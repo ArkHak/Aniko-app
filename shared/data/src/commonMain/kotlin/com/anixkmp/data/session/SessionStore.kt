@@ -3,6 +3,7 @@ package com.anixkmp.data.session
 import com.anixkmp.network.SessionInvalidator
 import com.anixkmp.network.TokenProvider
 import com.russhwolf.settings.Settings
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -57,10 +58,26 @@ class SessionStore(
     suspend fun bootstrap() {
         stateMutex.withLock {
             if (bootstrapped) return@withLock
-            val token = secureStorage.get()
+            val token = readTokenOrNull()
             _sessionState.value = token?.let { SessionState.Authorized(it) } ?: SessionState.Unauthorized
             bootstrapped = true
         }
+    }
+
+    /**
+     * [secureStorage] на практике может кинуть исключение не только на "нет записи"
+     * (это уже `null` внутри самой реализации), а на полный отказ хранилища — например,
+     * iOS Keychain с `OSStatus=-34018` (`errSecMissingEntitlement`) на несигнированной сборке.
+     * `bootstrap()` вызывается из голого `LaunchedEffect` на старте приложения без внешнего
+     * try/catch, а необработанное исключение в корутине на Kotlin/Native валит весь процесс
+     * (нет JVM-подобного дефолтного обработчика) — поэтому деградация тут обязательна.
+     */
+    private suspend fun readTokenOrNull(): String? = try {
+        secureStorage.get()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
     }
 
     /** Токен для `TokenProvider` — ждёт завершения [bootstrap], если он ещё не закончился. */
@@ -94,7 +111,17 @@ class SessionStore(
     }
 
     private suspend fun clearLocked() {
-        secureStorage.clear()
+        // Тот же риск, что и в readTokenOrNull(): SettingsViewModel.signOut() тоже вызывает
+        // это без внешнего try/catch. Физически стереть secure storage не удалось — не беда,
+        // локальную сессию сбрасываем в любом случае, пользователь не должен застрять
+        // залогиненным из-за отказа хранилища.
+        try {
+            secureStorage.clear()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // no-op — состояние всё равно сбрасывается ниже
+        }
         settings.remove(KEY_PROFILE_ID)
         _sessionState.value = SessionState.Unauthorized
         bootstrapped = true
