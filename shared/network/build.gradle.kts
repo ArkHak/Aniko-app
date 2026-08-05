@@ -20,6 +20,11 @@ kotlin {
             implementation(libs.ktor.client.logging)
         }
 
+        commonTest.dependencies {
+            implementation(libs.ktor.client.mock)
+            implementation(libs.kotlinx.coroutines.test)
+        }
+
         jvmSharedMain.dependencies {
             implementation(libs.ktor.client.okhttp)
         }

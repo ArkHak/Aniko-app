@@ -17,5 +17,14 @@ kotlin {
             implementation(libs.koin.core)
             implementation(libs.multiplatform.settings)
         }
+
+        commonTest.dependencies {
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.multiplatform.settings.test)
+        }
+
+        androidMain.dependencies {
+            implementation(libs.androidx.security.crypto)
+        }
     }
 }

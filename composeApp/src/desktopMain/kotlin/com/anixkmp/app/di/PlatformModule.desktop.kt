@@ -1,5 +1,7 @@
 package com.anixkmp.app.di
 
+import com.anixkmp.data.session.MacKeychainTokenStorage
+import com.anixkmp.data.session.SecureTokenStorage
 import com.russhwolf.settings.PreferencesSettings
 import com.russhwolf.settings.Settings
 import org.koin.core.module.Module
@@ -10,4 +12,5 @@ actual fun platformModule(): Module = module {
     single<Settings> {
         PreferencesSettings(Preferences.userRoot().node("com/anixkmp/app"))
     }
+    single<SecureTokenStorage> { MacKeychainTokenStorage() }
 }

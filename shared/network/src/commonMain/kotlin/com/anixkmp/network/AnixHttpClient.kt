@@ -1,7 +1,9 @@
 package com.anixkmp.network
 
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.logging.LogLevel
@@ -9,6 +11,7 @@ import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.plugins.logging.SIMPLE
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
@@ -32,6 +35,7 @@ val AnixJson: Json = Json {
 fun createAnixHttpClient(
     apiConfig: ApiConfig = ApiConfig(),
     tokenProvider: TokenProvider = TokenProvider.Anonymous,
+    sessionInvalidator: SessionInvalidator = NoOpSessionInvalidator,
     json: Json = AnixJson,
 ): HttpClient = createPlatformHttpClient {
     expectSuccess = true
@@ -42,6 +46,27 @@ fun createAnixHttpClient(
 
     install(AnixTokenPlugin) {
         this.tokenProvider = tokenProvider
+    }
+
+    // 401/403 от бэкенда — токен протух/отозван. Кроме самого `auth/*`: там 401/403 значит
+    // «неверный логин/пароль», а не «сессия умерла», и рушить сессию из-за него нельзя.
+    // Обработчик ничего не бросает и не ретраит запрос — оригинальное исключение от
+    // `expectSuccess = true` пробрасывается дальше как обычно.
+    HttpResponseValidator {
+        handleResponseExceptionWithRequest { cause, request ->
+            val responseException = cause as? ResponseException ?: return@handleResponseExceptionWithRequest
+            val status = responseException.response.status
+            if (status != HttpStatusCode.Unauthorized && status != HttpStatusCode.Forbidden) {
+                return@handleResponseExceptionWithRequest
+            }
+
+            val path = request.url.encodedPath.removePrefix("/")
+            if (path.startsWith(AUTH_PATH_PREFIX)) {
+                return@handleResponseExceptionWithRequest
+            }
+
+            sessionInvalidator.onUnauthorized()
+        }
     }
 
     install(HttpTimeout) {
@@ -69,3 +94,6 @@ fun createAnixHttpClient(
         apiConfig.apiVersionHeader?.let { headers.append(ApiConfig.API_VERSION_HEADER, it) }
     }
 }
+
+/** Путь `auth/signIn` и всё, что под ним, — 401/403 там не значит «сессия умерла». */
+private const val AUTH_PATH_PREFIX = "auth/"

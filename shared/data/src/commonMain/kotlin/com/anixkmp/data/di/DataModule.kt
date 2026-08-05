@@ -9,6 +9,7 @@ import com.anixkmp.data.repository.EpisodeRepository
 import com.anixkmp.data.repository.ReleaseRepository
 import com.anixkmp.data.session.SessionStore
 import com.anixkmp.network.ApiConfig
+import com.anixkmp.network.SessionInvalidator
 import com.anixkmp.network.TokenProvider
 import com.anixkmp.network.createAnixHttpClient
 import io.ktor.client.HttpClient
@@ -23,13 +24,15 @@ import org.koin.dsl.module
 val dataModule = module {
     single { ApiConfig() }
 
-    single { SessionStore(settings = get()) }
+    single { SessionStore(settings = get(), secureStorage = get()) }
     single<TokenProvider> { get<SessionStore>() }
+    single<SessionInvalidator> { get<SessionStore>() }
 
     single<HttpClient> {
         createAnixHttpClient(
             apiConfig = get(),
             tokenProvider = get(),
+            sessionInvalidator = get(),
         )
     }
 

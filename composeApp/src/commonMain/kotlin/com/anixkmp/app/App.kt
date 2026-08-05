@@ -1,26 +1,36 @@
 package com.anixkmp.app
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
+import com.anixkmp.app.feature.auth.LoginScreen
 import com.anixkmp.app.feature.home.HomeScreen
 import com.anixkmp.app.feature.library.LibraryScreen
 import com.anixkmp.app.feature.settings.SettingsScreen
 import com.anixkmp.app.navigation.AnixDestination
+import com.anixkmp.data.repository.AuthRepository
+import com.anixkmp.data.session.SessionState
+import com.anixkmp.ui.component.AnixLoadingBox
 import com.anixkmp.ui.image.createAnixImageLoader
 import com.anixkmp.ui.theme.AnixTheme
 import io.ktor.client.HttpClient
@@ -35,6 +45,7 @@ import org.koin.compose.koinInject
 fun App() {
     KoinContext {
         val httpClient = koinInject<HttpClient>()
+        val authRepository = koinInject<AuthRepository>()
         val platformContext = LocalPlatformContext.current
 
         // Coil ходит в сеть тем же Ktor-клиентом, что и API.
@@ -44,9 +55,50 @@ fun App() {
             }
         }
 
-        AnixTheme {
-            AnixAppScaffold()
+        // Владелец bootstrap() — корневой уровень: гейтинг навигации ниже зависит от
+        // sessionState, поэтому чтение токена должно стартовать здесь, а не в фичах.
+        // bootstrap() идемпотентен, повторный вызов из HomeViewModel (если он там остался) — no-op.
+        LaunchedEffect(authRepository) {
+            authRepository.bootstrap()
         }
+
+        AnixTheme {
+            AnixSessionGate(authRepository)
+        }
+    }
+}
+
+/**
+ * Реактивный гейт по [AuthRepository.sessionState]:
+ * - [SessionState.Loading] — сплэш-лоадер, пока не прочитан токен;
+ * - [SessionState.Unauthorized] — экран входа;
+ * - [SessionState.Authorized] — основной граф из трёх табов.
+ *
+ * Также слушает [AuthRepository.sessionExpired] (401/403 от бэкенда) и показывает
+ * одноразовый снекбар — сама навигация на логин при этом переключается через sessionState.
+ */
+@Composable
+private fun AnixSessionGate(authRepository: AuthRepository) {
+    val sessionState by authRepository.sessionState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(authRepository) {
+        authRepository.sessionExpired.collect {
+            snackbarHostState.showSnackbar("Сессия истекла, войдите снова")
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        when (sessionState) {
+            SessionState.Loading -> AnixLoadingBox()
+            SessionState.Unauthorized -> LoginScreen()
+            is SessionState.Authorized -> AnixAppScaffold()
+        }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
 
