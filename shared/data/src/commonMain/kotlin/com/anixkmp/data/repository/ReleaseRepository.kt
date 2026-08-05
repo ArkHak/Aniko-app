@@ -1,0 +1,31 @@
+package com.anixkmp.data.repository
+
+import com.anixkmp.data.api.ProfileListApi
+import com.anixkmp.data.api.ReleaseApi
+import com.anixkmp.data.mapper.toDomain
+import com.anixkmp.data.paging.Paginator
+import com.anixkmp.model.AnixError
+import com.anixkmp.model.ListStatus
+import com.anixkmp.model.Paged
+import com.anixkmp.model.Release
+
+class ReleaseRepository(
+    private val releaseApi: ReleaseApi,
+    private val profileListApi: ProfileListApi,
+) {
+    suspend fun release(releaseId: Int): Release =
+        releaseApi.release(releaseId, extendedMode = true).release?.toDomain()
+            ?: throw AnixError.Parsing()
+
+    suspend fun watching(page: Int): Paged<Release> =
+        releaseApi.discoverWatching(page).toDomain { it.toDomain() }
+
+    suspend fun myList(status: ListStatus, page: Int): Paged<Release> =
+        profileListApi.myList(status, page).toDomain { it.toDomain() }
+
+    /** Готовый пагинатор для экрана «Продолжить смотреть». */
+    fun watchingPaginator(): Paginator<Release> = Paginator { page -> watching(page) }
+
+    /** Готовый пагинатор для экрана списка по статусу. */
+    fun listPaginator(status: ListStatus): Paginator<Release> = Paginator { page -> myList(status, page) }
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Тему рисует Compose; Android-тема нужна только чтобы убрать ActionBar
+         и сделать системные бары прозрачными до старта композиции. -->
+    <style name="Theme.AnixKMP" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

@@ -3,9 +3,21 @@ docs/api/samples/
 .gradle/
 build/
 .idea/
+.vscode/
+.run/
 local.properties
 *.iml
 .kotlin/
 xcuserdata/
 DerivedData/
 *.ipa
+
+# Секреты и подписи — не должны попадать в репозиторий никогда
+.env
+.env.*
+*.jks
+*.keystore
+
+# Мусор ОС и логи
+.DS_Store
+*.log
