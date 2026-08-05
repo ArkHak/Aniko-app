@@ -14,6 +14,10 @@ sealed interface AnixDestination {
     @Serializable
     data object Library : AnixDestination
 
+    /** Поиск релизов. */
+    @Serializable
+    data object Search : AnixDestination
+
     @Serializable
     data object Settings : AnixDestination
 

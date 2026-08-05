@@ -1,5 +1,6 @@
 package com.anixkmp.data.api
 
+import com.anixkmp.data.dto.InterestingDto
 import com.anixkmp.data.dto.PageableResponseDto
 import com.anixkmp.data.dto.ReleaseDto
 import com.anixkmp.data.dto.ReleaseResponseDto
@@ -40,4 +41,15 @@ class ReleaseApi(private val client: HttpClient) {
                 parameter("previous_page", previousPage)
             }.body<PageableResponseDto<ReleaseDto>>().requireOk()
         }
+
+    /**
+     * `POST discover/interesting` — публичный эндпоинт (без `token`, подтверждено и статически
+     * в `DiscoverApi.java` — у `interesting()` нет `@Query("token")`, — и вживую: запрос без
+     * токена вернул `200`, см. `docs/api/samples/discover_interesting.json`).
+     */
+    suspend fun discoverInteresting(): PageableResponseDto<InterestingDto> = apiCall {
+        client.post("discover/interesting")
+            .body<PageableResponseDto<InterestingDto>>()
+            .requireOk()
+    }
 }

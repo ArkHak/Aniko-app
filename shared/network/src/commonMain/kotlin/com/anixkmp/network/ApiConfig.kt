@@ -11,7 +11,13 @@ package com.anixkmp.network
 data class ApiConfig(
     val baseUrl: String = DEFAULT_BASE_URL,
     val staticBaseUrl: String = DEFAULT_STATIC_BASE_URL,
-    /** `[TODO: verify live]` — точное значение заголовка для `search/releases/{page}`. */
+    /**
+     * Проверено вживую (R3): `POST search/releases/0` с валидным телом `SearchRequest` и БЕЗ
+     * заголовка `API-Version` вернул `HTTP 200` с корректными данными (см.
+     * `docs/api/samples/search_releases_page0_no_api_version_header.json`). Несмотря на то что
+     * decompiled `SearchApi.java` объявляет параметр без дефолта (Android-клиент всегда его
+     * шлёт), сервер его не требует. Оставлено `null` осознанно, а не потому что не проверено.
+     */
     val apiVersionHeader: String? = null,
     val enableLogging: Boolean = true,
     val requestTimeoutMillis: Long = 30_000,

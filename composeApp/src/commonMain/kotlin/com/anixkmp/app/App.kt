@@ -18,14 +18,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
 import com.anixkmp.app.feature.auth.LoginScreen
 import com.anixkmp.app.feature.home.HomeScreen
 import com.anixkmp.app.feature.library.LibraryScreen
+import com.anixkmp.app.feature.release.ReleaseDetailsScreen
+import com.anixkmp.app.feature.search.SearchScreen
 import com.anixkmp.app.feature.settings.SettingsScreen
 import com.anixkmp.app.navigation.AnixDestination
 import com.anixkmp.data.repository.AuthRepository
@@ -104,6 +108,7 @@ private fun AnixSessionGate(authRepository: AuthRepository) {
 
 private val bottomTabs = listOf(
     BottomTab("Главная", AnixDestination.Home),
+    BottomTab("Поиск", AnixDestination.Search),
     BottomTab("Списки", AnixDestination.Library),
     BottomTab("Настройки", AnixDestination.Settings),
 )
@@ -140,9 +145,23 @@ private fun AnixAppScaffold() {
             startDestination = AnixDestination.Home,
             modifier = Modifier.fillMaxSize().padding(innerPadding),
         ) {
-            composable<AnixDestination.Home> { HomeScreen() }
+            composable<AnixDestination.Home> {
+                HomeScreen(onReleaseClick = navController::navigateToRelease)
+            }
+            composable<AnixDestination.Search> {
+                SearchScreen(onReleaseClick = navController::navigateToRelease)
+            }
             composable<AnixDestination.Library> { LibraryScreen() }
             composable<AnixDestination.Settings> { SettingsScreen() }
+            composable<AnixDestination.ReleaseDetails> { backStackEntry ->
+                val route: AnixDestination.ReleaseDetails = backStackEntry.toRoute()
+                ReleaseDetailsScreen(releaseId = route.releaseId)
+            }
         }
     }
+}
+
+private fun NavController.navigateToRelease(releaseId: Int) {
+    if (releaseId <= 0) return
+    navigate(AnixDestination.ReleaseDetails(releaseId))
 }
