@@ -34,7 +34,7 @@ import java.net.URI
  * `:shared:player` намеренно не тянет зависимость на compose.material3 ради одной заглушки.
  */
 @Composable
-actual fun EmbedPlayerView(url: String, modifier: Modifier) {
+actual fun EmbedPlayerView(url: String, referer: String?, modifier: Modifier) {
     var reopenSignal by remember(url) { mutableIntStateOf(0) }
 
     LaunchedEffect(url, reopenSignal) {

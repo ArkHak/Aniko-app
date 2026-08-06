@@ -8,6 +8,7 @@ import com.anixkmp.model.EpisodeSource
 import com.anixkmp.model.VideoHost
 import com.anixkmp.model.VoiceType
 import com.anixkmp.player.PlaybackSource
+import com.anixkmp.player.isKodikEmbedUrl
 
 /**
  * Цепочка резолвинга плеера из `docs/api/ENDPOINTS.md`:
@@ -41,7 +42,18 @@ class EpisodeRepository(private val episodeApi: EpisodeApi) {
         val target = episodeApi.target(releaseId, sourceId, position).episode?.toDomain()
         val url = target?.url?.takeIf { it.isNotBlank() }
             ?: throw AnixError.PlaybackResolve(host)
-        return PlaybackSource.Embed(url = url, host = host)
+        return if (isKodikEmbedUrl(url)) {
+            // Query-параметры `?d=/&s=/&ip=` из ответа API рассчитаны на referer из исходного
+            // запроса и с нашим WebView не совпадают — Kodik отдаёт `500 "Error code: ds"`
+            // (проверено вживую). Если вместо этого загрузить страницу без query, но с
+            // `Referer: https://anixmirai.com/`, Kodik сам генерирует корректные подписи
+            // (d_sign/pd_sign/ref_sign) на основе заголовка и отдаёт настоящую страницу плеера —
+            // 200, а не 500 (проверено вживую через curl). anixmirai.com — авторизованный домен
+            // партнёра на стороне Kodik (тот же, что видно в оригинальном приложении).
+            PlaybackSource.Embed(url = url.substringBefore('?'), host = host, referer = "https://anixmirai.com/")
+        } else {
+            PlaybackSource.Embed(url = url, host = host, referer = url)
+        }
     }
 
     suspend fun markWatched(releaseId: Int, sourceId: Int, position: Int) {

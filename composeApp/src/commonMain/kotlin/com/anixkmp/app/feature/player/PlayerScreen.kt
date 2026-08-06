@@ -48,7 +48,7 @@ fun PlayerScreen(
             else -> {
                 val source = state.source
                 if (source is PlaybackSource.Embed) {
-                    EmbedPlayerView(url = source.url, modifier = Modifier.fillMaxSize())
+                    EmbedPlayerView(url = source.url, referer = source.referer, modifier = Modifier.fillMaxSize())
                 } else {
                     // Недостижимо на практике: `resolvePlaybackSource` всегда возвращает `Embed`
                     // (см. `EpisodeRepository`), но исчерпывающая обработка честнее, чем `!!`.
