@@ -1,6 +1,5 @@
 package com.anixkmp.app.feature.search
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,7 +11,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,7 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anixkmp.ui.component.AnixEmptyBox
 import com.anixkmp.ui.component.AnixErrorBox
 import com.anixkmp.ui.component.AnixLoadingBox
-import com.anixkmp.ui.component.AnixPoster
+import com.anixkmp.ui.component.ReleaseCard
 import com.anixkmp.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -87,19 +85,10 @@ fun SearchScreen(
                         if (index >= pagingState.items.size - SEARCH_PREFETCH_THRESHOLD) {
                             viewModel.loadMore()
                         }
-                        Column {
-                            AnixPoster(
-                                url = release.posterUrl,
-                                contentDescription = release.title,
-                                modifier = Modifier.clickable { onReleaseClick(release.id) },
-                            )
-                            Text(
-                                text = release.title,
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 2,
-                                modifier = Modifier.padding(top = dimens.spaceXs),
-                            )
-                        }
+                        ReleaseCard(
+                            release = release,
+                            onClick = { onReleaseClick(release.id) },
+                        )
                     }
 
                     if (pagingState.isLoading) {

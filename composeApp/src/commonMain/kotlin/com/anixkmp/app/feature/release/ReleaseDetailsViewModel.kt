@@ -3,10 +3,12 @@ package com.anixkmp.app.feature.release
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anixkmp.data.repository.EpisodeRepository
+import com.anixkmp.data.repository.LibraryRepository
 import com.anixkmp.data.repository.ReleaseRepository
 import com.anixkmp.model.AnixError
 import com.anixkmp.model.Episode
 import com.anixkmp.model.EpisodeSource
+import com.anixkmp.model.ListStatus
 import com.anixkmp.model.Release
 import com.anixkmp.model.VoiceType
 import kotlinx.coroutines.CancellationException
@@ -47,6 +49,7 @@ data class ReleaseDetailsUiState(
 class ReleaseDetailsViewModel(
     private val releaseRepository: ReleaseRepository,
     private val episodeRepository: EpisodeRepository,
+    private val libraryRepository: LibraryRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReleaseDetailsUiState())
@@ -143,6 +146,48 @@ class ReleaseDetailsViewModel(
                 _uiState.update {
                     it.copy(isEpisodesStepLoading = false, episodesStepError = e.toEpisodesErrorMessage())
                 }
+            }
+        }
+    }
+
+    /**
+     * Меняет статус релиза в списке пользователя ([status] `null` — снять статус). Обновляет
+     * `state.release` оптимистично и, в отличие от `PlayerViewModel`'а с его молчаливым
+     * `runCatching { episodeRepository.markWatched(...) }`, откатывает локальное состояние при
+     * ошибке сети — здесь это видимый переключатель в UI, и разъехавшийся с сервером статус
+     * пользователь заметит.
+     */
+    fun changeListStatus(status: ListStatus?) {
+        val release = _uiState.value.release ?: return
+        val previousStatus = release.myListStatus
+        if (previousStatus == status) return
+
+        _uiState.update { it.copy(release = it.release?.copy(myListStatus = status)) }
+        viewModelScope.launch {
+            runCatching {
+                if (status != null) {
+                    libraryRepository.addToList(status, release.id)
+                } else {
+                    previousStatus?.let { libraryRepository.removeFromList(it, release.id) }
+                }
+            }.onFailure {
+                _uiState.update { it.copy(release = it.release?.copy(myListStatus = previousStatus)) }
+            }
+        }
+    }
+
+    /** Тоггл избранного — та же схема оптимистичного обновления с откатом при ошибке, см. [changeListStatus]. */
+    fun toggleFavorite() {
+        val release = _uiState.value.release ?: return
+        val previousFavorite = release.isFavorite
+        val nextFavorite = !previousFavorite
+
+        _uiState.update { it.copy(release = it.release?.copy(isFavorite = nextFavorite)) }
+        viewModelScope.launch {
+            runCatching {
+                if (nextFavorite) libraryRepository.addFavorite(release.id) else libraryRepository.removeFavorite(release.id)
+            }.onFailure {
+                _uiState.update { it.copy(release = it.release?.copy(isFavorite = previousFavorite)) }
             }
         }
     }

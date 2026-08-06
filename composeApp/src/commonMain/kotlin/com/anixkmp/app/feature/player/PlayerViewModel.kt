@@ -3,6 +3,7 @@ package com.anixkmp.app.feature.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anixkmp.data.repository.EpisodeRepository
+import com.anixkmp.data.repository.LibraryRepository
 import com.anixkmp.model.AnixError
 import com.anixkmp.model.VideoHost
 import com.anixkmp.player.PlaybackSource
@@ -30,6 +31,7 @@ data class PlayerUiState(
  */
 class PlayerViewModel(
     private val episodeRepository: EpisodeRepository,
+    private val libraryRepository: LibraryRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlayerUiState())
@@ -56,6 +58,9 @@ class PlayerViewModel(
                 // Эвристика MVP: успешный резолв ссылки = серия просмотрена. Ошибку отметки
                 // просмотра намеренно проглатываем — пользователю плеер важнее счётчика.
                 runCatching { episodeRepository.markWatched(releaseId, sourceId, position) }
+                // Та же логика для истории просмотра ("Фаза 6"): плееру не нужно знать об успехе
+                // синхронизации истории, ошибку тоже проглатываем, а не мешаем воспроизведению.
+                runCatching { libraryRepository.addHistory(releaseId, sourceId, position) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

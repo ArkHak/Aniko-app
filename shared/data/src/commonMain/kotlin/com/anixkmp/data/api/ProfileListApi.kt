@@ -9,7 +9,14 @@ import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 
-/** `ProfileListApi` + `FavoriteApi` — списки пользователя. */
+/**
+ * `ProfileListApi` — списки пользователя по статусу (смотрю/в планах/просмотрено/...).
+ *
+ * Избранное переехало в `FavoriteApi`, история — в `HistoryApi` (Фаза 6): изначально все три
+ * были вперемешку в этом классе, но у Anixart это разные REST-неймспейсы (пути вида
+ * `profile/list/...`, `favorite/...`, `history/...`), так что разделение точнее отражает
+ * реальный API.
+ */
 class ProfileListApi(private val client: HttpClient) {
 
     /** `GET profile/list/all/{status}/{page}?sort=&filter_announce=` */
@@ -37,24 +44,5 @@ class ProfileListApi(private val client: HttpClient) {
         client.get("profile/list/delete/${status.apiValue}/$releaseId")
             .body<SimpleResponseDto>()
             .requireOk()
-    }
-
-    /** `GET favorite/all/{page}?sort=&filter_announce=` */
-    suspend fun favorites(page: Int, sort: Int = 0, filterAnnounce: Int = 0): PageableResponseDto<ReleaseDto> =
-        apiCall {
-            client.get("favorite/all/$page") {
-                parameter("sort", sort)
-                parameter("filter_announce", filterAnnounce)
-            }.body<PageableResponseDto<ReleaseDto>>().requireOk()
-        }
-
-    /** `GET favorite/add/{r_id}` */
-    suspend fun addFavorite(releaseId: Int): SimpleResponseDto = apiCall {
-        client.get("favorite/add/$releaseId").body<SimpleResponseDto>().requireOk()
-    }
-
-    /** `GET favorite/delete/{r_id}` */
-    suspend fun removeFavorite(releaseId: Int): SimpleResponseDto = apiCall {
-        client.get("favorite/delete/$releaseId").body<SimpleResponseDto>().requireOk()
     }
 }

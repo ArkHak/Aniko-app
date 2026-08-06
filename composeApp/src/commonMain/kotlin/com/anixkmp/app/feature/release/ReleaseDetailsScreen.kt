@@ -12,18 +12,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anixkmp.model.Episode
 import com.anixkmp.model.EpisodeSource
+import com.anixkmp.model.ListStatus
 import com.anixkmp.model.Release
 import com.anixkmp.model.ReleaseStatus
 import com.anixkmp.model.VideoHost
@@ -35,11 +42,9 @@ import com.anixkmp.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Карточка релиза: постер, названия, описание, год/статус/жанры/оценка/счётчик серий,
- * плюс простой флоу выбора серии (тип озвучки → источник → серия) для перехода в плеер.
- *
- * Кнопки «в список»/«избранное» здесь намеренно нет — это Фаза 6 (`docs/plan`), заглушки под
- * неё не создаются, чтобы не плодить недоделанный UI.
+ * Карточка релиза: постер, названия, описание, год/статус/жанры/оценка/счётчик серий, блок
+ * «в список»/«избранное» (см. [FavoriteAndStatusRow]), плюс простой флоу выбора серии (тип
+ * озвучки → источник → серия) для перехода в плеер.
  */
 @Composable
 fun ReleaseDetailsScreen(
@@ -67,6 +72,8 @@ fun ReleaseDetailsScreen(
                 onSelectVoiceType = viewModel::selectVoiceType,
                 onSelectSource = viewModel::selectSource,
                 onEpisodeClick = { sourceId, position, host -> onEpisodeClick(releaseId, sourceId, position, host) },
+                onChangeListStatus = viewModel::changeListStatus,
+                onToggleFavorite = viewModel::toggleFavorite,
             )
         }
     }
@@ -79,6 +86,8 @@ private fun ReleaseDetailsContent(
     onSelectVoiceType: (Int) -> Unit,
     onSelectSource: (Int) -> Unit,
     onEpisodeClick: (sourceId: Int, position: Int, host: VideoHost) -> Unit,
+    onChangeListStatus: (ListStatus?) -> Unit,
+    onToggleFavorite: () -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
 
@@ -114,6 +123,12 @@ private fun ReleaseDetailsContent(
             }
         }
 
+        FavoriteAndStatusRow(
+            release = release,
+            onChangeListStatus = onChangeListStatus,
+            onToggleFavorite = onToggleFavorite,
+        )
+
         if (release.genres.isNotEmpty()) {
             Text(
                 text = release.genres.joinToString(", "),
@@ -132,6 +147,40 @@ private fun ReleaseDetailsContent(
             onSelectVoiceType = onSelectVoiceType,
             onSelectSource = onSelectSource,
             onEpisodeClick = onEpisodeClick,
+        )
+    }
+}
+
+/**
+ * Блок «в список»/«избранное» под шапкой релиза: тоггл избранного (сердце) + [ChipRow] с
+ * пятью статусами [ListStatus]. Повторный тап по уже выбранному статусу снимает его
+ * ([ListStatus.myListStatus] становится `null`) — `ChipRow` для этого не нужно менять,
+ * достаточно решить в обработчике клика конкретного чипа, какой статус передать дальше.
+ */
+@Composable
+private fun FavoriteAndStatusRow(
+    release: Release,
+    onChangeListStatus: (ListStatus?) -> Unit,
+    onToggleFavorite: () -> Unit,
+) {
+    val dimens = AnixThemeTokens.dimens
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+    ) {
+        IconButton(onClick = onToggleFavorite) {
+            Icon(
+                imageVector = if (release.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                contentDescription = if (release.isFavorite) "Убрать из избранного" else "Добавить в избранное",
+                tint = if (release.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        ChipRow(
+            items = ListStatus.entries,
+            isSelected = { it == release.myListStatus },
+            label = ListStatus::toDisplayName,
+            onClick = { status -> onChangeListStatus(if (status == release.myListStatus) null else status) },
         )
     }
 }
@@ -297,6 +346,14 @@ private fun ReleaseStatus.toDisplayName(): String? = when (this) {
     ReleaseStatus.ONGOING -> "Онгоинг"
     ReleaseStatus.FINISHED -> "Завершён"
     ReleaseStatus.UNKNOWN -> null
+}
+
+private fun ListStatus.toDisplayName(): String = when (this) {
+    ListStatus.WATCHING -> "Смотрю"
+    ListStatus.PLANNED -> "В планах"
+    ListStatus.COMPLETED -> "Просмотрено"
+    ListStatus.ON_HOLD -> "Отложено"
+    ListStatus.DROPPED -> "Брошено"
 }
 
 private fun formatGrade(grade: Double): String {

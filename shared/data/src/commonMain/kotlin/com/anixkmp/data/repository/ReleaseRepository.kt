@@ -1,18 +1,15 @@
 package com.anixkmp.data.repository
 
-import com.anixkmp.data.api.ProfileListApi
 import com.anixkmp.data.api.ReleaseApi
 import com.anixkmp.data.api.SearchApi
 import com.anixkmp.data.mapper.toDomain
 import com.anixkmp.data.paging.Paginator
 import com.anixkmp.model.AnixError
-import com.anixkmp.model.ListStatus
 import com.anixkmp.model.Paged
 import com.anixkmp.model.Release
 
 class ReleaseRepository(
     private val releaseApi: ReleaseApi,
-    private val profileListApi: ProfileListApi,
     private val searchApi: SearchApi,
 ) {
     suspend fun release(releaseId: Int): Release =
@@ -25,9 +22,6 @@ class ReleaseRepository(
     suspend fun recommendations(page: Int, previousPage: Int = 0): Paged<Release> =
         releaseApi.discoverRecommendations(page, previousPage).toDomain { it.toDomain() }
 
-    suspend fun myList(status: ListStatus, page: Int): Paged<Release> =
-        profileListApi.myList(status, page).toDomain { it.toDomain() }
-
     /** `search/releases/{page}` — см. `SearchApi` про сверенную вживую форму ответа. */
     suspend fun search(query: String, page: Int): Paged<Release> =
         searchApi.releaseSearch(page, query).toDomain { it.toDomain() }
@@ -37,9 +31,6 @@ class ReleaseRepository(
 
     /** Готовый пагинатор для секции рекомендаций на главном экране. */
     fun recommendationsPaginator(): Paginator<Release> = Paginator { page -> recommendations(page) }
-
-    /** Готовый пагинатор для экрана списка по статусу. */
-    fun listPaginator(status: ListStatus): Paginator<Release> = Paginator { page -> myList(status, page) }
 
     /** Готовый пагинатор для экрана поиска — новый на каждый поисковый запрос. */
     fun searchPaginator(query: String): Paginator<Release> = Paginator { page -> search(query, page) }

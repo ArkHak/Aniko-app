@@ -153,7 +153,9 @@ private fun AnixAppScaffold() {
             composable<AnixDestination.Search> {
                 SearchScreen(onReleaseClick = navController::navigateToRelease)
             }
-            composable<AnixDestination.Library> { LibraryScreen() }
+            composable<AnixDestination.Library> {
+                LibraryScreen(onReleaseClick = navController::navigateToRelease)
+            }
             composable<AnixDestination.Settings> { SettingsScreen() }
             composable<AnixDestination.ReleaseDetails> { backStackEntry ->
                 val route: AnixDestination.ReleaseDetails = backStackEntry.toRoute()

@@ -21,6 +21,10 @@ internal suspend fun <T> apiCall(block: suspend () -> T): T =
         block()
     } catch (e: CancellationException) {
         throw e
+    } catch (e: AnixError) {
+        // `requireOk()` бросает `AnixError.Api` изнутри этого же блока (см. ниже) — не даём
+        // общему `catch (Throwable)` перезаворачивать уже классифицированную ошибку в Unknown.
+        throw e
     } catch (e: ClientRequestException) {
         if (e.response.status == HttpStatusCode.Unauthorized ||
             e.response.status == HttpStatusCode.Forbidden
