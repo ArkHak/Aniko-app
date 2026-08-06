@@ -1,14 +1,14 @@
 plugins {
-    id("anix.kmp.library")
+    id("aniko.kmp.library")
 }
 
 android {
-    namespace = "com.anixkmp.network"
+    namespace = "com.aniko.network"
 }
 
 kotlin {
     sourceSets {
-        // `jvmSharedMain` (Android + Desktop) объявлен в convention-плагине anix.kmp.library.
+        // `jvmSharedMain` (Android + Desktop) объявлен в convention-плагине aniko.kmp.library.
         val jvmSharedMain by getting
 
         commonMain.dependencies {

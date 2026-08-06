@@ -1,13 +1,13 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
-    id("anix.kmp.application")
-    id("anix.kmp.compose")
+    id("aniko.kmp.application")
+    id("aniko.kmp.compose")
     // нужен для type-safe навигации (@Serializable destinations)
-    id("anix.kmp.serialization")
+    id("aniko.kmp.serialization")
 }
 
-val desktopMainClass = "com.anixkmp.app.MainKt"
+val desktopMainClass = "com.aniko.app.MainKt"
 
 kotlin {
     // Чтобы работал и `:composeApp:run` (Compose Desktop), и `:composeApp:desktopRun` (KGP).
@@ -24,7 +24,7 @@ kotlin {
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
-            binaryOption("bundleId", "com.anixkmp.app.composeapp")
+            binaryOption("bundleId", "com.aniko.app.composeapp")
         }
     }
 
@@ -68,10 +68,10 @@ kotlin {
 }
 
 android {
-    namespace = "com.anixkmp.app"
+    namespace = "com.aniko.app"
 
     defaultConfig {
-        applicationId = "com.anixkmp.app"
+        applicationId = "com.aniko.app"
         versionCode = 1
         versionName = "0.1.0"
     }
@@ -93,7 +93,7 @@ compose.desktop {
         nativeDistributions {
             // Desktop-таргет собираем только под macOS (согласовано в плане).
             targetFormats(TargetFormat.Dmg)
-            packageName = "AnixKMP"
+            packageName = "Aniko"
             packageVersion = "1.0.0"
         }
     }

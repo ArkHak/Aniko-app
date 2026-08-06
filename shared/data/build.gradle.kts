@@ -1,10 +1,10 @@
 plugins {
-    id("anix.kmp.library")
-    id("anix.kmp.serialization")
+    id("aniko.kmp.library")
+    id("aniko.kmp.serialization")
 }
 
 android {
-    namespace = "com.anixkmp.data"
+    namespace = "com.aniko.data"
 }
 
 kotlin {

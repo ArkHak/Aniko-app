@@ -1,9 +1,9 @@
 plugins {
-    id("anix.kmp.library")
+    id("aniko.kmp.library")
 }
 
 android {
-    namespace = "com.anixkmp.model"
+    namespace = "com.aniko.model"
 }
 
 // :shared:model намеренно без зависимостей кроме stdlib — это чистые domain-модели.

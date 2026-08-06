@@ -1,4 +1,4 @@
-rootProject.name = "AnixKMP"
+rootProject.name = "Aniko"
 
 pluginManagement {
     includeBuild("build-logic")

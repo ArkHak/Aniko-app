@@ -1,10 +1,10 @@
 plugins {
-    id("anix.kmp.library")
-    id("anix.kmp.compose")
+    id("aniko.kmp.library")
+    id("aniko.kmp.compose")
 }
 
 android {
-    namespace = "com.anixkmp.ui"
+    namespace = "com.aniko.ui"
 }
 
 kotlin {

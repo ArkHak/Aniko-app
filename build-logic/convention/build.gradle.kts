@@ -2,7 +2,7 @@ plugins {
     `kotlin-dsl`
 }
 
-group = "com.anixkmp.buildlogic"
+group = "com.aniko.buildlogic"
 
 kotlin {
     jvmToolchain(17)
