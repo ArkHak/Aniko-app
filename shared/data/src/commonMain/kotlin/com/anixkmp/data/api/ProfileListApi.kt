@@ -19,11 +19,20 @@ import io.ktor.client.request.parameter
  */
 class ProfileListApi(private val client: HttpClient) {
 
-    /** `GET profile/list/all/{status}/{page}?sort=&filter_announce=` */
+    /**
+     * `GET profile/list/all/{status}/{page}?sort=&filter_announce=`
+     *
+     * [sort] по умолчанию `1` — «сначала недавно добавленные». Decompiled `res/values/arrays.xml`
+     * (`R.array.sort`) подписывает индекс `0` как «По дате добавления ▼» и `1` как «По дате
+     * добавления ▲», что наивно читается как «`0` = сначала новые», но это неверно — проверено
+     * вживую (см. историю коммитов): при `sort=0` только что изменённый релиз не поднимается
+     * наверх списка, а при `sort=1` — поднимается. Подписи в decompiled-ресурсах, видимо, относятся
+     * к направлению сортировки по значению даты, а не к тому, что видит пользователь сверху экрана.
+     */
     suspend fun myList(
         status: ListStatus,
         page: Int,
-        sort: Int = 0,
+        sort: Int = 1,
         filterAnnounce: Int = 0,
     ): PageableResponseDto<ReleaseDto> = apiCall {
         client.get("profile/list/all/${status.apiValue}/$page") {

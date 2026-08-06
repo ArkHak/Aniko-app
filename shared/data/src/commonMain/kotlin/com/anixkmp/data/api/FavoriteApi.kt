@@ -11,8 +11,16 @@ import io.ktor.client.request.parameter
 /** `FavoriteApi` — избранные релизы пользователя. */
 class FavoriteApi(private val client: HttpClient) {
 
-    /** `GET favorite/all/{page}?sort=&filter_announce=` */
-    suspend fun favorites(page: Int, sort: Int = 0, filterAnnounce: Int = 0): PageableResponseDto<ReleaseDto> =
+    /**
+     * `GET favorite/all/{page}?sort=&filter_announce=`
+     *
+     * [sort] по умолчанию `1` — «сначала недавно добавленные». См. комментарий у
+     * `ProfileListApi.myList` — та же (неочевидная, проверенная вживую только для списков по
+     * статусу) семантика значения `sort` предполагается и здесь, так как это тот же query-параметр
+     * и тот же REST-стиль API. `[TODO: verify live]` конкретно для избранного отдельно не
+     * проверялось.
+     */
+    suspend fun favorites(page: Int, sort: Int = 1, filterAnnounce: Int = 0): PageableResponseDto<ReleaseDto> =
         apiCall {
             client.get("favorite/all/$page") {
                 parameter("sort", sort)
