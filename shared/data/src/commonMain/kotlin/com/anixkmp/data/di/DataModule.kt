@@ -4,12 +4,15 @@ import com.anixkmp.data.api.AuthApi
 import com.anixkmp.data.api.EpisodeApi
 import com.anixkmp.data.api.FavoriteApi
 import com.anixkmp.data.api.HistoryApi
+import com.anixkmp.data.api.ProfileApi
 import com.anixkmp.data.api.ProfileListApi
+import com.anixkmp.data.api.ProfilePreferenceApi
 import com.anixkmp.data.api.ReleaseApi
 import com.anixkmp.data.api.SearchApi
 import com.anixkmp.data.repository.AuthRepository
 import com.anixkmp.data.repository.EpisodeRepository
 import com.anixkmp.data.repository.LibraryRepository
+import com.anixkmp.data.repository.ProfileRepository
 import com.anixkmp.data.repository.ReleaseRepository
 import com.anixkmp.data.session.SessionStore
 import com.anixkmp.network.ApiConfig
@@ -47,9 +50,12 @@ val dataModule = module {
     single { FavoriteApi(client = get()) }
     single { HistoryApi(client = get()) }
     single { SearchApi(client = get()) }
+    single { ProfileApi(client = get()) }
+    single { ProfilePreferenceApi(client = get()) }
 
     single { AuthRepository(authApi = get(), sessionStore = get()) }
     single { ReleaseRepository(releaseApi = get(), searchApi = get()) }
     single { EpisodeRepository(episodeApi = get()) }
     single { LibraryRepository(profileListApi = get(), favoriteApi = get(), historyApi = get()) }
+    single { ProfileRepository(profileApi = get(), profilePreferenceApi = get(), sessionStore = get()) }
 }

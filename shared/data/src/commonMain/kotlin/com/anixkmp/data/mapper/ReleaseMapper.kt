@@ -47,6 +47,3 @@ private fun String?.toReleaseStatus(): ReleaseStatus = when {
     contains("вышел", ignoreCase = true) || contains("заверш", ignoreCase = true) -> ReleaseStatus.FINISHED
     else -> ReleaseStatus.UNKNOWN
 }
-
-private fun String.toAbsoluteUrl(base: String): String =
-    if (startsWith("http://") || startsWith("https://")) this else base.trimEnd('/') + "/" + trimStart('/')

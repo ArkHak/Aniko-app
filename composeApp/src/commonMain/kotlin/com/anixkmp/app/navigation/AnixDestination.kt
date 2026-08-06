@@ -21,6 +21,10 @@ sealed interface AnixDestination {
     @Serializable
     data object Settings : AnixDestination
 
+    /** Профиль текущего пользователя (Фаза 7), открывается из [Settings]. */
+    @Serializable
+    data object Profile : AnixDestination
+
     /** Карточка релиза. */
     @Serializable
     data class ReleaseDetails(val releaseId: Int) : AnixDestination

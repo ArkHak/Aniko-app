@@ -11,14 +11,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import org.koin.compose.viewmodel.koinViewModel
 
-/** Экран настроек. Пока единственный пункт — выход из аккаунта. */
+/** Экран настроек: переход в свой профиль и выход из аккаунта. */
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
+    onProfileClick: () -> Unit = {},
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     Surface(modifier = modifier.fillMaxSize()) {
         Column {
+            ListItem(
+                headlineContent = { Text(text = "Мой профиль") },
+                modifier = Modifier.clickable(onClick = onProfileClick),
+            )
             ListItem(
                 headlineContent = {
                     Text(

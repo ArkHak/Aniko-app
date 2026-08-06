@@ -29,6 +29,7 @@ import com.anixkmp.app.feature.auth.LoginScreen
 import com.anixkmp.app.feature.home.HomeScreen
 import com.anixkmp.app.feature.library.LibraryScreen
 import com.anixkmp.app.feature.player.PlayerScreen
+import com.anixkmp.app.feature.profile.ProfileScreen
 import com.anixkmp.app.feature.release.ReleaseDetailsScreen
 import com.anixkmp.app.feature.search.SearchScreen
 import com.anixkmp.app.feature.settings.SettingsScreen
@@ -156,7 +157,12 @@ private fun AnixAppScaffold() {
             composable<AnixDestination.Library> {
                 LibraryScreen(onReleaseClick = navController::navigateToRelease)
             }
-            composable<AnixDestination.Settings> { SettingsScreen() }
+            composable<AnixDestination.Settings> {
+                SettingsScreen(onProfileClick = { navController.navigate(AnixDestination.Profile) })
+            }
+            composable<AnixDestination.Profile> {
+                ProfileScreen(onBack = { navController.popBackStack() })
+            }
             composable<AnixDestination.ReleaseDetails> { backStackEntry ->
                 val route: AnixDestination.ReleaseDetails = backStackEntry.toRoute()
                 ReleaseDetailsScreen(

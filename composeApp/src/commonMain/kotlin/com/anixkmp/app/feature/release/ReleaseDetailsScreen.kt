@@ -2,7 +2,6 @@ package com.anixkmp.app.feature.release
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,6 +37,7 @@ import com.anixkmp.model.VoiceType
 import com.anixkmp.ui.component.AnixErrorBox
 import com.anixkmp.ui.component.AnixLoadingBox
 import com.anixkmp.ui.component.AnixPoster
+import com.anixkmp.ui.component.ChipRow
 import com.anixkmp.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -255,40 +255,6 @@ private fun SectionLabel(text: String) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
     )
-}
-
-@Composable
-private fun <T> ChipRow(
-    items: List<T>,
-    isSelected: (T) -> Boolean,
-    label: (T) -> String,
-    onClick: (T) -> Unit,
-) {
-    val dimens = AnixThemeTokens.dimens
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-    ) {
-        items.forEach { item ->
-            val selected = isSelected(item)
-            Text(
-                text = label(item),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (selected) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                modifier = Modifier
-                    .background(
-                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(dimens.cornerL),
-                    )
-                    .clickable { onClick(item) }
-                    .padding(horizontal = dimens.spaceM, vertical = dimens.spaceS),
-            )
-        }
-    }
 }
 
 @Composable
