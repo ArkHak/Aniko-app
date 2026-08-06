@@ -1,4 +1,5 @@
 docs/api/jadx-out/
+docs/api/jadx-out-*/
 docs/api/samples/
 .gradle/
 build/
@@ -8,6 +9,7 @@ build/
 local.properties
 *.iml
 .kotlin/
+gradle/gradle-daemon-jvm.properties
 xcuserdata/
 DerivedData/
 *.ipa
