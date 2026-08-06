@@ -7,6 +7,7 @@ import com.anixkmp.model.Episode
 import com.anixkmp.model.EpisodeSource
 import com.anixkmp.model.VideoHost
 import com.anixkmp.model.VoiceType
+import com.anixkmp.player.PlaybackSource
 
 /**
  * Цепочка резолвинга плеера из `docs/api/ENDPOINTS.md`:
@@ -24,15 +25,23 @@ class EpisodeRepository(private val episodeApi: EpisodeApi) {
         episodeApi.episodes(releaseId, typeId, sourceId).episodes.map { it.toDomain() }
 
     /**
-     * Резолвит серию в URL. Является ли URL прямым потоком или embed-страницей —
-     * решает вызывающая сторона (`:shared:player`), опираясь на [host].
+     * Резолвит серию в проигрываемый источник для WebView.
      *
-     * `[TODO: verify live]` — формат ответа сервера ещё не подтверждён.
+     * `host` приходит от вызывающей стороны (экран плеера получает его из навигации,
+     * см. `AnixDestination.Player.hostKey`) — репозиторий больше не хранит его сам между
+     * вызовами `sources()`/`resolvePlaybackSource()`, это раньше было гонкой состояния между
+     * параллельными экранами (см. код-ревью Фазы 5).
+     *
+     * Архитектурное решение (не пересматривать в рамках Фазы 5): всё воспроизведение идёт через
+     * embed (WebView), независимо от хоста и от [com.anixkmp.model.EpisodeTarget.iframe] —
+     * нативный `PlayerController`/`PlaybackSource.Direct` из `:shared:player` остаются заделом
+     * на будущее и здесь не используются.
      */
-    suspend fun resolveTargetUrl(releaseId: Int, source: EpisodeSource, position: Int): String {
-        val url = episodeApi.target(releaseId, source.id, position).episode?.url
-        return url?.takeIf { it.isNotBlank() }
-            ?: throw AnixError.PlaybackResolve(source.host)
+    suspend fun resolvePlaybackSource(releaseId: Int, sourceId: Int, position: Int, host: VideoHost): PlaybackSource {
+        val target = episodeApi.target(releaseId, sourceId, position).episode?.toDomain()
+        val url = target?.url?.takeIf { it.isNotBlank() }
+            ?: throw AnixError.PlaybackResolve(host)
+        return PlaybackSource.Embed(url = url, host = host)
     }
 
     suspend fun markWatched(releaseId: Int, sourceId: Int, position: Int) {
@@ -43,22 +52,13 @@ class EpisodeRepository(private val episodeApi: EpisodeApi) {
         episodeApi.markUnwatched(releaseId, sourceId, position)
     }
 
-    /** Хосты, которые заведомо требуют embed-режима, а не прямого воспроизведения. */
-    fun requiresEmbed(host: VideoHost): Boolean = when (host) {
-        VideoHost.KODIK,
-        VideoHost.SIBNET,
-        VideoHost.RUTUBE,
-        VideoHost.VK_VIDEO,
-        VideoHost.OK_RU,
-        VideoHost.MAIL_RU,
-        VideoHost.MYVI,
-        VideoHost.ALLVIDEO,
-        VideoHost.SOVET_ROMANTICA,
-        VideoHost.STUDIO_MIR,
-        VideoHost.TORLOOK,
-        VideoHost.UNKNOWN,
-        -> true
-
-        VideoHost.ANILIBRIA -> false
-    }
+    /*
+     * Мёртвая заметка (не публичный API): изначально предполагалось ветвление
+     * Direct/Embed по хосту — карта ниже перечисляла хосты, которые заведомо требуют
+     * embed-страницы. Решение MVP — всё через embed, поэтому карта не нужна как код, но
+     * оставлена как справка на случай будущего возврата к нативному воспроизведению:
+     *
+     * KODIK, SIBNET, RUTUBE, VK_VIDEO, OK_RU, MAIL_RU, MYVI, ALLVIDEO, SOVET_ROMANTICA,
+     * STUDIO_MIR, TORLOOK, UNKNOWN -> требуют embed; ANILIBRIA -> предположительно прямой поток.
+     */
 }

@@ -2,9 +2,11 @@ package com.anixkmp.data.mapper
 
 import com.anixkmp.data.dto.EpisodeDto
 import com.anixkmp.data.dto.EpisodeSourceDto
+import com.anixkmp.data.dto.EpisodeTargetDto
 import com.anixkmp.data.dto.EpisodeTypeDto
 import com.anixkmp.model.Episode
 import com.anixkmp.model.EpisodeSource
+import com.anixkmp.model.EpisodeTarget
 import com.anixkmp.model.VideoHost
 import com.anixkmp.model.VoiceType
 
@@ -23,23 +25,22 @@ fun EpisodeSourceDto.toDomain(): EpisodeSource = EpisodeSource(
 )
 
 /**
- * ВРЕМЕННОЕ РЕШЕНИЕ, заменить после живой верификации API (пункт R3 в `docs/api/ENDPOINTS.md`).
- *
- * Правильный путь — читать машинный ключ [EpisodeSourceDto.sourceKey]. Но точный формат
- * `SourcesResponse` ещё не сверен с реальным ответом сервера, поэтому поле приходит `null`
- * и мы падаем в fallback по человекочитаемому [EpisodeSourceDto.name] («КОДиК HD» → KODIK).
- *
- * Fallback заведомо хрупкий: название локализовано и может измениться на стороне Anixart.
- * Как только R3 даст реальное имя поля — поправить `@SerialName` в DTO и удалить fallback.
+ * Живая верификация (R3, `episode/186/{typeId}`) подтвердила: [EpisodeSourceDto.name] — чистый
+ * машинный ключ («Kodik», «Sibnet»), не локализованное человекочитаемое название. Прямой
+ * [VideoHost.fromKey] по этому полю — рабочее решение, а не хрупкий fallback (спекулятивное
+ * поле `source_key`, которое в реальном ответе не встречается, убрано из DTO).
  */
-private fun EpisodeSourceDto.resolveHost(): VideoHost {
-    val fromExplicitKey = sourceKey?.let(VideoHost::fromKey) ?: VideoHost.UNKNOWN
-    if (fromExplicitKey != VideoHost.UNKNOWN) return fromExplicitKey
-    return VideoHost.fromKey(name)
-}
+private fun EpisodeSourceDto.resolveHost(): VideoHost = VideoHost.fromKey(name)
 
 fun EpisodeDto.toDomain(): Episode = Episode(
     position = position,
     name = name,
     isWatched = isWatched,
+)
+
+fun EpisodeTargetDto.toDomain(): EpisodeTarget = EpisodeTarget(
+    position = position,
+    name = name,
+    url = url,
+    iframe = iframe,
 )

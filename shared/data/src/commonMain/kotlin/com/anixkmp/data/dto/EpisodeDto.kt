@@ -15,7 +15,13 @@ data class EpisodeTypeDto(
     val id: Int = 0,
     val name: String? = null,
     @SerialName("episodes_count") val episodesCount: Int? = null,
-    val workers: List<String> = emptyList(),
+    /**
+     * Живая верификация (R3, `episode/186`): реальный ответ отдаёт строку
+     * (`"workers":"Ancord"` либо `"workers":""`), а не массив. `List<String>` здесь ронял бы
+     * десериализацию на каждом релизе — `ignoreUnknownKeys` не спасает от несовпадения типа
+     * известного поля.
+     */
+    val workers: String? = null,
 )
 
 /** `SourcesResponse` — `GET episode/{releaseId}/{typeId}`. */
@@ -28,16 +34,13 @@ data class SourcesResponseDto(
 @Serializable
 data class EpisodeSourceDto(
     val id: Int = 0,
-    /** Человекочитаемое название вида «КОДиК HD» — для показа пользователю, не для логики. */
-    val name: String? = null,
     /**
-     * `[TODO: verify live / R2-R3]` Машинный ключ источника (`kodik`, `sibnet`, ...).
-     *
-     * Реального имени поля мы пока не знаем — `SourcesResponse` не сверен с живым API.
-     * Заглушка стоит здесь, чтобы после верификации хватило поправить `@SerialName`,
-     * не трогая ни маппер, ни домен. Сейчас поле приходит `null`, работает fallback по [name].
+     * Живая верификация (R3, `episode/186/{typeId}`): значение — чистый машинный ключ
+     * (`"Kodik"`, `"Sibnet"`), не локализованное человекочитаемое название. `source_key` в
+     * реальном ответе не встречается вообще (было спекулятивное поле — убрано). [VideoHost.fromKey]
+     * работает прямо по этому полю, без хрупкого fallback.
      */
-    @SerialName("source_key") val sourceKey: String? = null,
+    val name: String? = null,
     @SerialName("episodes_count") val episodesCount: Int? = null,
 )
 
@@ -58,10 +61,9 @@ data class EpisodeDto(
 /**
  * `EpisodeTargetResponse` — `GET episode/target/{releaseId}/{sourceId}/{position}`.
  *
- * ЭТО КЛЮЧЕВОЙ DTO для плеера и одновременно самый неопределённый:
- * `[TODO: verify live]` — неизвестно, отдаёт ли сервер прямую ссылку на видео
- * или embed-страницу стороннего плеера (kodik/sibnet/...). См. `docs/api/ENDPOINTS.md`,
- * пункт 2 раздела «Что осталось сделать».
+ * Живая верификация (R3): сервер отдаёт явное булево поле `iframe`. Пример — Kodik:
+ * `"iframe":true, "url":"https://kodikplayer.com/seria/..."`; Sibnet: `"iframe":false,
+ * "url":"https://video.sibnet.ru/shell.php?..."`.
  */
 @Serializable
 data class EpisodeTargetResponseDto(
@@ -73,6 +75,12 @@ data class EpisodeTargetResponseDto(
 data class EpisodeTargetDto(
     val position: Int = 0,
     val name: String? = null,
-    /** Ссылка: либо прямой поток, либо iframe-страница — определяется по хосту. */
+    /** Ссылка на проигрываемый источник. */
     val url: String? = null,
+    /**
+     * Признак embed-страницы стороннего плеера против прямого потока. Пока не влияет на
+     * ветвление — MVP грузит всё через embed (WebView) независимо от значения. Поле сохранено
+     * на будущее нативное ветвление Direct/Embed.
+     */
+    val iframe: Boolean = false,
 )

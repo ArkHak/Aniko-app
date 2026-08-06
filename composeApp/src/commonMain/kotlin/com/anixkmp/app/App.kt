@@ -28,11 +28,13 @@ import coil3.compose.LocalPlatformContext
 import com.anixkmp.app.feature.auth.LoginScreen
 import com.anixkmp.app.feature.home.HomeScreen
 import com.anixkmp.app.feature.library.LibraryScreen
+import com.anixkmp.app.feature.player.PlayerScreen
 import com.anixkmp.app.feature.release.ReleaseDetailsScreen
 import com.anixkmp.app.feature.search.SearchScreen
 import com.anixkmp.app.feature.settings.SettingsScreen
 import com.anixkmp.app.navigation.AnixDestination
 import com.anixkmp.data.repository.AuthRepository
+import com.anixkmp.model.VideoHost
 import com.anixkmp.data.session.SessionState
 import com.anixkmp.ui.component.AnixLoadingBox
 import com.anixkmp.ui.image.createAnixImageLoader
@@ -155,7 +157,19 @@ private fun AnixAppScaffold() {
             composable<AnixDestination.Settings> { SettingsScreen() }
             composable<AnixDestination.ReleaseDetails> { backStackEntry ->
                 val route: AnixDestination.ReleaseDetails = backStackEntry.toRoute()
-                ReleaseDetailsScreen(releaseId = route.releaseId)
+                ReleaseDetailsScreen(
+                    releaseId = route.releaseId,
+                    onEpisodeClick = navController::navigateToPlayer,
+                )
+            }
+            composable<AnixDestination.Player> { backStackEntry ->
+                val route: AnixDestination.Player = backStackEntry.toRoute()
+                PlayerScreen(
+                    releaseId = route.releaseId,
+                    sourceId = route.sourceId,
+                    position = route.position,
+                    hostKey = route.hostKey,
+                )
             }
         }
     }
@@ -164,4 +178,10 @@ private fun AnixAppScaffold() {
 private fun NavController.navigateToRelease(releaseId: Int) {
     if (releaseId <= 0) return
     navigate(AnixDestination.ReleaseDetails(releaseId))
+}
+
+private fun NavController.navigateToPlayer(releaseId: Int, sourceId: Int, position: Int, host: VideoHost) {
+    navigate(
+        AnixDestination.Player(releaseId = releaseId, sourceId = sourceId, position = position, hostKey = host.key),
+    )
 }

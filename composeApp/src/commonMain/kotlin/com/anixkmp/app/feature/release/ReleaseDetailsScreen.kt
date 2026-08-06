@@ -1,12 +1,18 @@
 package com.anixkmp.app.feature.release
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -16,8 +22,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.anixkmp.model.Episode
+import com.anixkmp.model.EpisodeSource
 import com.anixkmp.model.Release
 import com.anixkmp.model.ReleaseStatus
+import com.anixkmp.model.VideoHost
+import com.anixkmp.model.VoiceType
 import com.anixkmp.ui.component.AnixErrorBox
 import com.anixkmp.ui.component.AnixLoadingBox
 import com.anixkmp.ui.component.AnixPoster
@@ -25,7 +35,8 @@ import com.anixkmp.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Карточка релиза: постер, названия, описание, год/статус/жанры/оценка/счётчик серий.
+ * Карточка релиза: постер, названия, описание, год/статус/жанры/оценка/счётчик серий,
+ * плюс простой флоу выбора серии (тип озвучки → источник → серия) для перехода в плеер.
  *
  * Кнопки «в список»/«избранное» здесь намеренно нет — это Фаза 6 (`docs/plan`), заглушки под
  * неё не создаются, чтобы не плодить недоделанный UI.
@@ -34,11 +45,11 @@ import org.koin.compose.viewmodel.koinViewModel
 fun ReleaseDetailsScreen(
     releaseId: Int,
     modifier: Modifier = Modifier,
+    onEpisodeClick: (releaseId: Int, sourceId: Int, position: Int, host: VideoHost) -> Unit = { _, _, _, _ -> },
     viewModel: ReleaseDetailsViewModel = koinViewModel(),
 ) {
     LaunchedEffect(releaseId) { viewModel.load(releaseId) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val dimens = AnixThemeTokens.dimens
 
     Surface(modifier = modifier.fillMaxSize()) {
         when {
@@ -50,13 +61,25 @@ fun ReleaseDetailsScreen(
                 modifier = Modifier.fillMaxSize(),
             )
 
-            state.release != null -> ReleaseDetailsContent(release = state.release!!)
+            state.release != null -> ReleaseDetailsContent(
+                release = state.release!!,
+                state = state,
+                onSelectVoiceType = viewModel::selectVoiceType,
+                onSelectSource = viewModel::selectSource,
+                onEpisodeClick = { sourceId, position, host -> onEpisodeClick(releaseId, sourceId, position, host) },
+            )
         }
     }
 }
 
 @Composable
-private fun ReleaseDetailsContent(release: Release) {
+private fun ReleaseDetailsContent(
+    release: Release,
+    state: ReleaseDetailsUiState,
+    onSelectVoiceType: (Int) -> Unit,
+    onSelectSource: (Int) -> Unit,
+    onEpisodeClick: (sourceId: Int, position: Int, host: VideoHost) -> Unit,
+) {
     val dimens = AnixThemeTokens.dimens
 
     Column(
@@ -102,6 +125,145 @@ private fun ReleaseDetailsContent(release: Release) {
         val description = release.description
         if (!description.isNullOrBlank()) {
             Text(text = description, style = MaterialTheme.typography.bodyMedium)
+        }
+
+        EpisodeSelectionSection(
+            state = state,
+            onSelectVoiceType = onSelectVoiceType,
+            onSelectSource = onSelectSource,
+            onEpisodeClick = onEpisodeClick,
+        )
+    }
+}
+
+/** Флоу выбора серии: тип озвучки → источник → серия. Плоские списки/чипы — намеренно без вычурного UI. */
+@Composable
+private fun EpisodeSelectionSection(
+    state: ReleaseDetailsUiState,
+    onSelectVoiceType: (Int) -> Unit,
+    onSelectSource: (Int) -> Unit,
+    onEpisodeClick: (sourceId: Int, position: Int, host: VideoHost) -> Unit,
+) {
+    val dimens = AnixThemeTokens.dimens
+
+    Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceM)) {
+        Text(text = "Серии", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+        if (state.voiceTypes.isNotEmpty()) {
+            SectionLabel("Озвучка")
+            ChipRow(
+                items = state.voiceTypes,
+                isSelected = { it.id == state.selectedTypeId },
+                label = VoiceType::name,
+                onClick = { onSelectVoiceType(it.id) },
+            )
+        }
+
+        if (state.sources.isNotEmpty()) {
+            SectionLabel("Источник")
+            ChipRow(
+                items = state.sources,
+                isSelected = { it.id == state.selectedSourceId },
+                label = EpisodeSource::name,
+                onClick = { onSelectSource(it.id) },
+            )
+        }
+
+        when {
+            // Не `AnixLoadingBox` (он `fillMaxSize()`) — эта секция живёт внутри уже
+            // прокручиваемой колонки с неограниченной высотой, `fillMaxSize()` там уронит layout.
+            state.isEpisodesStepLoading -> CircularProgressIndicator(modifier = Modifier.padding(dimens.spaceM))
+
+            state.episodesStepError != null -> Text(
+                text = state.episodesStepError,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+
+            state.episodes.isNotEmpty() -> {
+                SectionLabel("Список серий")
+                Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
+                    val sourceId = state.selectedSourceId
+                    // Хост берём из уже отображённого списка источников текущего выбора — без
+                    // отдельного кэша/повторного запроса, гонка состояния тут невозможна.
+                    val host = state.sources.firstOrNull { it.id == sourceId }?.host ?: VideoHost.UNKNOWN
+                    state.episodes.forEach { episode ->
+                        EpisodeRow(
+                            episode = episode,
+                            onClick = { if (sourceId != null) onEpisodeClick(sourceId, episode.position, host) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+    )
+}
+
+@Composable
+private fun <T> ChipRow(
+    items: List<T>,
+    isSelected: (T) -> Boolean,
+    label: (T) -> String,
+    onClick: (T) -> Unit,
+) {
+    val dimens = AnixThemeTokens.dimens
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+    ) {
+        items.forEach { item ->
+            val selected = isSelected(item)
+            Text(
+                text = label(item),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onPrimary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                modifier = Modifier
+                    .background(
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(dimens.cornerL),
+                    )
+                    .clickable { onClick(item) }
+                    .padding(horizontal = dimens.spaceM, vertical = dimens.spaceS),
+            )
+        }
+    }
+}
+
+@Composable
+private fun EpisodeRow(episode: Episode, onClick: () -> Unit) {
+    val dimens = AnixThemeTokens.dimens
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(dimens.cornerS))
+            .padding(dimens.spaceM),
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+    ) {
+        Text(
+            text = episode.name ?: "Серия ${episode.position}",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        if (episode.isWatched) {
+            Text(
+                text = "✓",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }

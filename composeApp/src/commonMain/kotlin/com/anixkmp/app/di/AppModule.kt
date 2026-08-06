@@ -2,6 +2,7 @@ package com.anixkmp.app.di
 
 import com.anixkmp.app.feature.auth.LoginViewModel
 import com.anixkmp.app.feature.home.HomeViewModel
+import com.anixkmp.app.feature.player.PlayerViewModel
 import com.anixkmp.app.feature.release.ReleaseDetailsViewModel
 import com.anixkmp.app.feature.search.SearchViewModel
 import com.anixkmp.app.feature.settings.SettingsViewModel
@@ -21,4 +22,5 @@ val appModule = module {
     viewModelOf(::SettingsViewModel)
     viewModelOf(::SearchViewModel)
     viewModelOf(::ReleaseDetailsViewModel)
+    viewModelOf(::PlayerViewModel)
 }

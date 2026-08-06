@@ -25,11 +25,19 @@ sealed interface AnixDestination {
     @Serializable
     data class ReleaseDetails(val releaseId: Int) : AnixDestination
 
-    /** Плеер: релиз + выбранный источник + номер серии. */
+    /**
+     * Плеер: релиз + выбранный источник + номер серии.
+     *
+     * `hostKey` ([com.anixkmp.model.VideoHost.key]) передаётся явно из экрана выбора источника,
+     * а не вычисляется заново на экране плеера — так резолвинг хоста не зависит от
+     * runtime-состояния другого репозитория/экрана (см. код-ревью Фазы 5: раньше `EpisodeRepository`
+     * держал `lastSources` как мутабельный кэш специально для этого, что было гонкой состояния).
+     */
     @Serializable
     data class Player(
         val releaseId: Int,
         val sourceId: Int,
         val position: Int,
+        val hostKey: String,
     ) : AnixDestination
 }

@@ -8,7 +8,8 @@ data class VoiceType(
     val id: Int,
     val name: String,
     val episodesCount: Int? = null,
-    val workers: List<String> = emptyList(),
+    /** Живая верификация (R3): реальный API отдаёт строку (или пусто), не массив имён. */
+    val workers: String? = null,
 )
 
 /**
@@ -34,6 +35,22 @@ data class Episode(
     val position: Int,
     val name: String?,
     val isWatched: Boolean = false,
+)
+
+/**
+ * Итог резолвинга серии в проигрываемый источник
+ * (`GET episode/target/{releaseId}/{sourceId}/{position}` → `EpisodeTargetResponse`).
+ *
+ * @param iframe Явный признак embed-страницы против прямого потока, который отдаёт сервер.
+ * Сейчас нигде не используется для ветвления: весь плеер в MVP работает через embed (WebView)
+ * независимо от типа источника, см. `EpisodeRepository.resolvePlaybackSource`. Поле сохранено
+ * на будущее, когда добавится нативное воспроизведение прямых потоков.
+ */
+data class EpisodeTarget(
+    val position: Int,
+    val name: String?,
+    val url: String?,
+    val iframe: Boolean,
 )
 
 /**
