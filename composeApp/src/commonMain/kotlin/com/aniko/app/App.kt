@@ -39,7 +39,7 @@ import com.aniko.data.session.SessionState
 import com.aniko.model.VideoHost
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.image.createAnixImageLoader
-import com.aniko.ui.theme.AnixTheme
+import com.aniko.ui.theme.AppTheme
 import io.ktor.client.HttpClient
 import org.koin.compose.KoinContext
 import org.koin.compose.koinInject
@@ -69,7 +69,7 @@ fun App() {
             authRepository.bootstrap()
         }
 
-        AnixTheme {
+        AppTheme {
             AnixSessionGate(authRepository)
         }
     }
