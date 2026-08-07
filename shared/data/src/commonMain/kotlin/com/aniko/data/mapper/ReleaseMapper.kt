@@ -48,6 +48,11 @@ fun <D, T> PageableResponseDto<D>.toDomain(map: (D) -> T): Paged<T> =
         totalCount = totalCount,
     )
 
+// P2.T10: это НЕ хардкод UI-текста — Anixart API отдаёт статус релиза как русскоязычную строку
+// в самом ответе (нет отдельного enum-поля), поэтому парсинг обязан матчиться на её русские
+// значения. `ForbiddenCyrillicStringLiteral` такие случаи и не пытается отличать (см. KDoc
+// правила) — это осознанное и задокументированное исключение, не грандфазеренное через baseline.
+@Suppress("ForbiddenCyrillicStringLiteral")
 private fun String?.toReleaseStatus(): ReleaseStatus =
     when {
         this == null -> ReleaseStatus.UNKNOWN

@@ -75,7 +75,10 @@ fun LibraryScreen(
             when {
                 pagingState.error != null && pagingState.items.isEmpty() ->
                     AnixErrorBox(
-                        message = pagingState.error?.message ?: strings.libraryLoadError,
+                        // P2.T10: не показываем `error.message` напрямую — это текст исключения
+                        // AnixError (технический, на английском, только для логов/debug), не
+                        // локализованный UI-текст. Всегда локализованный fallback.
+                        message = strings.libraryLoadError,
                         onRetry = { viewModel.retry(selectedTab) },
                         modifier = Modifier.fillMaxSize(),
                     )

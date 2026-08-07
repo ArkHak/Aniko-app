@@ -43,7 +43,7 @@ class MacKeychainTokenStorage : SecureTokenStorage {
             when (exitCode) {
                 0 -> stdout.trim().ifEmpty { null }
                 ERR_ITEM_NOT_FOUND -> null
-                else -> error("security find-generic-password завершился с кодом $exitCode: $stderr")
+                else -> error("security find-generic-password exited with code $exitCode: $stderr")
             }
         }
 
@@ -73,7 +73,7 @@ class MacKeychainTokenStorage : SecureTokenStorage {
             val exitCode = process.waitFor()
 
             check(exitCode == 0 || exitCode == ERR_ITEM_NOT_FOUND) {
-                "security delete-generic-password завершился с кодом $exitCode: $stderr"
+                "security delete-generic-password exited with code $exitCode: $stderr"
             }
         }
 
@@ -95,7 +95,7 @@ class MacKeychainTokenStorage : SecureTokenStorage {
         val output = process.inputStream.bufferedReader().use { it.readText() }
         val exitCode = process.waitFor()
 
-        check(exitCode == 0) { "security -i завершился с кодом $exitCode: $output" }
+        check(exitCode == 0) { "security -i exited with code $exitCode: $output" }
     }
 
     private companion object {

@@ -85,7 +85,10 @@ fun ProfileScreen(
 
             uiState.error != null && profile == null ->
                 AnixErrorBox(
-                    message = uiState.error?.message ?: strings.profileLoadError,
+                    // P2.T10: не показываем `error.message` напрямую — это текст исключения
+                    // AnixError (технический, на английском, только для логов/debug), не
+                    // локализованный UI-текст. Всегда локализованный fallback.
+                    message = strings.profileLoadError,
                     onRetry = viewModel::retry,
                     modifier = Modifier.fillMaxSize().padding(innerPadding),
                 )

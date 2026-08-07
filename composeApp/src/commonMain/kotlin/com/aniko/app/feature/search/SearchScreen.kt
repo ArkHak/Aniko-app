@@ -64,7 +64,10 @@ fun SearchScreen(
 
                 pagingState.error != null && pagingState.items.isEmpty() ->
                     AnixErrorBox(
-                        message = pagingState.error?.message ?: strings.searchError,
+                        // P2.T10: не показываем `error.message` напрямую — это текст исключения
+                        // AnixError (технический, на английском, только для логов/debug), не
+                        // локализованный UI-текст. Всегда локализованный fallback.
+                        message = strings.searchError,
                         onRetry = viewModel::retry,
                         modifier = Modifier.fillMaxSize(),
                     )

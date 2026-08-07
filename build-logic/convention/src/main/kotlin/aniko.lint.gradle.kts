@@ -9,10 +9,26 @@ import org.jlleitschuh.gradle.ktlint.reporter.ReporterType
 /**
  * ktlint (форматирование/стиль) + detekt (статический анализ) для модуля (P1.T11).
  *
- * Дефолтные ruleset'ы без кастомных правил: собственное detekt-правило против
- * захардкоженных строковых литералов в UI — это P2.T10, отдельная будущая задача,
- * сюда сознательно не входит. `config/detekt/detekt.yml` в корне репозитория лишь донастраивает
- * один встроенный parameter (`FunctionNaming.ignoreAnnotated`), кастомных Rule-классов нет.
+ * Подключает кастомный ruleset "aniko" (P2.T10, модуль `:detekt-rules` — правило
+ * `ForbiddenCyrillicStringLiteral` против захардкоженных кириллических строковых литералов вне
+ * i18n-слоя) для КАЖДОГО модуля, применяющего `aniko.lint`.
+ *
+ * Про границу includeBuild (важно, эмпирически проверено — см. журнал изменений плана
+ * `docs/REELWAVE_PLAN.md`, запись P2.T10): `build-logic` — отдельная includeBuild-сборка со своим
+ * project-графом (`build-logic/settings.gradle.kts` содержит только `:convention`, там нет
+ * `:detekt-rules`). Интуитивно кажется, что `project(":detekt-rules")` внутри ЭТОГО файла (он же
+ * часть build-logic) не должен резолвиться. Но это не так: precompiled script plugin (этот файл)
+ * компилируется в класс `Plugin<Project>`, и `project(...)` внутри его тела — метод получателя
+ * `Project`, вызываемый в рантайме на РЕАЛЬНОМ объекте `Project`, к которому плагин применяется
+ * (`:composeApp`, `:shared:model`, ...) — а это projects КОРНЕВОЙ сборки, где `:detekt-rules`
+ * прекрасно резолвится. Проверено запуском `:shared:model:detektMetadataCommonMain` с реальным
+ * кириллическим литералом ТОЛЬКО с этой декларацией (без какой-либо `detektPlugins`-зависимости
+ * в самом `shared/model/build.gradle.kts`) — правило сработало. Поэтому одной декларации здесь
+ * достаточно для всех потребителей `aniko.lint`, дублировать её в каждом модуле не нужно.
+ *
+ * `config/detekt/detekt.yml` в корне репозитория настраивает один встроенный parameter
+ * (`FunctionNaming.ignoreAnnotated`) и конфигурирует правило `ForbiddenCyrillicStringLiteral`
+ * (excludes на тестовые source set'ы и i18n-слой).
  *
  * При первом включении (2026-08-07) detekt на дефолтных правилах нашёл ~70 существующих
  * находок (MagicNumber в цветовой палитре/status-кодах, TooGenericExceptionCaught,
@@ -24,6 +40,12 @@ import org.jlleitschuh.gradle.ktlint.reporter.ReporterType
 plugins {
     id("org.jlleitschuh.gradle.ktlint")
     id("io.gitlab.arturbosch.detekt")
+}
+
+dependencies {
+    // :detekt-rules — модуль КОРНЕВОЙ сборки (не build-logic), см. подробный KDoc в
+    // detekt-rules/build.gradle.kts про то, почему он объявлен именно там.
+    add("detektPlugins", project(":detekt-rules"))
 }
 
 ktlint {

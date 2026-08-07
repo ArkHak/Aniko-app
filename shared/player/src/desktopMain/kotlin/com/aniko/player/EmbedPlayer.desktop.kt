@@ -53,8 +53,13 @@ actual fun EmbedPlayerView(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // P2.T10: намеренно английский текст, не через Strings/Lyricist. `:shared:player`
+            // не зависит от `:shared:ui` (там живёт i18n-слой) — заводить эту зависимость ради
+            // двух подписей заглушки не входит в объём этой задачи (см. KDoc класса выше:
+            // desktop-плеер — уже задокументированная упрощённая заглушка Фазы 5, полноценный
+            // WebView не тащим). Полная локализация этого экрана — будущая задача.
             BasicText(
-                text = "Открыто в системном браузере",
+                text = "Opened in the system browser",
                 style = TextStyle(color = Color.White),
             )
             Box(
@@ -65,7 +70,7 @@ actual fun EmbedPlayerView(
                         .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 BasicText(
-                    text = "Открыть ещё раз",
+                    text = "Open again",
                     style = TextStyle(color = Color.White),
                 )
             }

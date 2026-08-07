@@ -28,6 +28,9 @@ dependencyResolutionManagement {
     }
 }
 
+// Кастомное detekt-правило (P2.T10) — модуль КОРНЕВОЙ сборки (не build-logic), см. подробный
+// KDoc в detekt-rules/build.gradle.kts про то, почему именно так из-за границы includeBuild.
+include(":detekt-rules")
 include(":shared:model")
 include(":shared:network")
 include(":shared:data")

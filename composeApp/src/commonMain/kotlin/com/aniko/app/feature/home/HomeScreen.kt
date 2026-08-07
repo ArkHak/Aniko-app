@@ -99,7 +99,10 @@ private fun ReleaseSection(
         when {
             error != null && state.items.isEmpty() ->
                 AnixErrorBox(
-                    message = error.message ?: LocalStrings.current.homeSectionLoadError,
+                    // P2.T10: не показываем `error.message` напрямую — это текст исключения
+                    // AnixError (технический, на английском, только для логов/debug), не
+                    // локализованный UI-текст. Всегда локализованный fallback.
+                    message = LocalStrings.current.homeSectionLoadError,
                     onRetry = onRetry,
                     modifier = Modifier.fillMaxWidth().height(SECTION_HEIGHT),
                 )

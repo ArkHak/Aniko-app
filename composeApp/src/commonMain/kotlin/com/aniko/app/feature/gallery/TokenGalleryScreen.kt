@@ -240,6 +240,13 @@ private fun TypographySection() {
     }
 }
 
+// P2.T10: это НЕ хардкод UI-текста в обычном смысле — TokenGalleryScreen (P2.T12) намеренно
+// показывает RU- и EN-образец одновременно, независимо от текущего языка приложения, специально
+// для визуальной сверки типографики сразу на обоих языках (см. KDoc P2.T12 в
+// docs/REELWAVE_PLAN.md: "не переключается языком приложения — оба нужны разом для сверки").
+// Через Strings/Lyricist это не сделать (там ровно один активный язык), поэтому — осознанное
+// исключение, не грандфазеренное через baseline.
+@Suppress("ForbiddenCyrillicStringLiteral")
 @Composable
 private fun TypographyRow(
     name: String,

@@ -1,9 +1,25 @@
 # Дефолтный ruleset detekt (`buildUponDefaultConfig = true` в build-logic/convention) — этот
-# файл НЕ вводит кастомные правила (см. P1.T11 в docs/REELWAVE_PLAN.md), только настраивает
-# параметр одного встроенного правила против ложного срабатывания, системного для Compose-кода.
+# файл настраивает один встроенный параметр (см. FunctionNaming ниже) и подключает кастомный
+# ruleset "aniko" (P2.T10, модуль :detekt-rules — см. его KDoc про включение через границу
+# includeBuild).
 naming:
   FunctionNaming:
     # @Composable-функции по конвенции называются в PascalCase (`HomeScreen`, `TitleCard`, ...) —
     # без этого исключения правило массово ловит их во всех compose-модулях (тот же самый случай,
     # что и `ktlint_function_naming_ignore_when_annotated_with` в .editorconfig).
     ignoreAnnotated: ["Composable"]
+
+# Кастомный ruleset :detekt-rules (P2.T10). Проверяется без послаблений через baseline —
+# находки этого правила намеренно НЕ грандфазерятся (в отличие от встроенных правил из P1.T11).
+aniko:
+  active: true
+  ForbiddenCyrillicStringLiteral:
+    active: true
+    # Тестам можно (не UI, не пользовательский текст) — единый glob ловит все варианты имён
+    # тестовых source set'ов в этом KMP-проекте (commonTest/desktopTest/androidUnitTest/
+    # androidInstrumentedTest/iosTest/...), не только уже существующие commonTest/desktopTest.
+    excludes:
+      - "**/src/*[Tt]est*/**"
+      # i18n-слой (P2.T9, `shared/ui/.../i18n/`) по своей природе целиком состоит из
+      # русских/английских строковых литералов — это значения переводов, не хардкод.
+      - "**/com/aniko/ui/i18n/**"
