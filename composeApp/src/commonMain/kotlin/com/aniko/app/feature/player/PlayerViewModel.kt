@@ -16,8 +16,26 @@ import kotlinx.coroutines.launch
 data class PlayerUiState(
     val isLoading: Boolean = true,
     val source: PlaybackSource? = null,
-    val errorMessage: String? = null,
+    val error: PlayerError? = null,
 )
+
+/**
+ * Причина ошибки резолва плеера, без готового текста — текст живёт в `Strings` (Фаза 2 плана,
+ * P2.T9: ViewModel не знает про `LocalStrings`/Compose, локализация — забота [PlayerScreen]).
+ * [SourceUnavailable] назван не `PlaybackSource`, чтобы не конфликтовать с
+ * [com.aniko.player.PlaybackSource], уже импортированным в этом файле.
+ */
+sealed interface PlayerError {
+    data object NoConnection : PlayerError
+
+    data object Unauthorized : PlayerError
+
+    data class SourceUnavailable(
+        val hostKey: String,
+    ) : PlayerError
+
+    data object Generic : PlayerError
+}
 
 /**
  * ViewModel экрана плеера.
@@ -53,7 +71,7 @@ class PlayerViewModel(
     ) {
         val key = LoadKey(releaseId, sourceId, position, host)
         // Не повторяем загрузку, если тот же эпизод уже грузится или уже успешно загружен.
-        // Ошибочное состояние (errorMessage != null) НЕ блокирует повтор — иначе повторный тап
+        // Ошибочное состояние (error != null) НЕ блокирует повтор — иначе повторный тап
         // по той же серии после сбоя молча ничего не делал бы, и единственным способом
         // повторить попытку оставалась бы кнопка "Повторить" на AnixErrorBox.
         if (loadedKey == key && (_uiState.value.isLoading || _uiState.value.source != null)) return
@@ -73,7 +91,7 @@ class PlayerViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.value = PlayerUiState(isLoading = false, errorMessage = e.toPlayerErrorMessage())
+                _uiState.value = PlayerUiState(isLoading = false, error = e.toPlayerError())
             }
         }
     }
@@ -83,12 +101,12 @@ class PlayerViewModel(
     }
 }
 
-private fun Exception.toPlayerErrorMessage(): String {
-    val error = this as? AnixError ?: return "Не удалось загрузить видео"
+private fun Exception.toPlayerError(): PlayerError {
+    val error = this as? AnixError ?: return PlayerError.Generic
     return when (error) {
-        is AnixError.Network -> "Нет соединения с сервером"
-        is AnixError.Unauthorized -> "Требуется вход в аккаунт"
-        is AnixError.PlaybackResolve -> "Не удалось получить видео с источника ${error.host.key}"
-        else -> "Не удалось загрузить видео"
+        is AnixError.Network -> PlayerError.NoConnection
+        is AnixError.Unauthorized -> PlayerError.Unauthorized
+        is AnixError.PlaybackResolve -> PlayerError.SourceUnavailable(error.host.key)
+        else -> PlayerError.Generic
     }
 }

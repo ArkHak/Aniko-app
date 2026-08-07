@@ -29,6 +29,9 @@ import com.aniko.ui.component.AnixEmptyBox
 import com.aniko.ui.component.AnixErrorBox
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.component.ReleaseCard
+import com.aniko.ui.i18n.LocalStrings
+import com.aniko.ui.i18n.Strings
+import com.aniko.ui.i18n.displayName
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -49,6 +52,7 @@ fun LibraryScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
     val selectedTab = uiState.selectedTab
 
     // Id релиза, для которого сейчас открыто контекстное меню — не Release целиком, чтобы меню
@@ -62,7 +66,7 @@ fun LibraryScreen(
                     Tab(
                         selected = tab == selectedTab,
                         onClick = { viewModel.selectTab(tab) },
-                        text = { Text(tab.title()) },
+                        text = { Text(tab.title(strings)) },
                     )
                 }
             }
@@ -71,7 +75,7 @@ fun LibraryScreen(
             when {
                 pagingState.error != null && pagingState.items.isEmpty() ->
                     AnixErrorBox(
-                        message = pagingState.error?.message ?: "Не удалось загрузить список",
+                        message = pagingState.error?.message ?: strings.libraryLoadError,
                         onRetry = { viewModel.retry(selectedTab) },
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -83,7 +87,7 @@ fun LibraryScreen(
 
                 pagingState.isEmpty ->
                     AnixEmptyBox(
-                        message = selectedTab.emptyMessage(),
+                        message = selectedTab.emptyMessage(strings),
                         modifier = Modifier.fillMaxSize(),
                     )
 
@@ -158,27 +162,31 @@ private fun LibraryContextMenu(
     onRemoveFromList: (ListStatus) -> Unit,
     onRemoveFromHistory: () -> Unit,
 ) {
+    val strings = LocalStrings.current
+
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         ListStatus.entries.filter { it != release.myListStatus }.forEach { status ->
             DropdownMenuItem(
-                text = { Text("В «${status.displayName()}»") },
+                text = { Text(strings.libraryMoveToStatus(status.displayName(strings))) },
                 onClick = { onChangeStatus(status) },
             )
         }
         DropdownMenuItem(
-            text = { Text(if (release.isFavorite) "Убрать из избранного" else "Добавить в избранное") },
+            text = {
+                Text(if (release.isFavorite) strings.commonRemoveFromFavorites else strings.commonAddToFavorites)
+            },
             onClick = onToggleFavorite,
         )
         when (tab) {
             is LibraryTab.Status ->
                 DropdownMenuItem(
-                    text = { Text("Удалить из списка") },
+                    text = { Text(strings.libraryRemoveFromList) },
                     onClick = { onRemoveFromList(tab.status) },
                 )
 
             LibraryTab.History ->
                 DropdownMenuItem(
-                    text = { Text("Удалить из истории") },
+                    text = { Text(strings.libraryRemoveFromHistory) },
                     onClick = onRemoveFromHistory,
                 )
 
@@ -187,27 +195,18 @@ private fun LibraryContextMenu(
     }
 }
 
-private fun LibraryTab.title(): String =
+private fun LibraryTab.title(strings: Strings): String =
     when (this) {
-        is LibraryTab.Status -> status.displayName()
-        LibraryTab.Favorites -> "Избранное"
-        LibraryTab.History -> "История"
+        is LibraryTab.Status -> status.displayName(strings)
+        LibraryTab.Favorites -> strings.libraryTabFavorites
+        LibraryTab.History -> strings.libraryTabHistory
     }
 
-private fun LibraryTab.emptyMessage(): String =
+private fun LibraryTab.emptyMessage(strings: Strings): String =
     when (this) {
-        is LibraryTab.Status -> "Список пуст"
-        LibraryTab.Favorites -> "В избранном пока ничего нет"
-        LibraryTab.History -> "История просмотра пуста"
-    }
-
-private fun ListStatus.displayName(): String =
-    when (this) {
-        ListStatus.WATCHING -> "Смотрю"
-        ListStatus.PLANNED -> "В планах"
-        ListStatus.COMPLETED -> "Просмотрено"
-        ListStatus.ON_HOLD -> "Отложено"
-        ListStatus.DROPPED -> "Брошено"
+        is LibraryTab.Status -> strings.libraryEmptyStatus
+        LibraryTab.Favorites -> strings.libraryEmptyFavorites
+        LibraryTab.History -> strings.libraryEmptyHistory
     }
 
 private const val LIBRARY_PREFETCH_THRESHOLD = 6

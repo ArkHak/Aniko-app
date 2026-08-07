@@ -14,8 +14,24 @@ data class LoginUiState(
     val login: String = "",
     val password: String = "",
     val isLoading: Boolean = false,
-    val errorMessage: String? = null,
+    val error: LoginError? = null,
 )
+
+/**
+ * Причина ошибки `auth/signIn`, без готового текста — текст живёт в `Strings` (Фаза 2 плана,
+ * P2.T9: ViewModel не знает про `LocalStrings`/Compose, локализация — забота [LoginScreen]).
+ *
+ * Коды `auth/signIn` (см. `docs/api/jadx-out/.../network/response/auth/SignInResponse.java`
+ * и базовый `network/Response.java`): SUCCESSFUL=0, FAILED=1, INVALID_LOGIN=2,
+ * INVALID_PASSWORD=3, BANNED=402, PERM_BANNED=403.
+ */
+enum class LoginError {
+    GENERIC,
+    INVALID_LOGIN,
+    INVALID_PASSWORD,
+    ACCOUNT_BANNED,
+    NO_CONNECTION,
+}
 
 /**
  * ViewModel экрана входа.
@@ -31,18 +47,18 @@ class LoginViewModel(
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
     fun onLoginChange(value: String) {
-        _uiState.value = _uiState.value.copy(login = value, errorMessage = null)
+        _uiState.value = _uiState.value.copy(login = value, error = null)
     }
 
     fun onPasswordChange(value: String) {
-        _uiState.value = _uiState.value.copy(password = value, errorMessage = null)
+        _uiState.value = _uiState.value.copy(password = value, error = null)
     }
 
     fun submit() {
         val state = _uiState.value
         if (state.isLoading || state.login.isBlank() || state.password.isBlank()) return
 
-        _uiState.value = state.copy(isLoading = true, errorMessage = null)
+        _uiState.value = state.copy(isLoading = true, error = null)
         viewModelScope.launch {
             try {
                 authRepository.signIn(state.login, state.password)
@@ -57,33 +73,26 @@ class LoginViewModel(
                     _uiState.value.copy(
                         isLoading = false,
                         password = "",
-                        errorMessage = e.toLoginErrorMessage(),
+                        error = e.toLoginError(),
                     )
             }
         }
     }
 }
 
-/**
- * Маппинг ошибок `auth/signIn` на понятные сообщения.
- *
- * Коды `auth/signIn` (см. `docs/api/jadx-out/.../network/response/auth/SignInResponse.java`
- * и базовый `network/Response.java`): SUCCESSFUL=0, FAILED=1, INVALID_LOGIN=2,
- * INVALID_PASSWORD=3, BANNED=402, PERM_BANNED=403.
- */
-private fun Exception.toLoginErrorMessage(): String {
-    val error = this as? AnixError ?: return "Не удалось войти, попробуйте снова"
+private fun Exception.toLoginError(): LoginError {
+    val error = this as? AnixError ?: return LoginError.GENERIC
     return when (error) {
         is AnixError.Api ->
             when (error.apiCode) {
-                CODE_INVALID_LOGIN -> "Неверный логин"
-                CODE_INVALID_PASSWORD -> "Неверный пароль"
-                CODE_BANNED, CODE_PERM_BANNED -> "Аккаунт заблокирован"
-                else -> "Не удалось войти, попробуйте снова"
+                CODE_INVALID_LOGIN -> LoginError.INVALID_LOGIN
+                CODE_INVALID_PASSWORD -> LoginError.INVALID_PASSWORD
+                CODE_BANNED, CODE_PERM_BANNED -> LoginError.ACCOUNT_BANNED
+                else -> LoginError.GENERIC
             }
 
-        is AnixError.Network -> "Нет соединения с сервером"
-        else -> "Не удалось войти, попробуйте снова"
+        is AnixError.Network -> LoginError.NO_CONNECTION
+        else -> LoginError.GENERIC
     }
 }
 

@@ -37,6 +37,8 @@ import com.aniko.ui.component.AnixAvatar
 import com.aniko.ui.component.AnixErrorBox
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.component.ChipRow
+import com.aniko.ui.i18n.LocalStrings
+import com.aniko.ui.i18n.Strings
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -54,15 +56,19 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val strings = LocalStrings.current
 
     Scaffold(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Профиль") },
+                title = { Text(strings.profileTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = strings.backContentDescription,
+                        )
                     }
                 },
             )
@@ -79,7 +85,7 @@ fun ProfileScreen(
 
             uiState.error != null && profile == null ->
                 AnixErrorBox(
-                    message = uiState.error?.message ?: "Не удалось загрузить профиль",
+                    message = uiState.error?.message ?: strings.profileLoadError,
                     onRetry = viewModel::retry,
                     modifier = Modifier.fillMaxSize().padding(innerPadding),
                 )
@@ -111,6 +117,7 @@ private fun ProfileContent(
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
 
     Column(
         modifier =
@@ -123,12 +130,20 @@ private fun ProfileContent(
 
         HorizontalDivider()
 
-        Text(text = "Статистика", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(
+            text = strings.profileStatsTitle,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
         StatsGrid(profile = profile)
 
         HorizontalDivider()
 
-        Text(text = "Приватность", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(
+            text = strings.profilePrivacyTitle,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
         PrivacySection(
             privacy = privacy,
             onUpdatePrivacyStats = onUpdatePrivacyStats,
@@ -148,6 +163,7 @@ private fun ProfileHeader(
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -158,7 +174,7 @@ private fun ProfileHeader(
         Text(text = profile.login, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 
         if (profile.isSponsor) {
-            AssistChip(onClick = {}, label = { Text("Спонсор") })
+            AssistChip(onClick = {}, label = { Text(strings.profileSponsorBadge) })
         }
 
         if (profile.isBanned || profile.isPermBanned) {
@@ -168,7 +184,12 @@ private fun ProfileHeader(
             ) {
                 Column(modifier = Modifier.padding(dimens.spaceM)) {
                     Text(
-                        text = if (profile.isPermBanned) "Аккаунт заблокирован навсегда" else "Аккаунт заблокирован",
+                        text =
+                            if (profile.isPermBanned) {
+                                strings.profileAccountBannedPermanently
+                            } else {
+                                strings.commonAccountBanned
+                            },
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onErrorContainer,
@@ -197,16 +218,17 @@ private fun StatsGrid(
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
     val stats =
         listOf(
-            "Смотрю" to profile.watchingCount,
-            "В планах" to profile.planCount,
-            "Просмотрено" to profile.completedCount,
-            "Отложено" to profile.holdOnCount,
-            "Брошено" to profile.droppedCount,
-            "Избранное" to profile.favoriteCount,
-            "Друзья" to profile.friendCount,
-            "Комментарии" to profile.commentCount,
+            strings.listStatusWatching to profile.watchingCount,
+            strings.listStatusPlanned to profile.planCount,
+            strings.listStatusCompleted to profile.completedCount,
+            strings.listStatusOnHold to profile.holdOnCount,
+            strings.listStatusDropped to profile.droppedCount,
+            strings.libraryTabFavorites to profile.favoriteCount,
+            strings.profileFriendsLabel to profile.friendCount,
+            strings.profileCommentsLabel to profile.commentCount,
         )
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceM)) {
@@ -242,11 +264,12 @@ private fun PrivacySection(
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceM)) {
-        PrivacyRow(title = "Кто видит статистику", selected = privacy.stats, onSelect = onUpdatePrivacyStats)
-        PrivacyRow(title = "Кто видит списки", selected = privacy.counts, onSelect = onUpdatePrivacyCounts)
-        PrivacyRow(title = "Кто видит соцсети", selected = privacy.social, onSelect = onUpdatePrivacySocial)
+        PrivacyRow(title = strings.privacyWhoSeesStats, selected = privacy.stats, onSelect = onUpdatePrivacyStats)
+        PrivacyRow(title = strings.privacyWhoSeesLists, selected = privacy.counts, onSelect = onUpdatePrivacyCounts)
+        PrivacyRow(title = strings.privacyWhoSeesSocial, selected = privacy.social, onSelect = onUpdatePrivacySocial)
         FriendRequestPrivacyRow(selected = privacy.friendRequests, onSelect = onUpdatePrivacyFriendRequests)
 
         Row(
@@ -254,7 +277,7 @@ private fun PrivacySection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(text = "Режим инкогнито", style = MaterialTheme.typography.bodyMedium)
+            Text(text = strings.privacyIncognitoMode, style = MaterialTheme.typography.bodyMedium)
             Switch(checked = privacy.isIncognito, onCheckedChange = { onToggleIncognito() })
         }
     }
@@ -267,12 +290,13 @@ private fun PrivacyRow(
     onSelect: (PrivacyVisibility) -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
         Text(text = title, style = MaterialTheme.typography.bodyMedium)
         ChipRow(
             items = PrivacyVisibility.entries,
             isSelected = { it == selected },
-            label = PrivacyVisibility::toDisplayName,
+            label = { it.toDisplayName(strings) },
             onClick = onSelect,
         )
     }
@@ -284,26 +308,27 @@ private fun FriendRequestPrivacyRow(
     onSelect: (FriendRequestVisibility) -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
-        Text(text = "Заявки в друзья", style = MaterialTheme.typography.bodyMedium)
+        Text(text = strings.privacyFriendRequestsLabel, style = MaterialTheme.typography.bodyMedium)
         ChipRow(
             items = FriendRequestVisibility.entries,
             isSelected = { it == selected },
-            label = FriendRequestVisibility::toDisplayName,
+            label = { it.toDisplayName(strings) },
             onClick = onSelect,
         )
     }
 }
 
-private fun PrivacyVisibility.toDisplayName(): String =
+private fun PrivacyVisibility.toDisplayName(strings: Strings): String =
     when (this) {
-        PrivacyVisibility.EVERYONE -> "Все"
-        PrivacyVisibility.FRIENDS_ONLY -> "Друзья"
-        PrivacyVisibility.ONLY_ME -> "Только я"
+        PrivacyVisibility.EVERYONE -> strings.privacyVisibilityEveryone
+        PrivacyVisibility.FRIENDS_ONLY -> strings.privacyVisibilityFriendsOnly
+        PrivacyVisibility.ONLY_ME -> strings.privacyVisibilityOnlyMe
     }
 
-private fun FriendRequestVisibility.toDisplayName(): String =
+private fun FriendRequestVisibility.toDisplayName(strings: Strings): String =
     when (this) {
-        FriendRequestVisibility.EVERYONE -> "Все"
-        FriendRequestVisibility.NOBODY -> "Никто"
+        FriendRequestVisibility.EVERYONE -> strings.privacyVisibilityEveryone
+        FriendRequestVisibility.NOBODY -> strings.friendRequestVisibilityNobody
     }

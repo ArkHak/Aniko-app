@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aniko.model.ListStatus
 import com.aniko.model.Release
+import com.aniko.ui.i18n.LocalStrings
+import com.aniko.ui.i18n.shortLabel
 import com.aniko.ui.theme.AnixThemeTokens
 
 /**
@@ -92,7 +94,7 @@ private fun FavoriteBadge() {
     ) {
         Icon(
             imageVector = Icons.Filled.Favorite,
-            contentDescription = "В избранном",
+            contentDescription = LocalStrings.current.commonFavoriteBadge,
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(OVERLAY_ICON_SIZE),
         )
@@ -110,23 +112,13 @@ private fun ListStatusBadge(status: ListStatus) {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = status.shortLabel(),
+            text = status.shortLabel(LocalStrings.current),
             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
             color = Color.White,
             textAlign = TextAlign.Center,
         )
     }
 }
-
-/** Короткое обозначение статуса списка для компактного бейджа поверх постера. */
-private fun ListStatus.shortLabel(): String =
-    when (this) {
-        ListStatus.WATCHING -> "С"
-        ListStatus.PLANNED -> "П"
-        ListStatus.COMPLETED -> "✓"
-        ListStatus.ON_HOLD -> "О"
-        ListStatus.DROPPED -> "Б"
-    }
 
 @Composable
 private fun ListStatus.badgeColor(): Color =

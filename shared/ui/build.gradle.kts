@@ -23,6 +23,9 @@ kotlin {
             api(libs.coil.compose)
             api(libs.coil.network.ktor3)
             implementation(libs.ktor.client.core)
+            // i18n (P2.T7/P2.T8): Lyricist — CMP Resources не подходит для runtime-переключения
+            // языка, см. docs/REELWAVE_PLAN.md.
+            implementation(libs.lyricist)
         }
     }
 }

@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 
 @Composable
@@ -41,7 +42,7 @@ fun AnixErrorBox(
                 textAlign = TextAlign.Center,
             )
             if (onRetry != null) {
-                Button(onClick = onRetry) { Text("Повторить") }
+                Button(onClick = onRetry) { Text(LocalStrings.current.commonRetry) }
             }
         }
     }

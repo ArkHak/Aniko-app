@@ -38,6 +38,9 @@ import com.aniko.ui.component.AnixErrorBox
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.component.AnixPoster
 import com.aniko.ui.component.ChipRow
+import com.aniko.ui.i18n.LocalStrings
+import com.aniko.ui.i18n.Strings
+import com.aniko.ui.i18n.displayName
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -55,6 +58,7 @@ fun ReleaseDetailsScreen(
 ) {
     LaunchedEffect(releaseId) { viewModel.load(releaseId) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val strings = LocalStrings.current
 
     Surface(modifier = modifier.fillMaxSize()) {
         when {
@@ -62,7 +66,7 @@ fun ReleaseDetailsScreen(
 
             state.errorMessage != null && state.release == null ->
                 AnixErrorBox(
-                    message = state.errorMessage.orEmpty(),
+                    message = state.errorMessage.toReleaseMessage(strings),
                     onRetry = viewModel::retry,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -94,6 +98,7 @@ private fun ReleaseDetailsContent(
     onToggleFavorite: () -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
 
     Column(
         modifier =
@@ -121,10 +126,10 @@ private fun ReleaseDetailsContent(
                     )
                 }
 
-                InfoRow(label = "Год", value = release.year?.toString())
-                InfoRow(label = "Статус", value = release.status.toDisplayName())
-                InfoRow(label = "Серии", value = release.episodesLabel())
-                InfoRow(label = "Оценка", value = release.grade?.let { formatGrade(it) })
+                InfoRow(label = strings.releaseInfoYear, value = release.year?.toString())
+                InfoRow(label = strings.releaseInfoStatus, value = release.status.toDisplayName(strings))
+                InfoRow(label = strings.releaseInfoEpisodesLabel, value = release.episodesLabel())
+                InfoRow(label = strings.releaseInfoRating, value = release.grade?.let { formatGrade(it) })
             }
         }
 
@@ -169,6 +174,7 @@ private fun FavoriteAndStatusRow(
     onToggleFavorite: () -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -177,14 +183,15 @@ private fun FavoriteAndStatusRow(
         IconButton(onClick = onToggleFavorite) {
             Icon(
                 imageVector = if (release.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                contentDescription = if (release.isFavorite) "Убрать из избранного" else "Добавить в избранное",
+                contentDescription =
+                    if (release.isFavorite) strings.commonRemoveFromFavorites else strings.commonAddToFavorites,
                 tint = if (release.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             )
         }
         ChipRow(
             items = ListStatus.entries,
             isSelected = { it == release.myListStatus },
-            label = ListStatus::toDisplayName,
+            label = { it.displayName(strings) },
             onClick = { status -> onChangeListStatus(if (status == release.myListStatus) null else status) },
         )
     }
@@ -199,12 +206,17 @@ private fun EpisodeSelectionSection(
     onEpisodeClick: (sourceId: Int, position: Int, host: VideoHost) -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
 
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceM)) {
-        Text(text = "Серии", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(
+            text = strings.releaseInfoEpisodesLabel,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
 
         if (state.voiceTypes.isNotEmpty()) {
-            SectionLabel("Озвучка")
+            SectionLabel(strings.releaseSectionVoiceType)
             ChipRow(
                 items = state.voiceTypes,
                 isSelected = { it.id == state.selectedTypeId },
@@ -214,7 +226,7 @@ private fun EpisodeSelectionSection(
         }
 
         if (state.sources.isNotEmpty()) {
-            SectionLabel("Источник")
+            SectionLabel(strings.releaseSectionSource)
             ChipRow(
                 items = state.sources,
                 isSelected = { it.id == state.selectedSourceId },
@@ -230,13 +242,13 @@ private fun EpisodeSelectionSection(
 
             state.episodesStepError != null ->
                 Text(
-                    text = state.episodesStepError,
+                    text = state.episodesStepError.toEpisodesMessage(strings),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                 )
 
             state.episodes.isNotEmpty() -> {
-                SectionLabel("Список серий")
+                SectionLabel(strings.releaseSectionEpisodesList)
                 Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
                     val sourceId = state.selectedSourceId
                     // Хост берём из уже отображённого списка источников текущего выбора — без
@@ -269,6 +281,7 @@ private fun EpisodeRow(
     onClick: () -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
     Row(
         modifier =
             Modifier
@@ -279,7 +292,7 @@ private fun EpisodeRow(
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
     ) {
         Text(
-            text = episode.name ?: "Серия ${episode.position}",
+            text = episode.name ?: strings.releaseEpisodeFallbackName(episode.position),
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )
@@ -320,21 +333,26 @@ private fun Release.episodesLabel(): String? {
     }
 }
 
-private fun ReleaseStatus.toDisplayName(): String? =
+private fun ReleaseStatus.toDisplayName(strings: Strings): String? =
     when (this) {
-        ReleaseStatus.ANNOUNCE -> "Анонс"
-        ReleaseStatus.ONGOING -> "Онгоинг"
-        ReleaseStatus.FINISHED -> "Завершён"
+        ReleaseStatus.ANNOUNCE -> strings.releaseStatusAnnounce
+        ReleaseStatus.ONGOING -> strings.releaseStatusOngoing
+        ReleaseStatus.FINISHED -> strings.releaseStatusFinished
         ReleaseStatus.UNKNOWN -> null
     }
 
-private fun ListStatus.toDisplayName(): String =
+private fun LoadError?.toReleaseMessage(strings: Strings): String =
     when (this) {
-        ListStatus.WATCHING -> "Смотрю"
-        ListStatus.PLANNED -> "В планах"
-        ListStatus.COMPLETED -> "Просмотрено"
-        ListStatus.ON_HOLD -> "Отложено"
-        ListStatus.DROPPED -> "Брошено"
+        LoadError.NO_CONNECTION -> strings.commonErrorNoConnection
+        LoadError.UNAUTHORIZED -> strings.commonErrorUnauthorized
+        LoadError.GENERIC, null -> strings.releaseLoadError
+    }
+
+private fun LoadError?.toEpisodesMessage(strings: Strings): String =
+    when (this) {
+        LoadError.NO_CONNECTION -> strings.commonErrorNoConnection
+        LoadError.UNAUTHORIZED -> strings.commonErrorUnauthorized
+        LoadError.GENERIC, null -> strings.releaseEpisodesLoadError
     }
 
 private fun formatGrade(grade: Double): String {

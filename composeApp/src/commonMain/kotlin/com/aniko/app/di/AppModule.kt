@@ -1,6 +1,7 @@
 package com.aniko.app.di
 
 import com.aniko.app.feature.auth.LoginViewModel
+import com.aniko.app.feature.gallery.TokenGalleryViewModel
 import com.aniko.app.feature.home.HomeViewModel
 import com.aniko.app.feature.library.LibraryViewModel
 import com.aniko.app.feature.player.PlayerViewModel
@@ -28,4 +29,5 @@ val appModule =
         viewModelOf(::PlayerViewModel)
         viewModelOf(::LibraryViewModel)
         viewModelOf(::ProfileViewModel)
+        viewModelOf(::TokenGalleryViewModel)
     }

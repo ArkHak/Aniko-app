@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 data class ReleaseDetailsUiState(
     val isLoading: Boolean = false,
     val release: Release? = null,
-    val errorMessage: String? = null,
+    val errorMessage: LoadError? = null,
     // Флоу выбора серии: типы озвучки → источники → серии (см. `docs/api/ENDPOINTS.md`).
     val voiceTypes: List<VoiceType> = emptyList(),
     val selectedTypeId: Int? = null,
@@ -28,8 +28,21 @@ data class ReleaseDetailsUiState(
     val selectedSourceId: Int? = null,
     val episodes: List<Episode> = emptyList(),
     val isEpisodesStepLoading: Boolean = false,
-    val episodesStepError: String? = null,
+    val episodesStepError: LoadError? = null,
 )
+
+/**
+ * Причина ошибки загрузки релиза/серий, без готового текста — текст живёт в `Strings`
+ * (Фаза 2 плана, P2.T9: ViewModel не знает про `LocalStrings`/Compose). Одно и то же значение
+ * [GENERIC] размечает и «не удалось загрузить релиз», и «не удалось загрузить серии» — какой
+ * именно текст показать, решает [ReleaseDetailsScreen] по тому, в какое поле стейта попала
+ * ошибка ([ReleaseDetailsUiState.errorMessage] vs [ReleaseDetailsUiState.episodesStepError]).
+ */
+enum class LoadError {
+    NO_CONNECTION,
+    UNAUTHORIZED,
+    GENERIC,
+}
 
 /**
  * ViewModel карточки релиза.
@@ -68,7 +81,7 @@ class ReleaseDetailsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.value = ReleaseDetailsUiState(errorMessage = e.toReleaseErrorMessage())
+                _uiState.value = ReleaseDetailsUiState(errorMessage = e.toLoadError())
                 return@launch
             }
             loadVoiceTypes(releaseId)
@@ -89,7 +102,7 @@ class ReleaseDetailsViewModel(
                 throw e
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isEpisodesStepLoading = false, episodesStepError = e.toEpisodesErrorMessage())
+                    it.copy(isEpisodesStepLoading = false, episodesStepError = e.toLoadError())
                 }
             }
         }
@@ -116,7 +129,7 @@ class ReleaseDetailsViewModel(
                 throw e
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isEpisodesStepLoading = false, episodesStepError = e.toEpisodesErrorMessage())
+                    it.copy(isEpisodesStepLoading = false, episodesStepError = e.toLoadError())
                 }
             }
         }
@@ -142,7 +155,7 @@ class ReleaseDetailsViewModel(
                 throw e
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isEpisodesStepLoading = false, episodesStepError = e.toEpisodesErrorMessage())
+                    it.copy(isEpisodesStepLoading = false, episodesStepError = e.toLoadError())
                 }
             }
         }
@@ -199,20 +212,11 @@ private inline fun MutableStateFlow<ReleaseDetailsUiState>.update(block: (Releas
     value = block(value)
 }
 
-private fun Exception.toReleaseErrorMessage(): String {
-    val error = this as? AnixError ?: return "Не удалось загрузить релиз"
+private fun Exception.toLoadError(): LoadError {
+    val error = this as? AnixError ?: return LoadError.GENERIC
     return when (error) {
-        is AnixError.Network -> "Нет соединения с сервером"
-        is AnixError.Unauthorized -> "Требуется вход в аккаунт"
-        else -> "Не удалось загрузить релиз"
-    }
-}
-
-private fun Exception.toEpisodesErrorMessage(): String {
-    val error = this as? AnixError ?: return "Не удалось загрузить серии"
-    return when (error) {
-        is AnixError.Network -> "Нет соединения с сервером"
-        is AnixError.Unauthorized -> "Требуется вход в аккаунт"
-        else -> "Не удалось загрузить серии"
+        is AnixError.Network -> LoadError.NO_CONNECTION
+        is AnixError.Unauthorized -> LoadError.UNAUTHORIZED
+        else -> LoadError.GENERIC
     }
 }

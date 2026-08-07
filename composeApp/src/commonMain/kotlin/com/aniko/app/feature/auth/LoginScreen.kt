@@ -23,6 +23,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aniko.ui.i18n.LocalStrings
+import com.aniko.ui.i18n.Strings
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -33,6 +35,7 @@ fun LoginScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
 
     Surface(modifier = modifier.fillMaxSize()) {
         Column(
@@ -44,7 +47,7 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "Вход в Anixart",
+                text = strings.loginTitle,
                 style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center,
             )
@@ -52,7 +55,7 @@ fun LoginScreen(
             OutlinedTextField(
                 value = state.login,
                 onValueChange = viewModel::onLoginChange,
-                label = { Text("Логин") },
+                label = { Text(strings.loginLoginLabel) },
                 singleLine = true,
                 enabled = !state.isLoading,
                 keyboardOptions =
@@ -66,7 +69,7 @@ fun LoginScreen(
             OutlinedTextField(
                 value = state.password,
                 onValueChange = viewModel::onPasswordChange,
-                label = { Text("Пароль") },
+                label = { Text(strings.loginPasswordLabel) },
                 singleLine = true,
                 enabled = !state.isLoading,
                 visualTransformation = PasswordVisualTransformation(),
@@ -86,14 +89,14 @@ fun LoginScreen(
                         color = MaterialTheme.colorScheme.onPrimary,
                     )
                 } else {
-                    Text("Войти")
+                    Text(strings.loginSubmit)
                 }
             }
 
-            val errorMessage = state.errorMessage
-            if (errorMessage != null) {
+            val error = state.error
+            if (error != null) {
                 Text(
-                    text = errorMessage,
+                    text = error.toMessage(strings),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center,
@@ -102,3 +105,12 @@ fun LoginScreen(
         }
     }
 }
+
+private fun LoginError.toMessage(strings: Strings): String =
+    when (this) {
+        LoginError.GENERIC -> strings.loginGenericError
+        LoginError.INVALID_LOGIN -> strings.loginInvalidLogin
+        LoginError.INVALID_PASSWORD -> strings.loginInvalidPassword
+        LoginError.ACCOUNT_BANNED -> strings.commonAccountBanned
+        LoginError.NO_CONNECTION -> strings.commonErrorNoConnection
+    }

@@ -12,6 +12,8 @@ import com.aniko.player.EmbedPlayerView
 import com.aniko.player.PlaybackSource
 import com.aniko.ui.component.AnixErrorBox
 import com.aniko.ui.component.AnixLoadingBox
+import com.aniko.ui.i18n.LocalStrings
+import com.aniko.ui.i18n.Strings
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -34,14 +36,15 @@ fun PlayerScreen(
         viewModel.load(releaseId, sourceId, position, VideoHost.fromKey(hostKey))
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val strings = LocalStrings.current
 
     Surface(modifier = modifier.fillMaxSize()) {
         when {
             state.isLoading -> AnixLoadingBox(modifier = Modifier.fillMaxSize())
 
-            state.errorMessage != null ->
+            state.error != null ->
                 AnixErrorBox(
-                    message = state.errorMessage.orEmpty(),
+                    message = state.error.toMessage(strings),
                     onRetry = viewModel::retry,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -53,9 +56,17 @@ fun PlayerScreen(
                 } else {
                     // Недостижимо на практике: `resolvePlaybackSource` всегда возвращает `Embed`
                     // (см. `EpisodeRepository`), но исчерпывающая обработка честнее, чем `!!`.
-                    AnixErrorBox(message = "Не удалось загрузить видео", modifier = Modifier.fillMaxSize())
+                    AnixErrorBox(message = strings.playerLoadError, modifier = Modifier.fillMaxSize())
                 }
             }
         }
     }
 }
+
+private fun PlayerError?.toMessage(strings: Strings): String =
+    when (this) {
+        PlayerError.NoConnection -> strings.commonErrorNoConnection
+        PlayerError.Unauthorized -> strings.commonErrorUnauthorized
+        is PlayerError.SourceUnavailable -> strings.playerSourceError(hostKey)
+        PlayerError.Generic, null -> strings.playerLoadError
+    }

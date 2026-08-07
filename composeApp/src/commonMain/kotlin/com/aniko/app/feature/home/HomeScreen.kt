@@ -23,6 +23,7 @@ import com.aniko.model.Release
 import com.aniko.ui.component.AnixErrorBox
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.component.AnixPoster
+import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -44,6 +45,7 @@ fun HomeScreen(
     val watchingState by viewModel.watchingState.collectAsStateWithLifecycle()
     val recommendationsState by viewModel.recommendationsState.collectAsStateWithLifecycle()
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
 
     Surface(modifier = modifier.fillMaxSize()) {
         Column(
@@ -54,14 +56,14 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
         ) {
             ReleaseSection(
-                title = "Продолжить смотреть",
+                title = strings.homeContinueWatching,
                 state = watchingState,
                 onReleaseClick = onReleaseClick,
                 onRetry = viewModel::retryWatching,
                 onLoadMore = viewModel::loadMoreWatching,
             )
             ReleaseSection(
-                title = "Рекомендации",
+                title = strings.homeRecommendations,
                 state = recommendationsState,
                 onReleaseClick = onReleaseClick,
                 onRetry = viewModel::retryRecommendations,
@@ -97,7 +99,7 @@ private fun ReleaseSection(
         when {
             error != null && state.items.isEmpty() ->
                 AnixErrorBox(
-                    message = error.message ?: "Не удалось загрузить",
+                    message = error.message ?: LocalStrings.current.homeSectionLoadError,
                     onRetry = onRetry,
                     modifier = Modifier.fillMaxWidth().height(SECTION_HEIGHT),
                 )

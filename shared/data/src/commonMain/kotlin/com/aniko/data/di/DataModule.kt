@@ -9,6 +9,7 @@ import com.aniko.data.api.ProfileListApi
 import com.aniko.data.api.ProfilePreferenceApi
 import com.aniko.data.api.ReleaseApi
 import com.aniko.data.api.SearchApi
+import com.aniko.data.locale.LocaleStore
 import com.aniko.data.repository.AuthRepository
 import com.aniko.data.repository.EpisodeRepository
 import com.aniko.data.repository.LibraryRepository
@@ -35,6 +36,7 @@ val dataModule =
         single { SessionStore(settings = get(), secureStorage = get()) }
         single<TokenProvider> { get<SessionStore>() }
         single<SessionInvalidator> { get<SessionStore>() }
+        single { LocaleStore(settings = get()) }
 
         single<HttpClient> {
             createAnixHttpClient(

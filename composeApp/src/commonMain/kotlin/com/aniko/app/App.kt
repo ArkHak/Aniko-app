@@ -26,6 +26,7 @@ import androidx.navigation.toRoute
 import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
 import com.aniko.app.feature.auth.LoginScreen
+import com.aniko.app.feature.gallery.TokenGalleryScreen
 import com.aniko.app.feature.home.HomeScreen
 import com.aniko.app.feature.library.LibraryScreen
 import com.aniko.app.feature.player.PlayerScreen
@@ -34,10 +35,13 @@ import com.aniko.app.feature.release.ReleaseDetailsScreen
 import com.aniko.app.feature.search.SearchScreen
 import com.aniko.app.feature.settings.SettingsScreen
 import com.aniko.app.navigation.AnixDestination
+import com.aniko.data.locale.LocaleStore
 import com.aniko.data.repository.AuthRepository
 import com.aniko.data.session.SessionState
 import com.aniko.model.VideoHost
 import com.aniko.ui.component.AnixLoadingBox
+import com.aniko.ui.i18n.LocalStrings
+import com.aniko.ui.i18n.ProvideAppStrings
 import com.aniko.ui.image.createAnixImageLoader
 import com.aniko.ui.theme.AppTheme
 import io.ktor.client.HttpClient
@@ -53,6 +57,7 @@ fun App() {
     KoinContext {
         val httpClient = koinInject<HttpClient>()
         val authRepository = koinInject<AuthRepository>()
+        val localeStore = koinInject<LocaleStore>()
         val platformContext = LocalPlatformContext.current
 
         // Coil ходит в сеть тем же Ktor-клиентом, что и API.
@@ -69,8 +74,15 @@ fun App() {
             authRepository.bootstrap()
         }
 
+        // Язык — читается из LocaleStore (P2.T11) и прокидывается в ProvideAppStrings (P2.T7/T8),
+        // а не наоборот: shared/ui ничего не знает про DI/Settings, только про Compose-механику
+        // Lyricist (см. KDoc ProvideAppStrings). null — «следовать системной локали».
+        val languageTag by localeStore.languageTag.collectAsStateWithLifecycle()
+
         AppTheme {
-            AnixSessionGate(authRepository)
+            ProvideAppStrings(languageTag = languageTag) {
+                AnixSessionGate(authRepository)
+            }
         }
     }
 }
@@ -89,9 +101,10 @@ private fun AnixSessionGate(authRepository: AuthRepository) {
     val sessionState by authRepository.sessionState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(authRepository) {
+    val sessionExpiredMessage = LocalStrings.current.sessionExpiredMessage
+    LaunchedEffect(authRepository, sessionExpiredMessage) {
         authRepository.sessionExpired.collect {
-            snackbarHostState.showSnackbar("Сессия истекла, войдите снова")
+            snackbarHostState.showSnackbar(sessionExpiredMessage)
         }
     }
 
@@ -109,13 +122,16 @@ private fun AnixSessionGate(authRepository: AuthRepository) {
     }
 }
 
-private val bottomTabs =
-    listOf(
-        BottomTab("Главная", AnixDestination.Home),
-        BottomTab("Поиск", AnixDestination.Search),
-        BottomTab("Списки", AnixDestination.Library),
-        BottomTab("Настройки", AnixDestination.Settings),
+@Composable
+private fun bottomTabs(): List<BottomTab> {
+    val strings = LocalStrings.current
+    return listOf(
+        BottomTab(strings.navHome, AnixDestination.Home),
+        BottomTab(strings.navSearch, AnixDestination.Search),
+        BottomTab(strings.navLibrary, AnixDestination.Library),
+        BottomTab(strings.navSettings, AnixDestination.Settings),
     )
+}
 
 private data class BottomTab(
     val title: String,
@@ -126,6 +142,7 @@ private data class BottomTab(
 private fun AnixAppScaffold() {
     val navController = rememberNavController()
     var selectedTab by remember { mutableIntStateOf(0) }
+    val bottomTabs = bottomTabs()
 
     Scaffold(
         bottomBar = {
@@ -162,10 +179,16 @@ private fun AnixAppScaffold() {
                 LibraryScreen(onReleaseClick = navController::navigateToRelease)
             }
             composable<AnixDestination.Settings> {
-                SettingsScreen(onProfileClick = { navController.navigate(AnixDestination.Profile) })
+                SettingsScreen(
+                    onProfileClick = { navController.navigate(AnixDestination.Profile) },
+                    onDesignGalleryClick = { navController.navigate(AnixDestination.TokenGallery) },
+                )
             }
             composable<AnixDestination.Profile> {
                 ProfileScreen(onBack = { navController.popBackStack() })
+            }
+            composable<AnixDestination.TokenGallery> {
+                TokenGalleryScreen(onBack = { navController.popBackStack() })
             }
             composable<AnixDestination.ReleaseDetails> { backStackEntry ->
                 val route: AnixDestination.ReleaseDetails = backStackEntry.toRoute()

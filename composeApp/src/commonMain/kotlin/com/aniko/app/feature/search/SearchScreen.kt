@@ -22,6 +22,7 @@ import com.aniko.ui.component.AnixEmptyBox
 import com.aniko.ui.component.AnixErrorBox
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.component.ReleaseCard
+import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -35,6 +36,7 @@ fun SearchScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val pagingState by viewModel.pagingState.collectAsStateWithLifecycle()
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
 
     Surface(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(dimens.spaceM)) {
@@ -42,7 +44,7 @@ fun SearchScreen(
                 value = query,
                 onValueChange = viewModel::onQueryChange,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Название аниме...") },
+                placeholder = { Text(strings.searchPlaceholder) },
                 singleLine = true,
                 trailingIcon = {
                     if (query.isNotEmpty()) {
@@ -56,13 +58,13 @@ fun SearchScreen(
             when {
                 query.isBlank() ->
                     AnixEmptyBox(
-                        message = "Введите название, чтобы найти релиз",
+                        message = strings.searchEmptyPrompt,
                         modifier = Modifier.fillMaxSize(),
                     )
 
                 pagingState.error != null && pagingState.items.isEmpty() ->
                     AnixErrorBox(
-                        message = pagingState.error?.message ?: "Не удалось выполнить поиск",
+                        message = pagingState.error?.message ?: strings.searchError,
                         onRetry = viewModel::retry,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -74,7 +76,7 @@ fun SearchScreen(
 
                 pagingState.isEmpty ->
                     AnixEmptyBox(
-                        message = "Ничего не найдено",
+                        message = strings.searchNoResults,
                         modifier = Modifier.fillMaxSize(),
                     )
 
