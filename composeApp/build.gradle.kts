@@ -94,7 +94,9 @@ compose.desktop {
             // Desktop-таргет собираем только под macOS (согласовано в плане).
             targetFormats(TargetFormat.Dmg)
             packageName = "Aniko"
-            packageVersion = "0.0.1"
+            // jpackage требует, чтобы первое число версии пакета было >= 1 — это отдельная
+            // версия macOS-инсталлятора, не совпадающая с версией приложения (0.0.1).
+            packageVersion = "1.0.0"
         }
     }
 }
