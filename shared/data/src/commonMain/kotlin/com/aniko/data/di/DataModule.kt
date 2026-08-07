@@ -28,34 +28,35 @@ import org.koin.dsl.module
  * `Settings` сюда НЕ входит: его реализация платформенная (Android требует Context),
  * поэтому его поставляет `composeApp` через свой платформенный модуль.
  */
-val dataModule = module {
-    single { ApiConfig() }
+val dataModule =
+    module {
+        single { ApiConfig() }
 
-    single { SessionStore(settings = get(), secureStorage = get()) }
-    single<TokenProvider> { get<SessionStore>() }
-    single<SessionInvalidator> { get<SessionStore>() }
+        single { SessionStore(settings = get(), secureStorage = get()) }
+        single<TokenProvider> { get<SessionStore>() }
+        single<SessionInvalidator> { get<SessionStore>() }
 
-    single<HttpClient> {
-        createAnixHttpClient(
-            apiConfig = get(),
-            tokenProvider = get(),
-            sessionInvalidator = get(),
-        )
+        single<HttpClient> {
+            createAnixHttpClient(
+                apiConfig = get(),
+                tokenProvider = get(),
+                sessionInvalidator = get(),
+            )
+        }
+
+        single { AuthApi(client = get()) }
+        single { ReleaseApi(client = get()) }
+        single { EpisodeApi(client = get()) }
+        single { ProfileListApi(client = get()) }
+        single { FavoriteApi(client = get()) }
+        single { HistoryApi(client = get()) }
+        single { SearchApi(client = get()) }
+        single { ProfileApi(client = get()) }
+        single { ProfilePreferenceApi(client = get()) }
+
+        single { AuthRepository(authApi = get(), sessionStore = get()) }
+        single { ReleaseRepository(releaseApi = get(), searchApi = get()) }
+        single { EpisodeRepository(episodeApi = get()) }
+        single { LibraryRepository(profileListApi = get(), favoriteApi = get(), historyApi = get()) }
+        single { ProfileRepository(profileApi = get(), profilePreferenceApi = get(), sessionStore = get()) }
     }
-
-    single { AuthApi(client = get()) }
-    single { ReleaseApi(client = get()) }
-    single { EpisodeApi(client = get()) }
-    single { ProfileListApi(client = get()) }
-    single { FavoriteApi(client = get()) }
-    single { HistoryApi(client = get()) }
-    single { SearchApi(client = get()) }
-    single { ProfileApi(client = get()) }
-    single { ProfilePreferenceApi(client = get()) }
-
-    single { AuthRepository(authApi = get(), sessionStore = get()) }
-    single { ReleaseRepository(releaseApi = get(), searchApi = get()) }
-    single { EpisodeRepository(episodeApi = get()) }
-    single { LibraryRepository(profileListApi = get(), favoriteApi = get(), historyApi = get()) }
-    single { ProfileRepository(profileApi = get(), profilePreferenceApi = get(), sessionStore = get()) }
-}

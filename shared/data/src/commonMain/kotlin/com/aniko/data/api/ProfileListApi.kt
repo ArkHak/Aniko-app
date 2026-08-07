@@ -17,8 +17,9 @@ import io.ktor.client.request.parameter
  * `profile/list/...`, `favorite/...`, `history/...`), так что разделение точнее отражает
  * реальный API.
  */
-class ProfileListApi(private val client: HttpClient) {
-
+class ProfileListApi(
+    private val client: HttpClient,
+) {
     /**
      * `GET profile/list/all/{status}/{page}?sort=&filter_announce=`
      *
@@ -34,24 +35,37 @@ class ProfileListApi(private val client: HttpClient) {
         page: Int,
         sort: Int = 1,
         filterAnnounce: Int = 0,
-    ): PageableResponseDto<ReleaseDto> = apiCall {
-        client.get("profile/list/all/${status.apiValue}/$page") {
-            parameter("sort", sort)
-            parameter("filter_announce", filterAnnounce)
-        }.body<PageableResponseDto<ReleaseDto>>().requireOk()
-    }
+    ): PageableResponseDto<ReleaseDto> =
+        apiCall {
+            client
+                .get("profile/list/all/${status.apiValue}/$page") {
+                    parameter("sort", sort)
+                    parameter("filter_announce", filterAnnounce)
+                }.body<PageableResponseDto<ReleaseDto>>()
+                .requireOk()
+        }
 
     /** `GET profile/list/add/{status}/{r_id}` */
-    suspend fun addToList(status: ListStatus, releaseId: Int): SimpleResponseDto = apiCall {
-        client.get("profile/list/add/${status.apiValue}/$releaseId")
-            .body<SimpleResponseDto>()
-            .requireOk()
-    }
+    suspend fun addToList(
+        status: ListStatus,
+        releaseId: Int,
+    ): SimpleResponseDto =
+        apiCall {
+            client
+                .get("profile/list/add/${status.apiValue}/$releaseId")
+                .body<SimpleResponseDto>()
+                .requireOk()
+        }
 
     /** `GET profile/list/delete/{status}/{r_id}` */
-    suspend fun removeFromList(status: ListStatus, releaseId: Int): SimpleResponseDto = apiCall {
-        client.get("profile/list/delete/${status.apiValue}/$releaseId")
-            .body<SimpleResponseDto>()
-            .requireOk()
-    }
+    suspend fun removeFromList(
+        status: ListStatus,
+        releaseId: Int,
+    ): SimpleResponseDto =
+        apiCall {
+            client
+                .get("profile/list/delete/${status.apiValue}/$releaseId")
+                .body<SimpleResponseDto>()
+                .requireOk()
+        }
 }

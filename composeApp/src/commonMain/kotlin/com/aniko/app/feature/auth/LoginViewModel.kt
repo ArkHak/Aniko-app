@@ -27,7 +27,6 @@ data class LoginUiState(
 class LoginViewModel(
     private val authRepository: AuthRepository,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
@@ -54,11 +53,12 @@ class LoginViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    password = "",
-                    errorMessage = e.toLoginErrorMessage(),
-                )
+                _uiState.value =
+                    _uiState.value.copy(
+                        isLoading = false,
+                        password = "",
+                        errorMessage = e.toLoginErrorMessage(),
+                    )
             }
         }
     }
@@ -74,12 +74,13 @@ class LoginViewModel(
 private fun Exception.toLoginErrorMessage(): String {
     val error = this as? AnixError ?: return "Не удалось войти, попробуйте снова"
     return when (error) {
-        is AnixError.Api -> when (error.apiCode) {
-            CODE_INVALID_LOGIN -> "Неверный логин"
-            CODE_INVALID_PASSWORD -> "Неверный пароль"
-            CODE_BANNED, CODE_PERM_BANNED -> "Аккаунт заблокирован"
-            else -> "Не удалось войти, попробуйте снова"
-        }
+        is AnixError.Api ->
+            when (error.apiCode) {
+                CODE_INVALID_LOGIN -> "Неверный логин"
+                CODE_INVALID_PASSWORD -> "Неверный пароль"
+                CODE_BANNED, CODE_PERM_BANNED -> "Аккаунт заблокирован"
+                else -> "Не удалось войти, попробуйте снова"
+            }
 
         is AnixError.Network -> "Нет соединения с сервером"
         else -> "Не удалось войти, попробуйте снова"

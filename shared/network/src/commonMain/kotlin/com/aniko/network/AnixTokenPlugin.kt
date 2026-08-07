@@ -14,14 +14,15 @@ class AnixTokenPluginConfig {
  * (`@Query("token") String token` во всех `*Api.java`). Если параметр уже
  * выставлен вручную — плагин его не трогает.
  */
-val AnixTokenPlugin = createClientPlugin("AnixTokenPlugin", ::AnixTokenPluginConfig) {
-    val tokenProvider = pluginConfig.tokenProvider
+val AnixTokenPlugin =
+    createClientPlugin("AnixTokenPlugin", ::AnixTokenPluginConfig) {
+        val tokenProvider = pluginConfig.tokenProvider
 
-    onRequest { request, _ ->
-        if (!request.url.parameters.contains(ApiConfig.TOKEN_QUERY_PARAM)) {
-            tokenProvider.token()?.let { token ->
-                request.url.parameters.append(ApiConfig.TOKEN_QUERY_PARAM, token)
+        onRequest { request, _ ->
+            if (!request.url.parameters.contains(ApiConfig.TOKEN_QUERY_PARAM)) {
+                tokenProvider.token()?.let { token ->
+                    request.url.parameters.append(ApiConfig.TOKEN_QUERY_PARAM, token)
+                }
             }
         }
     }
-}

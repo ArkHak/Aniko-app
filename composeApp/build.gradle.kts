@@ -5,6 +5,7 @@ plugins {
     id("aniko.kmp.compose")
     // нужен для type-safe навигации (@Serializable destinations)
     id("aniko.kmp.serialization")
+    id("aniko.lint")
 }
 
 val desktopMainClass = "com.aniko.app.MainKt"

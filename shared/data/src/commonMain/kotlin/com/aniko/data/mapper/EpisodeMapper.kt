@@ -10,19 +10,21 @@ import com.aniko.model.EpisodeTarget
 import com.aniko.model.VideoHost
 import com.aniko.model.VoiceType
 
-fun EpisodeTypeDto.toDomain(): VoiceType = VoiceType(
-    id = id,
-    name = name.orEmpty(),
-    episodesCount = episodesCount,
-    workers = workers,
-)
+fun EpisodeTypeDto.toDomain(): VoiceType =
+    VoiceType(
+        id = id,
+        name = name.orEmpty(),
+        episodesCount = episodesCount,
+        workers = workers,
+    )
 
-fun EpisodeSourceDto.toDomain(): EpisodeSource = EpisodeSource(
-    id = id,
-    name = name.orEmpty(),
-    host = resolveHost(),
-    episodesCount = episodesCount,
-)
+fun EpisodeSourceDto.toDomain(): EpisodeSource =
+    EpisodeSource(
+        id = id,
+        name = name.orEmpty(),
+        host = resolveHost(),
+        episodesCount = episodesCount,
+    )
 
 /**
  * Живая верификация (R3, `episode/186/{typeId}`) подтвердила: [EpisodeSourceDto.name] — чистый
@@ -32,15 +34,17 @@ fun EpisodeSourceDto.toDomain(): EpisodeSource = EpisodeSource(
  */
 private fun EpisodeSourceDto.resolveHost(): VideoHost = VideoHost.fromKey(name)
 
-fun EpisodeDto.toDomain(): Episode = Episode(
-    position = position,
-    name = name,
-    isWatched = isWatched,
-)
+fun EpisodeDto.toDomain(): Episode =
+    Episode(
+        position = position,
+        name = name,
+        isWatched = isWatched,
+    )
 
-fun EpisodeTargetDto.toDomain(): EpisodeTarget = EpisodeTarget(
-    position = position,
-    name = name,
-    url = url,
-    iframe = iframe,
-)
+fun EpisodeTargetDto.toDomain(): EpisodeTarget =
+    EpisodeTarget(
+        position = position,
+        name = name,
+        url = url,
+        iframe = iframe,
+    )

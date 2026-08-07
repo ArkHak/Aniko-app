@@ -77,7 +77,6 @@ import kotlin.native.ref.createCleaner
  * архитектурная правка, а единственный компилируемый вариант на этой платформе.
  */
 class IosKeychainTokenStorage : SecureTokenStorage {
-
     private val ioDispatcher get() = Dispatchers.Default
 
     // Тип — CFTypeRef?, а не CFStringRef?: это ЗНАЧЕНИЯ для kSecAttrService/kSecAttrAccount
@@ -86,62 +85,73 @@ class IosKeychainTokenStorage : SecureTokenStorage {
     private val cfAccount: CFTypeRef? = CFBridgingRetain(ACCOUNT)
 
     @Suppress("unused")
-    private val cleaner: Cleaner = createCleaner(cfService to cfAccount) { (service, account) ->
-        CFBridgingRelease(service)
-        CFBridgingRelease(account)
-    }
+    private val cleaner: Cleaner =
+        createCleaner(cfService to cfAccount) { (service, account) ->
+            CFBridgingRelease(service)
+            CFBridgingRelease(account)
+        }
 
     private val baseProperties: Map<CFStringRef?, CFTypeRef?>
-        get() = mapOf(
-            kSecClass to kSecClassGenericPassword,
-            kSecAttrService to cfService,
-            kSecAttrAccount to cfAccount,
-        )
+        get() =
+            mapOf(
+                kSecClass to kSecClassGenericPassword,
+                kSecAttrService to cfService,
+                kSecAttrAccount to cfAccount,
+            )
 
-    override suspend fun get(): String? = withContext(ioDispatcher) {
-        readTokenData()?.let { NSString.create(it, NSUTF8StringEncoding)?.asKotlinString() }
-    }
-
-    override suspend fun set(token: String): Unit = withContext(ioDispatcher) {
-        val data = token.asNSString().dataUsingEncoding(NSUTF8StringEncoding)
-        if (!addKeychainItem(data)) {
-            updateKeychainItem(data)
+    override suspend fun get(): String? =
+        withContext(ioDispatcher) {
+            readTokenData()?.let { NSString.create(it, NSUTF8StringEncoding)?.asKotlinString() }
         }
-    }
 
-    override suspend fun clear(): Unit = withContext(ioDispatcher) {
-        removeKeychainItem()
-    }
-
-    private fun readTokenData(): NSData? = memScoped {
-        val cfValue = alloc<CFTypeRefVar>()
-        val status = keychainOperation(
-            kSecReturnData to kCFBooleanTrue,
-            kSecMatchLimit to kSecMatchLimitOne,
-        ) { SecItemCopyMatching(it, cfValue.ptr) }
-        if (status == errSecItemNotFound) return@memScoped null
-        status.checkError()
-        CFBridgingRelease(cfValue.value) as? NSData
-    }
-
-    private fun addKeychainItem(value: NSData?): Boolean = cfRetain(value) { cfValue ->
-        val status = keychainOperation(
-            kSecValueData to cfValue,
-            kSecAttrAccessible to kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-        ) { SecItemAdd(it, null) }
-        status.checkError(errSecDuplicateItem)
-        status != errSecDuplicateItem
-    }
-
-    private fun updateKeychainItem(value: NSData?): Unit = cfRetain(value) { cfValue ->
-        val status = keychainOperation {
-            val attributes = cfDictionaryOf(kSecValueData to cfValue)
-            val output = SecItemUpdate(it, attributes)
-            CFBridgingRelease(attributes)
-            output
+    override suspend fun set(token: String): Unit =
+        withContext(ioDispatcher) {
+            val data = token.asNSString().dataUsingEncoding(NSUTF8StringEncoding)
+            if (!addKeychainItem(data)) {
+                updateKeychainItem(data)
+            }
         }
-        status.checkError()
-    }
+
+    override suspend fun clear(): Unit =
+        withContext(ioDispatcher) {
+            removeKeychainItem()
+        }
+
+    private fun readTokenData(): NSData? =
+        memScoped {
+            val cfValue = alloc<CFTypeRefVar>()
+            val status =
+                keychainOperation(
+                    kSecReturnData to kCFBooleanTrue,
+                    kSecMatchLimit to kSecMatchLimitOne,
+                ) { SecItemCopyMatching(it, cfValue.ptr) }
+            if (status == errSecItemNotFound) return@memScoped null
+            status.checkError()
+            CFBridgingRelease(cfValue.value) as? NSData
+        }
+
+    private fun addKeychainItem(value: NSData?): Boolean =
+        cfRetain(value) { cfValue ->
+            val status =
+                keychainOperation(
+                    kSecValueData to cfValue,
+                    kSecAttrAccessible to kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+                ) { SecItemAdd(it, null) }
+            status.checkError(errSecDuplicateItem)
+            status != errSecDuplicateItem
+        }
+
+    private fun updateKeychainItem(value: NSData?): Unit =
+        cfRetain(value) { cfValue ->
+            val status =
+                keychainOperation {
+                    val attributes = cfDictionaryOf(kSecValueData to cfValue)
+                    val output = SecItemUpdate(it, attributes)
+                    CFBridgingRelease(attributes)
+                    output
+                }
+            status.checkError()
+        }
 
     private fun removeKeychainItem() {
         val status = memScoped { keychainOperation { SecItemDelete(it) } }
@@ -168,8 +178,7 @@ class IosKeychainTokenStorage : SecureTokenStorage {
     }
 }
 
-private fun MemScope.cfDictionaryOf(vararg items: Pair<CFStringRef?, CFTypeRef?>): CFDictionaryRef? =
-    cfDictionaryOf(mapOf(*items))
+private fun MemScope.cfDictionaryOf(vararg items: Pair<CFStringRef?, CFTypeRef?>): CFDictionaryRef? = cfDictionaryOf(mapOf(*items))
 
 private fun MemScope.cfDictionaryOf(map: Map<CFStringRef?, CFTypeRef?>): CFDictionaryRef? {
     val size = map.size
@@ -185,14 +194,18 @@ private fun MemScope.cfDictionaryOf(map: Map<CFStringRef?, CFTypeRef?>): CFDicti
     )
 }
 
-private inline fun <T> cfRetain(value: Any?, block: MemScope.(CFTypeRef?) -> T): T = memScoped {
-    val cfValue = CFBridgingRetain(value)
-    try {
-        block(cfValue)
-    } finally {
-        CFBridgingRelease(cfValue)
+private inline fun <T> cfRetain(
+    value: Any?,
+    block: MemScope.(CFTypeRef?) -> T,
+): T =
+    memScoped {
+        val cfValue = CFBridgingRetain(value)
+        try {
+            block(cfValue)
+        } finally {
+            CFBridgingRelease(cfValue)
+        }
     }
-}
 
 // Оборачиваем каст в функции ради читаемости на месте вызова (аналогично multiplatform-settings).
 @Suppress("CAST_NEVER_SUCCEEDS")

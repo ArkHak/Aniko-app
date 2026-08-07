@@ -14,7 +14,6 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(
     private val authRepository: AuthRepository,
 ) : ViewModel() {
-
     fun signOut() {
         viewModelScope.launch {
             authRepository.signOut()

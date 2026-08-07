@@ -20,12 +20,15 @@ import kotlinx.coroutines.withContext
  * используем эти API как есть, они по-прежнему рабочие и поддерживаемые библиотекой.
  */
 @Suppress("DEPRECATION")
-class AndroidSecureTokenStorage(private val context: Context) : SecureTokenStorage {
-
+class AndroidSecureTokenStorage(
+    private val context: Context,
+) : SecureTokenStorage {
     private val prefs: SharedPreferences by lazy {
-        val masterKey = MasterKey.Builder(context.applicationContext)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+        val masterKey =
+            MasterKey
+                .Builder(context.applicationContext)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
 
         EncryptedSharedPreferences.create(
             context.applicationContext,
@@ -36,17 +39,20 @@ class AndroidSecureTokenStorage(private val context: Context) : SecureTokenStora
         )
     }
 
-    override suspend fun get(): String? = withContext(Dispatchers.IO) {
-        prefs.getString(KEY_TOKEN, null)
-    }
+    override suspend fun get(): String? =
+        withContext(Dispatchers.IO) {
+            prefs.getString(KEY_TOKEN, null)
+        }
 
-    override suspend fun set(token: String): Unit = withContext(Dispatchers.IO) {
-        prefs.edit().putString(KEY_TOKEN, token).apply()
-    }
+    override suspend fun set(token: String): Unit =
+        withContext(Dispatchers.IO) {
+            prefs.edit().putString(KEY_TOKEN, token).apply()
+        }
 
-    override suspend fun clear(): Unit = withContext(Dispatchers.IO) {
-        prefs.edit().remove(KEY_TOKEN).apply()
-    }
+    override suspend fun clear(): Unit =
+        withContext(Dispatchers.IO) {
+            prefs.edit().remove(KEY_TOKEN).apply()
+        }
 
     private companion object {
         const val PREFS_FILE_NAME = "aniko.secure"

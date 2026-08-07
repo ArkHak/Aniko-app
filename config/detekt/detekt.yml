@@ -1,0 +1,9 @@
+# Дефолтный ruleset detekt (`buildUponDefaultConfig = true` в build-logic/convention) — этот
+# файл НЕ вводит кастомные правила (см. P1.T11 в docs/REELWAVE_PLAN.md), только настраивает
+# параметр одного встроенного правила против ложного срабатывания, системного для Compose-кода.
+naming:
+  FunctionNaming:
+    # @Composable-функции по конвенции называются в PascalCase (`HomeScreen`, `TitleCard`, ...) —
+    # без этого исключения правило массово ловит их во всех compose-модулях (тот же самый случай,
+    # что и `ktlint_function_naming_ignore_when_annotated_with` в .editorconfig).
+    ignoreAnnotated: ["Composable"]

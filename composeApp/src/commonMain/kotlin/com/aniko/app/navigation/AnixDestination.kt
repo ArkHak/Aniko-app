@@ -7,7 +7,6 @@ import kotlinx.serialization.Serializable
  * Добавлять сюда, а не разбрасывать строковые route по фичам.
  */
 sealed interface AnixDestination {
-
     @Serializable
     data object Home : AnixDestination
 
@@ -27,7 +26,9 @@ sealed interface AnixDestination {
 
     /** Карточка релиза. */
     @Serializable
-    data class ReleaseDetails(val releaseId: Int) : AnixDestination
+    data class ReleaseDetails(
+        val releaseId: Int,
+    ) : AnixDestination
 
     /**
      * Плеер: релиз + выбранный источник + номер серии.

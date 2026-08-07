@@ -1,0 +1,10 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ForbiddenComment:ProfilePrivacy.kt$PrivacyVisibility$* Видимость раздела профиля для privacy-настроек (`profile/preference/privacy/.../edit`). * * Числовые значения — те же, что использует Anixart API в теле `PrivacyEditRequest.permission` * (см. `docs/api/jadx-out-21/sources/.../network/request/profile/PrivacyEditRequest.java`) и в * ответе `profile/preference/my` (`privacy_stats`/`privacy_counts`/`privacy_social`). * `[TODO: verify live]` — расшифровка 0/1/2 взята по аналогии с [ListStatus] (enum поверх Int из * API), сам список значений в decompiled-источниках не документирован текстом — предположение * «все/только друзья/только я» стандартно для privacy-переключателей такого вида в этом клиенте.</ID>
+    <ID>MagicNumber:ListStatus.kt$ListStatus.COMPLETED$3</ID>
+    <ID>MagicNumber:ListStatus.kt$ListStatus.DROPPED$5</ID>
+    <ID>MagicNumber:ListStatus.kt$ListStatus.ON_HOLD$4</ID>
+  </CurrentIssues>
+</SmellBaseline>

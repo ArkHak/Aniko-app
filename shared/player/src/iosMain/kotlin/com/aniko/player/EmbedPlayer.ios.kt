@@ -25,12 +25,17 @@ import platform.WebKit.WKWebViewConfiguration
  * большинству embed-плееров (Kodik/Sibnet/...) JS обязателен.
  */
 @Composable
-actual fun EmbedPlayerView(url: String, referer: String?, modifier: Modifier) {
+actual fun EmbedPlayerView(
+    url: String,
+    referer: String?,
+    modifier: Modifier,
+) {
     UIKitView(
         factory = {
-            val configuration = WKWebViewConfiguration().apply {
-                defaultWebpagePreferences.allowsContentJavaScript = true
-            }
+            val configuration =
+                WKWebViewConfiguration().apply {
+                    defaultWebpagePreferences.allowsContentJavaScript = true
+                }
             AnixEmbedWebView(frame = CGRectMake(0.0, 0.0, 0.0, 0.0), configuration = configuration).apply {
                 loadEmbed(url, referer)
             }
@@ -52,7 +57,10 @@ private class AnixEmbedWebView(
     var loadedEmbedUrl: String? = null
 }
 
-private fun AnixEmbedWebView.loadEmbed(url: String, referer: String?) {
+private fun AnixEmbedWebView.loadEmbed(
+    url: String,
+    referer: String?,
+) {
     if (loadedEmbedUrl == url) return
     // Untrusted URL из ответа API — грузим только http/https (см. код-ревью Фазы 5).
     if (!isSafeEmbedUrl(url)) return
@@ -68,13 +76,14 @@ private fun AnixEmbedWebView.loadEmbed(url: String, referer: String?) {
         // `URLWithString` (в отличие от конструктора `NSURL(string:)`) явно объявлен nullable —
         // не полагаемся на то, как cinterop разрешит nullability обычного конструктора.
         val nsUrl = NSURL.URLWithString(url) ?: return
-        val request = if (referer != null) {
-            NSMutableURLRequest(uRL = nsUrl).apply {
-                setValue(referer, forHTTPHeaderField = "Referer")
+        val request =
+            if (referer != null) {
+                NSMutableURLRequest(uRL = nsUrl).apply {
+                    setValue(referer, forHTTPHeaderField = "Referer")
+                }
+            } else {
+                NSURLRequest(uRL = nsUrl)
             }
-        } else {
-            NSURLRequest(uRL = nsUrl)
-        }
         loadRequest(request)
     }
 }

@@ -35,8 +35,8 @@ import com.aniko.app.feature.search.SearchScreen
 import com.aniko.app.feature.settings.SettingsScreen
 import com.aniko.app.navigation.AnixDestination
 import com.aniko.data.repository.AuthRepository
-import com.aniko.model.VideoHost
 import com.aniko.data.session.SessionState
+import com.aniko.model.VideoHost
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.image.createAnixImageLoader
 import com.aniko.ui.theme.AnixTheme
@@ -109,14 +109,18 @@ private fun AnixSessionGate(authRepository: AuthRepository) {
     }
 }
 
-private val bottomTabs = listOf(
-    BottomTab("Главная", AnixDestination.Home),
-    BottomTab("Поиск", AnixDestination.Search),
-    BottomTab("Списки", AnixDestination.Library),
-    BottomTab("Настройки", AnixDestination.Settings),
-)
+private val bottomTabs =
+    listOf(
+        BottomTab("Главная", AnixDestination.Home),
+        BottomTab("Поиск", AnixDestination.Search),
+        BottomTab("Списки", AnixDestination.Library),
+        BottomTab("Настройки", AnixDestination.Settings),
+    )
 
-private data class BottomTab(val title: String, val destination: AnixDestination)
+private data class BottomTab(
+    val title: String,
+    val destination: AnixDestination,
+)
 
 @Composable
 private fun AnixAppScaffold() {
@@ -188,7 +192,12 @@ private fun NavController.navigateToRelease(releaseId: Int) {
     navigate(AnixDestination.ReleaseDetails(releaseId))
 }
 
-private fun NavController.navigateToPlayer(releaseId: Int, sourceId: Int, position: Int, host: VideoHost) {
+private fun NavController.navigateToPlayer(
+    releaseId: Int,
+    sourceId: Int,
+    position: Int,
+    host: VideoHost,
+) {
     navigate(
         AnixDestination.Player(releaseId = releaseId, sourceId = sourceId, position = position, hostKey = host.key),
     )

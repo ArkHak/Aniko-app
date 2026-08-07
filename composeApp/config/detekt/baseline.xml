@@ -1,0 +1,26 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>DestructuringDeclarationWithTooManyEntries:PlayerViewModel.kt$PlayerViewModel$(releaseId, sourceId, position, host)</ID>
+    <ID>LongMethod:App.kt$@Composable private fun AnixAppScaffold()</ID>
+    <ID>LongMethod:LibraryScreen.kt$@Composable fun LibraryScreen( modifier: Modifier = Modifier, onReleaseClick: (Int) -&gt; Unit = {}, viewModel: LibraryViewModel = koinViewModel(), )</ID>
+    <ID>LongMethod:LoginScreen.kt$@Composable fun LoginScreen( modifier: Modifier = Modifier, viewModel: LoginViewModel = koinViewModel(), )</ID>
+    <ID>LongMethod:SearchScreen.kt$@Composable fun SearchScreen( modifier: Modifier = Modifier, onReleaseClick: (Int) -&gt; Unit = {}, viewModel: SearchViewModel = koinViewModel(), )</ID>
+    <ID>LongParameterList:LibraryScreen.kt$( expanded: Boolean, release: Release, tab: LibraryTab, onDismiss: () -&gt; Unit, onChangeStatus: (ListStatus) -&gt; Unit, onToggleFavorite: () -&gt; Unit, onRemoveFromList: (ListStatus) -&gt; Unit, onRemoveFromHistory: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:PlayerScreen.kt$( releaseId: Int, sourceId: Int, position: Int, hostKey: String, modifier: Modifier = Modifier, viewModel: PlayerViewModel = koinViewModel(), )</ID>
+    <ID>LongParameterList:ProfileScreen.kt$( privacy: ProfilePrivacy, onUpdatePrivacyStats: (PrivacyVisibility) -&gt; Unit, onUpdatePrivacyCounts: (PrivacyVisibility) -&gt; Unit, onUpdatePrivacySocial: (PrivacyVisibility) -&gt; Unit, onUpdatePrivacyFriendRequests: (FriendRequestVisibility) -&gt; Unit, onToggleIncognito: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongParameterList:ProfileScreen.kt$( profile: ProfileDetails, privacy: ProfilePrivacy, onUpdatePrivacyStats: (PrivacyVisibility) -&gt; Unit, onUpdatePrivacyCounts: (PrivacyVisibility) -&gt; Unit, onUpdatePrivacySocial: (PrivacyVisibility) -&gt; Unit, onUpdatePrivacyFriendRequests: (FriendRequestVisibility) -&gt; Unit, onToggleIncognito: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongParameterList:ReleaseDetailsScreen.kt$( release: Release, state: ReleaseDetailsUiState, onSelectVoiceType: (Int) -&gt; Unit, onSelectSource: (Int) -&gt; Unit, onEpisodeClick: (sourceId: Int, position: Int, host: VideoHost) -&gt; Unit, onChangeListStatus: (ListStatus?) -&gt; Unit, onToggleFavorite: () -&gt; Unit, )</ID>
+    <ID>MagicNumber:ProfileScreen.kt$4</ID>
+    <ID>MagicNumber:ReleaseDetailsScreen.kt$100</ID>
+    <ID>MagicNumber:ReleaseDetailsScreen.kt$100.0</ID>
+    <ID>MaxLineLength:ReleaseDetailsViewModel.kt$private inline</ID>
+    <ID>ReturnCount:ReleaseDetailsViewModel.kt$ReleaseDetailsViewModel$fun selectSource(sourceId: Int)</ID>
+    <ID>TooGenericExceptionCaught:LoginViewModel.kt$LoginViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PlayerViewModel.kt$PlayerViewModel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ReleaseDetailsViewModel.kt$ReleaseDetailsViewModel$e: Exception</ID>
+    <ID>TooManyFunctions:LibraryViewModel.kt$LibraryViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:ReleaseDetailsScreen.kt$com.aniko.app.feature.release.ReleaseDetailsScreen.kt</ID>
+  </CurrentIssues>
+</SmellBaseline>

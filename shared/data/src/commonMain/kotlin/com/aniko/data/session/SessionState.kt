@@ -9,12 +9,13 @@ package com.aniko.data.session
  * (сплэш/лоадер, затем либо основной граф, либо экран логина).
  */
 sealed interface SessionState {
-
     /** Bootstrap ещё не завершён — токен читается из [SecureTokenStorage]. */
     data object Loading : SessionState
 
     /** Пользователь авторизован, [token] — текущий валидный (насколько известно клиенту) токен. */
-    data class Authorized(val token: String) : SessionState
+    data class Authorized(
+        val token: String,
+    ) : SessionState
 
     /** Пользователь не авторизован (токена нет, либо сессия была инвалидирована/разлогинена). */
     data object Unauthorized : SessionState

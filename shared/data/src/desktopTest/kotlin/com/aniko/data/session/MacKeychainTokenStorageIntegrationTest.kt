@@ -29,65 +29,71 @@ import kotlin.test.assertNull
  */
 @Ignore("Integration test: не входит в стандартный ./gradlew test, только для ручного прогона")
 class MacKeychainTokenStorageIntegrationTest {
-
     private val storage = MacKeychainTokenStorage()
 
     @Test
-    fun setAndGet_savesTokenToKeychain_andRetrievesIt() = runTest {
-        // Arrange: используем уникальный токен, чтобы не конфликтовать с реальным
-        val testToken = "test-token-${System.currentTimeMillis()}"
+    fun setAndGet_savesTokenToKeychain_andRetrievesIt() =
+        runTest {
+            // Arrange: используем уникальный токен, чтобы не конфликтовать с реальным
+            val testToken = "test-token-${System.currentTimeMillis()}"
 
-        // Act & Assert: сохраняем и получаем
-        storage.set(testToken)
-        val retrieved = storage.get()
+            // Act & Assert: сохраняем и получаем
+            storage.set(testToken)
+            val retrieved = storage.get()
 
-        assertEquals(testToken, retrieved, "Токен должен быть сохранён и получен из Keychain")
+            assertEquals(testToken, retrieved, "Токен должен быть сохранён и получен из Keychain")
 
-        // Cleanup
-        storage.clear()
-    }
-
-    @Test
-    fun clear_removesTokenFromKeychain() = runTest {
-        // Arrange: сохраняем токен
-        val testToken = "test-token-${System.currentTimeMillis()}"
-        storage.set(testToken)
-
-        // Act: удаляем
-        storage.clear()
-
-        // Assert: токен больше не доступен
-        val retrieved = storage.get()
-        assertNull(retrieved, "После clear() токен должен быть удалён из Keychain")
-    }
+            // Cleanup
+            storage.clear()
+        }
 
     @Test
-    fun get_returnsNull_whenTokenNotFound() = runTest {
-        // Arrange: очищаем любой существующий токен
-        storage.clear()
+    fun clear_removesTokenFromKeychain() =
+        runTest {
+            // Arrange: сохраняем токен
+            val testToken = "test-token-${System.currentTimeMillis()}"
+            storage.set(testToken)
 
-        // Act: пытаемся получить несуществующий токен
-        val retrieved = storage.get()
+            // Act: удаляем
+            storage.clear()
 
-        // Assert: null вместо ошибки
-        assertNull(retrieved, "get() должен вернуть null когда токен не найден, не бросать исключение")
-    }
+            // Assert: токен больше не доступен
+            val retrieved = storage.get()
+            assertNull(retrieved, "После clear() токен должен быть удалён из Keychain")
+        }
 
     @Test
-    fun setWithSpecialCharacters_escapesCorrectly() = runTest {
-        // Arrange: токен с экранируемыми символами (пробелы, кавычки, бэкслэши)
-        val testToken = """test "token" with \ special chars"""
-        val uniqueToken = "$testToken-${System.currentTimeMillis()}"
+    fun get_returnsNull_whenTokenNotFound() =
+        runTest {
+            // Arrange: очищаем любой существующий токен
+            storage.clear()
 
-        // Act
-        storage.set(uniqueToken)
-        val retrieved = storage.get()
+            // Act: пытаемся получить несуществующий токен
+            val retrieved = storage.get()
 
-        // Assert: специальные символы должны быть обработаны корректно
-        assertEquals(uniqueToken, retrieved,
-            "Токен со специальными символами должен быть сохранён и получен без потерь")
+            // Assert: null вместо ошибки
+            assertNull(retrieved, "get() должен вернуть null когда токен не найден, не бросать исключение")
+        }
 
-        // Cleanup
-        storage.clear()
-    }
+    @Test
+    fun setWithSpecialCharacters_escapesCorrectly() =
+        runTest {
+            // Arrange: токен с экранируемыми символами (пробелы, кавычки, бэкслэши)
+            val testToken = """test "token" with \ special chars"""
+            val uniqueToken = "$testToken-${System.currentTimeMillis()}"
+
+            // Act
+            storage.set(uniqueToken)
+            val retrieved = storage.get()
+
+            // Assert: специальные символы должны быть обработаны корректно
+            assertEquals(
+                uniqueToken,
+                retrieved,
+                "Токен со специальными символами должен быть сохранён и получен без потерь",
+            )
+
+            // Cleanup
+            storage.clear()
+        }
 }

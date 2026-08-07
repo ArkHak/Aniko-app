@@ -10,6 +10,8 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
+        // org.jlleitschuh.gradle:ktlint-gradle публикуется только на Gradle Plugin Portal,
+        // не в Maven Central — нужен как обычный репозиторий зависимостей (P1.T11).
         gradlePluginPortal()
     }
     versionCatalogs {

@@ -16,15 +16,18 @@ class ReleaseRepository(
         releaseApi.release(releaseId, extendedMode = true).release?.toDomain()
             ?: throw AnixError.Parsing()
 
-    suspend fun watching(page: Int): Paged<Release> =
-        releaseApi.discoverWatching(page).toDomain { it.toDomain() }
+    suspend fun watching(page: Int): Paged<Release> = releaseApi.discoverWatching(page).toDomain { it.toDomain() }
 
-    suspend fun recommendations(page: Int, previousPage: Int = 0): Paged<Release> =
-        releaseApi.discoverRecommendations(page, previousPage).toDomain { it.toDomain() }
+    suspend fun recommendations(
+        page: Int,
+        previousPage: Int = 0,
+    ): Paged<Release> = releaseApi.discoverRecommendations(page, previousPage).toDomain { it.toDomain() }
 
     /** `search/releases/{page}` — см. `SearchApi` про сверенную вживую форму ответа. */
-    suspend fun search(query: String, page: Int): Paged<Release> =
-        searchApi.releaseSearch(page, query).toDomain { it.toDomain() }
+    suspend fun search(
+        query: String,
+        page: Int,
+    ): Paged<Release> = searchApi.releaseSearch(page, query).toDomain { it.toDomain() }
 
     /** Готовый пагинатор для экрана «Продолжить смотреть». */
     fun watchingPaginator(): Paginator<Release> = Paginator { page -> watching(page) }

@@ -18,13 +18,14 @@ import org.koin.dsl.module
  * в плане ради скорости соло-разработки. Когда модуль перерастёт себя,
  * пакет `feature/<name>` вынимается в отдельный Gradle-модуль почти без правок.
  */
-val appModule = module {
-    viewModelOf(::HomeViewModel)
-    viewModelOf(::LoginViewModel)
-    viewModelOf(::SettingsViewModel)
-    viewModelOf(::SearchViewModel)
-    viewModelOf(::ReleaseDetailsViewModel)
-    viewModelOf(::PlayerViewModel)
-    viewModelOf(::LibraryViewModel)
-    viewModelOf(::ProfileViewModel)
-}
+val appModule =
+    module {
+        viewModelOf(::HomeViewModel)
+        viewModelOf(::LoginViewModel)
+        viewModelOf(::SettingsViewModel)
+        viewModelOf(::SearchViewModel)
+        viewModelOf(::ReleaseDetailsViewModel)
+        viewModelOf(::PlayerViewModel)
+        viewModelOf(::LibraryViewModel)
+        viewModelOf(::ProfileViewModel)
+    }

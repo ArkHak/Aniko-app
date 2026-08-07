@@ -1,0 +1,6 @@
+root = true
+
+[*.{kt,kts}]
+# Compose-функции по конвенции называются в PascalCase (`HomeScreen`, `TitleCard`, ...) —
+# без этого ktlint массово ловит их правилом `function-naming`.
+ktlint_function_naming_ignore_when_annotated_with = Composable

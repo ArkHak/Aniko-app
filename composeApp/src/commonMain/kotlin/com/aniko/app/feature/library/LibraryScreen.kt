@@ -69,69 +69,73 @@ fun LibraryScreen(
 
             val pagingState = uiState.pagingState
             when {
-                pagingState.error != null && pagingState.items.isEmpty() -> AnixErrorBox(
-                    message = pagingState.error?.message ?: "Не удалось загрузить список",
-                    onRetry = { viewModel.retry(selectedTab) },
-                    modifier = Modifier.fillMaxSize(),
-                )
+                pagingState.error != null && pagingState.items.isEmpty() ->
+                    AnixErrorBox(
+                        message = pagingState.error?.message ?: "Не удалось загрузить список",
+                        onRetry = { viewModel.retry(selectedTab) },
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
-                pagingState.items.isEmpty() && (pagingState.isLoading || pagingState.isRefreshing) -> AnixLoadingBox(
-                    modifier = Modifier.fillMaxSize(),
-                )
+                pagingState.items.isEmpty() && (pagingState.isLoading || pagingState.isRefreshing) ->
+                    AnixLoadingBox(
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
-                pagingState.isEmpty -> AnixEmptyBox(
-                    message = selectedTab.emptyMessage(),
-                    modifier = Modifier.fillMaxSize(),
-                )
+                pagingState.isEmpty ->
+                    AnixEmptyBox(
+                        message = selectedTab.emptyMessage(),
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
-                else -> LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = dimens.posterWidth),
-                    contentPadding = PaddingValues(vertical = dimens.spaceM, horizontal = dimens.spaceS),
-                    horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                    verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    itemsIndexed(pagingState.items, key = { _, release -> release.id }) { index, release ->
-                        if (index >= pagingState.items.size - LIBRARY_PREFETCH_THRESHOLD) {
-                            viewModel.loadMore(selectedTab)
+                else ->
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = dimens.posterWidth),
+                        contentPadding = PaddingValues(vertical = dimens.spaceM, horizontal = dimens.spaceS),
+                        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+                        verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        itemsIndexed(pagingState.items, key = { _, release -> release.id }) { index, release ->
+                            if (index >= pagingState.items.size - LIBRARY_PREFETCH_THRESHOLD) {
+                                viewModel.loadMore(selectedTab)
+                            }
+                            Box {
+                                ReleaseCard(
+                                    release = release,
+                                    onClick = { onReleaseClick(release.id) },
+                                    onLongClick = { menuReleaseId = release.id },
+                                )
+                                LibraryContextMenu(
+                                    expanded = menuReleaseId == release.id,
+                                    release = release,
+                                    tab = selectedTab,
+                                    onDismiss = { menuReleaseId = null },
+                                    onChangeStatus = { status ->
+                                        viewModel.changeStatus(release, status)
+                                        menuReleaseId = null
+                                    },
+                                    onToggleFavorite = {
+                                        viewModel.toggleFavorite(release)
+                                        menuReleaseId = null
+                                    },
+                                    onRemoveFromList = { status ->
+                                        viewModel.removeFromList(release, status)
+                                        menuReleaseId = null
+                                    },
+                                    onRemoveFromHistory = {
+                                        viewModel.removeFromHistory(release)
+                                        menuReleaseId = null
+                                    },
+                                )
+                            }
                         }
-                        Box {
-                            ReleaseCard(
-                                release = release,
-                                onClick = { onReleaseClick(release.id) },
-                                onLongClick = { menuReleaseId = release.id },
-                            )
-                            LibraryContextMenu(
-                                expanded = menuReleaseId == release.id,
-                                release = release,
-                                tab = selectedTab,
-                                onDismiss = { menuReleaseId = null },
-                                onChangeStatus = { status ->
-                                    viewModel.changeStatus(release, status)
-                                    menuReleaseId = null
-                                },
-                                onToggleFavorite = {
-                                    viewModel.toggleFavorite(release)
-                                    menuReleaseId = null
-                                },
-                                onRemoveFromList = { status ->
-                                    viewModel.removeFromList(release, status)
-                                    menuReleaseId = null
-                                },
-                                onRemoveFromHistory = {
-                                    viewModel.removeFromHistory(release)
-                                    menuReleaseId = null
-                                },
-                            )
+
+                        if (pagingState.isLoading) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                AnixLoadingBox(modifier = Modifier.fillMaxWidth())
+                            }
                         }
                     }
-
-                    if (pagingState.isLoading) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            AnixLoadingBox(modifier = Modifier.fillMaxWidth())
-                        }
-                    }
-                }
             }
         }
     }
@@ -166,39 +170,44 @@ private fun LibraryContextMenu(
             onClick = onToggleFavorite,
         )
         when (tab) {
-            is LibraryTab.Status -> DropdownMenuItem(
-                text = { Text("Удалить из списка") },
-                onClick = { onRemoveFromList(tab.status) },
-            )
+            is LibraryTab.Status ->
+                DropdownMenuItem(
+                    text = { Text("Удалить из списка") },
+                    onClick = { onRemoveFromList(tab.status) },
+                )
 
-            LibraryTab.History -> DropdownMenuItem(
-                text = { Text("Удалить из истории") },
-                onClick = onRemoveFromHistory,
-            )
+            LibraryTab.History ->
+                DropdownMenuItem(
+                    text = { Text("Удалить из истории") },
+                    onClick = onRemoveFromHistory,
+                )
 
             LibraryTab.Favorites -> Unit
         }
     }
 }
 
-private fun LibraryTab.title(): String = when (this) {
-    is LibraryTab.Status -> status.displayName()
-    LibraryTab.Favorites -> "Избранное"
-    LibraryTab.History -> "История"
-}
+private fun LibraryTab.title(): String =
+    when (this) {
+        is LibraryTab.Status -> status.displayName()
+        LibraryTab.Favorites -> "Избранное"
+        LibraryTab.History -> "История"
+    }
 
-private fun LibraryTab.emptyMessage(): String = when (this) {
-    is LibraryTab.Status -> "Список пуст"
-    LibraryTab.Favorites -> "В избранном пока ничего нет"
-    LibraryTab.History -> "История просмотра пуста"
-}
+private fun LibraryTab.emptyMessage(): String =
+    when (this) {
+        is LibraryTab.Status -> "Список пуст"
+        LibraryTab.Favorites -> "В избранном пока ничего нет"
+        LibraryTab.History -> "История просмотра пуста"
+    }
 
-private fun ListStatus.displayName(): String = when (this) {
-    ListStatus.WATCHING -> "Смотрю"
-    ListStatus.PLANNED -> "В планах"
-    ListStatus.COMPLETED -> "Просмотрено"
-    ListStatus.ON_HOLD -> "Отложено"
-    ListStatus.DROPPED -> "Брошено"
-}
+private fun ListStatus.displayName(): String =
+    when (this) {
+        ListStatus.WATCHING -> "Смотрю"
+        ListStatus.PLANNED -> "В планах"
+        ListStatus.COMPLETED -> "Просмотрено"
+        ListStatus.ON_HOLD -> "Отложено"
+        ListStatus.DROPPED -> "Брошено"
+    }
 
 private const val LIBRARY_PREFETCH_THRESHOLD = 6

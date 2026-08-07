@@ -9,6 +9,7 @@ import platform.UIKit.UIViewController
  *
  * Экспортируется в фреймворк `ComposeApp` как `MainViewControllerKt.MainViewController()`.
  */
+@Suppress("ktlint:standard:function-naming")
 fun MainViewController(): UIViewController {
     initKoinOnce()
     return ComposeUIViewController {

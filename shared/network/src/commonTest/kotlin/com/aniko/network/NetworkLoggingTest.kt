@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 
 class NetworkLoggingTest {
-
     private val secret = "b3f1c9d2e8a74f60"
 
     @Test

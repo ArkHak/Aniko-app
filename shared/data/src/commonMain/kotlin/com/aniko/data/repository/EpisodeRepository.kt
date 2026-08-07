@@ -14,16 +14,21 @@ import com.aniko.player.isKodikEmbedUrl
  * Цепочка резолвинга плеера из `docs/api/ENDPOINTS.md`:
  * types → sources → episodes → target.
  */
-class EpisodeRepository(private val episodeApi: EpisodeApi) {
+class EpisodeRepository(
+    private val episodeApi: EpisodeApi,
+) {
+    suspend fun voiceTypes(releaseId: Int): List<VoiceType> = episodeApi.types(releaseId).types.map { it.toDomain() }
 
-    suspend fun voiceTypes(releaseId: Int): List<VoiceType> =
-        episodeApi.types(releaseId).types.map { it.toDomain() }
+    suspend fun sources(
+        releaseId: Int,
+        typeId: Int,
+    ): List<EpisodeSource> = episodeApi.sources(releaseId, typeId).sources.map { it.toDomain() }
 
-    suspend fun sources(releaseId: Int, typeId: Int): List<EpisodeSource> =
-        episodeApi.sources(releaseId, typeId).sources.map { it.toDomain() }
-
-    suspend fun episodes(releaseId: Int, typeId: Int, sourceId: Int): List<Episode> =
-        episodeApi.episodes(releaseId, typeId, sourceId).episodes.map { it.toDomain() }
+    suspend fun episodes(
+        releaseId: Int,
+        typeId: Int,
+        sourceId: Int,
+    ): List<Episode> = episodeApi.episodes(releaseId, typeId, sourceId).episodes.map { it.toDomain() }
 
     /**
      * Резолвит серию в проигрываемый источник для WebView.
@@ -38,10 +43,16 @@ class EpisodeRepository(private val episodeApi: EpisodeApi) {
      * нативный `PlayerController`/`PlaybackSource.Direct` из `:shared:player` остаются заделом
      * на будущее и здесь не используются.
      */
-    suspend fun resolvePlaybackSource(releaseId: Int, sourceId: Int, position: Int, host: VideoHost): PlaybackSource {
+    suspend fun resolvePlaybackSource(
+        releaseId: Int,
+        sourceId: Int,
+        position: Int,
+        host: VideoHost,
+    ): PlaybackSource {
         val target = episodeApi.target(releaseId, sourceId, position).episode?.toDomain()
-        val url = target?.url?.takeIf { it.isNotBlank() }
-            ?: throw AnixError.PlaybackResolve(host)
+        val url =
+            target?.url?.takeIf { it.isNotBlank() }
+                ?: throw AnixError.PlaybackResolve(host)
         return if (isKodikEmbedUrl(url)) {
             // Query-параметры `?d=/&s=/&ip=` из ответа API рассчитаны на referer из исходного
             // запроса и с нашим WebView не совпадают — Kodik отдаёт `500 "Error code: ds"`
@@ -56,11 +67,19 @@ class EpisodeRepository(private val episodeApi: EpisodeApi) {
         }
     }
 
-    suspend fun markWatched(releaseId: Int, sourceId: Int, position: Int) {
+    suspend fun markWatched(
+        releaseId: Int,
+        sourceId: Int,
+        position: Int,
+    ) {
         episodeApi.markWatched(releaseId, sourceId, position)
     }
 
-    suspend fun markUnwatched(releaseId: Int, sourceId: Int, position: Int) {
+    suspend fun markUnwatched(
+        releaseId: Int,
+        sourceId: Int,
+        position: Int,
+    ) {
         episodeApi.markUnwatched(releaseId, sourceId, position)
     }
 

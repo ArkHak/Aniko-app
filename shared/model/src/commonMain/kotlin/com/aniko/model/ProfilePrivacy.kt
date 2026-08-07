@@ -16,18 +16,20 @@ enum class PrivacyVisibility {
     ONLY_ME,
     ;
 
-    fun toApiValue(): Int = when (this) {
-        EVERYONE -> 0
-        FRIENDS_ONLY -> 1
-        ONLY_ME -> 2
-    }
+    fun toApiValue(): Int =
+        when (this) {
+            EVERYONE -> 0
+            FRIENDS_ONLY -> 1
+            ONLY_ME -> 2
+        }
 
     companion object {
-        fun fromApiValue(value: Int): PrivacyVisibility = when (value) {
-            1 -> FRIENDS_ONLY
-            2 -> ONLY_ME
-            else -> EVERYONE
-        }
+        fun fromApiValue(value: Int): PrivacyVisibility =
+            when (value) {
+                1 -> FRIENDS_ONLY
+                2 -> ONLY_ME
+                else -> EVERYONE
+            }
     }
 }
 
@@ -37,16 +39,18 @@ enum class FriendRequestVisibility {
     NOBODY,
     ;
 
-    fun toApiValue(): Int = when (this) {
-        EVERYONE -> 0
-        NOBODY -> 1
-    }
+    fun toApiValue(): Int =
+        when (this) {
+            EVERYONE -> 0
+            NOBODY -> 1
+        }
 
     companion object {
-        fun fromApiValue(value: Int): FriendRequestVisibility = when (value) {
-            1 -> NOBODY
-            else -> EVERYONE
-        }
+        fun fromApiValue(value: Int): FriendRequestVisibility =
+            when (value) {
+                1 -> NOBODY
+                else -> EVERYONE
+            }
     }
 }
 

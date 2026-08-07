@@ -3,13 +3,13 @@ package com.aniko.player
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
-/**
+/*
  * Простой embed-рендерер для MVP плеера.
  *
  * Архитектурное решение (Фаза 5, зафиксировано пользователем, не пересматривать):
  * ВСЁ воспроизведение идёт через встраиваемую веб-страницу источника (Kodik/Sibnet/...),
  * независимо от того, отдаёт ли сервер прямой поток или iframe-страницу
- * (см. `EpisodeTargetDto.iframe` в `:shared:data`). Нативный [PlayerController]/[VideoSurface]
+ * (см. `EpisodeTargetDto.iframe` в `:shared:data`). Нативный `PlayerController`/`VideoSurface`
  * из этого же модуля НЕ используются здесь — это отдельный, более простой механизм,
  * задел на нативное воспроизведение остаётся нетронутым на будущее.
  *
@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
  * - Desktop — полноценного WebView в Compose Desktop без тяжёлых зависимостей (JCEF/KCEF) нет,
  *   поэтому осознанно упрощаем: открываем URL в системном браузере и показываем заглушку.
  */
+
 /**
  * [referer] у большинства embed-хостов (Sibnet и т.п.) — self-referer (тот же URL, что и [url]):
  * они отдают `403`/страницу-заглушку без заголовка `Referer` (защита от хотлинкинга), а
@@ -30,7 +31,11 @@ import androidx.compose.ui.Modifier
  * приложения), по нему Kodik сам генерирует корректные подписи для страницы плеера.
  */
 @Composable
-expect fun EmbedPlayerView(url: String, referer: String? = null, modifier: Modifier = Modifier)
+expect fun EmbedPlayerView(
+    url: String,
+    referer: String? = null,
+    modifier: Modifier = Modifier,
+)
 
 /**
  * `true`, если [url] безопасно передавать в системный WebView/браузер — только `http`/`https`.
@@ -40,8 +45,7 @@ expect fun EmbedPlayerView(url: String, referer: String? = null, modifier: Modif
  * `WKWebView.loadRequest` / `Desktop.browse`, что для `javascript:`/`file:`/подобных схем
  * потенциально небезопасно (см. код-ревью Фазы 5).
  */
-fun isSafeEmbedUrl(url: String): Boolean =
-    url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
+fun isSafeEmbedUrl(url: String): Boolean = url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
 
 /**
  * `true`, если [url] — страница плеера Kodik (`kodikplayer.com`/`kodik.cc`/... или уже
@@ -69,5 +73,5 @@ internal fun kodikIframeHtml(url: String): String {
         <iframe src="$escapedUrl" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0"
          allow="autoplay *; fullscreen *; encrypted-media *" allowfullscreen></iframe>
         </body></html>
-    """.trimIndent()
+        """.trimIndent()
 }

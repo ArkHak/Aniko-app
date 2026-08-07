@@ -8,9 +8,10 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 import platform.Foundation.NSUserDefaults
 
-actual fun platformModule(): Module = module {
-    single<Settings> {
-        NSUserDefaultsSettings(NSUserDefaults.standardUserDefaults)
+actual fun platformModule(): Module =
+    module {
+        single<Settings> {
+            NSUserDefaultsSettings(NSUserDefaults.standardUserDefaults)
+        }
+        single<SecureTokenStorage> { IosKeychainTokenStorage() }
     }
-    single<SecureTokenStorage> { IosKeychainTokenStorage() }
-}

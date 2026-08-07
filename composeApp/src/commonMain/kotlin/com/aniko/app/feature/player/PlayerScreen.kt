@@ -39,11 +39,12 @@ fun PlayerScreen(
         when {
             state.isLoading -> AnixLoadingBox(modifier = Modifier.fillMaxSize())
 
-            state.errorMessage != null -> AnixErrorBox(
-                message = state.errorMessage.orEmpty(),
-                onRetry = viewModel::retry,
-                modifier = Modifier.fillMaxSize(),
-            )
+            state.errorMessage != null ->
+                AnixErrorBox(
+                    message = state.errorMessage.orEmpty(),
+                    onRetry = viewModel::retry,
+                    modifier = Modifier.fillMaxSize(),
+                )
 
             else -> {
                 val source = state.source

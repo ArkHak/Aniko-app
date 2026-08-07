@@ -31,8 +31,8 @@ import kotlin.test.assertTrue
  * синхронно из `Settings` без похода в сеть за токеном.
  */
 class ProfileRepositoryTest {
-
-    private val sampleProfileJson = """
+    private val sampleProfileJson =
+        """
         {
             "id": 42,
             "login": "test-user",
@@ -65,16 +65,18 @@ class ProfileRepositoryTest {
             "is_online": true,
             "is_verified": false
         }
-    """.trimIndent()
+        """.trimIndent()
 
-    private fun profileResponse(code: Int = 0): String = """
+    private fun profileResponse(code: Int = 0): String =
+        """
         {
             "code": $code,
             "profile": $sampleProfileJson
         }
-    """.trimIndent()
+        """.trimIndent()
 
-    private fun preferenceResponse(code: Int = 0): String = """
+    private fun preferenceResponse(code: Int = 0): String =
+        """
         {
             "code": $code,
             "privacy_stats": 1,
@@ -83,7 +85,7 @@ class ProfileRepositoryTest {
             "privacy_friend_requests": 1,
             "is_incognito": true
         }
-    """.trimIndent()
+        """.trimIndent()
 
     private fun simpleResponse(code: Int = 0): String = """{"code": $code}"""
 
@@ -102,18 +104,20 @@ class ProfileRepositoryTest {
         responseBody: String,
         profileId: Long? = 42L,
     ): ProfileRepository {
-        val mockEngine = MockEngine { request ->
-            val path = request.url.encodedPath
-            check(path == expectedPath) { "Unexpected path: $path, expected: $expectedPath" }
-            respond(
-                content = responseBody,
-                status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, "application/json"),
-            )
-        }
-        val httpClient = HttpClient(mockEngine) {
-            install(ContentNegotiation) { json(AnixJson) }
-        }
+        val mockEngine =
+            MockEngine { request ->
+                val path = request.url.encodedPath
+                check(path == expectedPath) { "Unexpected path: $path, expected: $expectedPath" }
+                respond(
+                    content = responseBody,
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+            }
+        val httpClient =
+            HttpClient(mockEngine) {
+                install(ContentNegotiation) { json(AnixJson) }
+            }
         return ProfileRepository(
             profileApi = ProfileApi(client = httpClient),
             profilePreferenceApi = ProfilePreferenceApi(client = httpClient),
@@ -124,158 +128,176 @@ class ProfileRepositoryTest {
     // ---- myProfile ------------------------------------------------------------------------
 
     @Test
-    fun myProfile_happyPath_returnsMappedProfile() = runTest {
-        val repository = repository("/profile/42", profileResponse())
+    fun myProfile_happyPath_returnsMappedProfile() =
+        runTest {
+            val repository = repository("/profile/42", profileResponse())
 
-        val profile = repository.myProfile()
+            val profile = repository.myProfile()
 
-        assertEquals(42L, profile.id)
-        assertEquals("test-user", profile.login)
-        assertTrue(profile.avatarUrl.orEmpty().endsWith("avatars/42.png"))
-        assertTrue(profile.isSponsor)
-        assertEquals(120, profile.ratingScore)
-        assertEquals(321, profile.watchedEpisodeCount)
-        assertTrue(profile.isOnline)
-    }
+            assertEquals(42L, profile.id)
+            assertEquals("test-user", profile.login)
+            assertTrue(profile.avatarUrl.orEmpty().endsWith("avatars/42.png"))
+            assertTrue(profile.isSponsor)
+            assertEquals(120, profile.ratingScore)
+            assertEquals(321, profile.watchedEpisodeCount)
+            assertTrue(profile.isOnline)
+        }
 
     @Test
-    fun myProfile_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/profile/42", profileResponse(code = 9))
+    fun myProfile_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/profile/42", profileResponse(code = 9))
 
-        assertFailsWith<AnixError.Api> {
-            repository.myProfile()
+            assertFailsWith<AnixError.Api> {
+                repository.myProfile()
+            }
         }
-    }
 
     @Test
-    fun myProfile_noProfileId_throwsUnauthorized_withoutNetworkCall() = runTest {
-        var requested = false
-        val mockEngine = MockEngine { request ->
-            requested = true
-            respond(
-                content = profileResponse(),
-                status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, "application/json"),
-            )
-        }
-        val httpClient = HttpClient(mockEngine) {
-            install(ContentNegotiation) { json(AnixJson) }
-        }
-        val repository = ProfileRepository(
-            profileApi = ProfileApi(client = httpClient),
-            profilePreferenceApi = ProfilePreferenceApi(client = httpClient),
-            sessionStore = sessionStore(profileId = null),
-        )
+    fun myProfile_noProfileId_throwsUnauthorized_withoutNetworkCall() =
+        runTest {
+            var requested = false
+            val mockEngine =
+                MockEngine { request ->
+                    requested = true
+                    respond(
+                        content = profileResponse(),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+            val httpClient =
+                HttpClient(mockEngine) {
+                    install(ContentNegotiation) { json(AnixJson) }
+                }
+            val repository =
+                ProfileRepository(
+                    profileApi = ProfileApi(client = httpClient),
+                    profilePreferenceApi = ProfilePreferenceApi(client = httpClient),
+                    sessionStore = sessionStore(profileId = null),
+                )
 
-        assertFailsWith<AnixError.Unauthorized> {
-            repository.myProfile()
+            assertFailsWith<AnixError.Unauthorized> {
+                repository.myProfile()
+            }
+            assertFalse(requested, "HTTP-запрос не должен был случиться без profileId")
         }
-        assertFalse(requested, "HTTP-запрос не должен был случиться без profileId")
-    }
 
     // ---- privacyPreferences -----------------------------------------------------------------
 
     @Test
-    fun privacyPreferences_happyPath_returnsMappedPrivacy() = runTest {
-        val repository = repository("/profile/preference/my", preferenceResponse())
+    fun privacyPreferences_happyPath_returnsMappedPrivacy() =
+        runTest {
+            val repository = repository("/profile/preference/my", preferenceResponse())
 
-        val privacy = repository.privacyPreferences()
+            val privacy = repository.privacyPreferences()
 
-        assertEquals(PrivacyVisibility.FRIENDS_ONLY, privacy.stats)
-        assertEquals(PrivacyVisibility.ONLY_ME, privacy.counts)
-        assertEquals(PrivacyVisibility.EVERYONE, privacy.social)
-        assertEquals(FriendRequestVisibility.NOBODY, privacy.friendRequests)
-        assertTrue(privacy.isIncognito)
-    }
+            assertEquals(PrivacyVisibility.FRIENDS_ONLY, privacy.stats)
+            assertEquals(PrivacyVisibility.ONLY_ME, privacy.counts)
+            assertEquals(PrivacyVisibility.EVERYONE, privacy.social)
+            assertEquals(FriendRequestVisibility.NOBODY, privacy.friendRequests)
+            assertTrue(privacy.isIncognito)
+        }
 
     @Test
-    fun privacyPreferences_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/profile/preference/my", preferenceResponse(code = 3))
+    fun privacyPreferences_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/profile/preference/my", preferenceResponse(code = 3))
 
-        assertFailsWith<AnixError.Api> {
-            repository.privacyPreferences()
+            assertFailsWith<AnixError.Api> {
+                repository.privacyPreferences()
+            }
         }
-    }
 
     // ---- updatePrivacy* / toggleIncognito -----------------------------------------------------
 
     @Test
-    fun updatePrivacyStats_happyPath_callsEditEndpoint() = runTest {
-        val repository = repository("/profile/preference/privacy/stats/edit", simpleResponse())
+    fun updatePrivacyStats_happyPath_callsEditEndpoint() =
+        runTest {
+            val repository = repository("/profile/preference/privacy/stats/edit", simpleResponse())
 
-        repository.updatePrivacyStats(PrivacyVisibility.FRIENDS_ONLY)
-    }
-
-    @Test
-    fun updatePrivacyStats_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/profile/preference/privacy/stats/edit", simpleResponse(code = 5))
-
-        assertFailsWith<AnixError.Api> {
             repository.updatePrivacyStats(PrivacyVisibility.FRIENDS_ONLY)
         }
-    }
 
     @Test
-    fun updatePrivacyCounts_happyPath_callsEditEndpoint() = runTest {
-        val repository = repository("/profile/preference/privacy/counts/edit", simpleResponse())
+    fun updatePrivacyStats_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/profile/preference/privacy/stats/edit", simpleResponse(code = 5))
 
-        repository.updatePrivacyCounts(PrivacyVisibility.ONLY_ME)
-    }
+            assertFailsWith<AnixError.Api> {
+                repository.updatePrivacyStats(PrivacyVisibility.FRIENDS_ONLY)
+            }
+        }
 
     @Test
-    fun updatePrivacyCounts_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/profile/preference/privacy/counts/edit", simpleResponse(code = 5))
+    fun updatePrivacyCounts_happyPath_callsEditEndpoint() =
+        runTest {
+            val repository = repository("/profile/preference/privacy/counts/edit", simpleResponse())
 
-        assertFailsWith<AnixError.Api> {
             repository.updatePrivacyCounts(PrivacyVisibility.ONLY_ME)
         }
-    }
 
     @Test
-    fun updatePrivacySocial_happyPath_callsEditEndpoint() = runTest {
-        val repository = repository("/profile/preference/privacy/social/edit", simpleResponse())
+    fun updatePrivacyCounts_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/profile/preference/privacy/counts/edit", simpleResponse(code = 5))
 
-        repository.updatePrivacySocial(PrivacyVisibility.EVERYONE)
-    }
+            assertFailsWith<AnixError.Api> {
+                repository.updatePrivacyCounts(PrivacyVisibility.ONLY_ME)
+            }
+        }
 
     @Test
-    fun updatePrivacySocial_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/profile/preference/privacy/social/edit", simpleResponse(code = 5))
+    fun updatePrivacySocial_happyPath_callsEditEndpoint() =
+        runTest {
+            val repository = repository("/profile/preference/privacy/social/edit", simpleResponse())
 
-        assertFailsWith<AnixError.Api> {
             repository.updatePrivacySocial(PrivacyVisibility.EVERYONE)
         }
-    }
 
     @Test
-    fun updatePrivacyFriendRequests_happyPath_callsEditEndpoint() = runTest {
-        val repository = repository("/profile/preference/privacy/friendRequests/edit", simpleResponse())
+    fun updatePrivacySocial_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/profile/preference/privacy/social/edit", simpleResponse(code = 5))
 
-        repository.updatePrivacyFriendRequests(FriendRequestVisibility.NOBODY)
-    }
+            assertFailsWith<AnixError.Api> {
+                repository.updatePrivacySocial(PrivacyVisibility.EVERYONE)
+            }
+        }
 
     @Test
-    fun updatePrivacyFriendRequests_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/profile/preference/privacy/friendRequests/edit", simpleResponse(code = 5))
+    fun updatePrivacyFriendRequests_happyPath_callsEditEndpoint() =
+        runTest {
+            val repository = repository("/profile/preference/privacy/friendRequests/edit", simpleResponse())
 
-        assertFailsWith<AnixError.Api> {
             repository.updatePrivacyFriendRequests(FriendRequestVisibility.NOBODY)
         }
-    }
 
     @Test
-    fun toggleIncognito_happyPath_callsIncognitoEndpoint() = runTest {
-        val repository = repository("/profile/preference/privacy/incognito/edit", simpleResponse())
+    fun updatePrivacyFriendRequests_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/profile/preference/privacy/friendRequests/edit", simpleResponse(code = 5))
 
-        repository.toggleIncognito()
-    }
+            assertFailsWith<AnixError.Api> {
+                repository.updatePrivacyFriendRequests(FriendRequestVisibility.NOBODY)
+            }
+        }
 
     @Test
-    fun toggleIncognito_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/profile/preference/privacy/incognito/edit", simpleResponse(code = 5))
+    fun toggleIncognito_happyPath_callsIncognitoEndpoint() =
+        runTest {
+            val repository = repository("/profile/preference/privacy/incognito/edit", simpleResponse())
 
-        assertFailsWith<AnixError.Api> {
             repository.toggleIncognito()
         }
-    }
+
+    @Test
+    fun toggleIncognito_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/profile/preference/privacy/incognito/edit", simpleResponse(code = 5))
+
+            assertFailsWith<AnixError.Api> {
+                repository.toggleIncognito()
+            }
+        }
 }

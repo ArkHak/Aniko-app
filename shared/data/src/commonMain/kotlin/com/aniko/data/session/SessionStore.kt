@@ -31,8 +31,8 @@ import kotlinx.coroutines.sync.withLock
 class SessionStore(
     private val settings: Settings,
     private val secureStorage: SecureTokenStorage,
-) : TokenProvider, SessionInvalidator {
-
+) : TokenProvider,
+    SessionInvalidator {
     private val stateMutex = Mutex()
     private var bootstrapped = false
 
@@ -72,13 +72,14 @@ class SessionStore(
      * try/catch, а необработанное исключение в корутине на Kotlin/Native валит весь процесс
      * (нет JVM-подобного дефолтного обработчика) — поэтому деградация тут обязательна.
      */
-    private suspend fun readTokenOrNull(): String? = try {
-        secureStorage.get()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        null
-    }
+    private suspend fun readTokenOrNull(): String? =
+        try {
+            secureStorage.get()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
 
     /** Токен для `TokenProvider` — ждёт завершения [bootstrap], если он ещё не закончился. */
     override suspend fun token(): String? {
@@ -87,7 +88,10 @@ class SessionStore(
     }
 
     /** Сохраняет токен успешного `auth/signIn` и переводит сессию в [SessionState.Authorized]. */
-    suspend fun save(token: String, profileId: Long) {
+    suspend fun save(
+        token: String,
+        profileId: Long,
+    ) {
         stateMutex.withLock {
             secureStorage.set(token)
             settings.putLong(KEY_PROFILE_ID, profileId)
@@ -96,8 +100,7 @@ class SessionStore(
         }
     }
 
-    fun profileId(): Long? =
-        if (settings.hasKey(KEY_PROFILE_ID)) settings.getLong(KEY_PROFILE_ID, 0L) else null
+    fun profileId(): Long? = if (settings.hasKey(KEY_PROFILE_ID)) settings.getLong(KEY_PROFILE_ID, 0L) else null
 
     /** Обычный logout по воле пользователя — БЕЗ сигнала [sessionExpired]. */
     suspend fun clear() {

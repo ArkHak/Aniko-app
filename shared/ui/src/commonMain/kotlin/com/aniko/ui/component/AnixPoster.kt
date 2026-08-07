@@ -26,10 +26,11 @@ fun AnixPoster(
         model = url,
         contentDescription = contentDescription,
         contentScale = ContentScale.Crop,
-        modifier = modifier
-            .width(dimens.posterWidth)
-            .aspectRatio(dimens.posterAspectRatio)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant, shape),
+        modifier =
+            modifier
+                .width(dimens.posterWidth)
+                .aspectRatio(dimens.posterAspectRatio)
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceVariant, shape),
     )
 }

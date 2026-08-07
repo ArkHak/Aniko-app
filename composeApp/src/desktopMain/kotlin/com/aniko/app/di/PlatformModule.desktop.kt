@@ -8,9 +8,10 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 import java.util.prefs.Preferences
 
-actual fun platformModule(): Module = module {
-    single<Settings> {
-        PreferencesSettings(Preferences.userRoot().node("com/aniko/app"))
+actual fun platformModule(): Module =
+    module {
+        single<Settings> {
+            PreferencesSettings(Preferences.userRoot().node("com/aniko/app"))
+        }
+        single<SecureTokenStorage> { MacKeychainTokenStorage() }
     }
-    single<SecureTokenStorage> { MacKeychainTokenStorage() }
-}

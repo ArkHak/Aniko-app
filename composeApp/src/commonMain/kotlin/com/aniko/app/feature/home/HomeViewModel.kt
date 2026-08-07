@@ -19,7 +19,6 @@ import kotlinx.coroutines.launch
 class HomeViewModel(
     private val releaseRepository: ReleaseRepository,
 ) : ViewModel() {
-
     private val watchingPaginator = releaseRepository.watchingPaginator()
     private val recommendationsPaginator = releaseRepository.recommendationsPaginator()
 

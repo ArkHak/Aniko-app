@@ -16,47 +16,62 @@ import io.ktor.http.contentType
  * `network/api/ProfilePreferenceApi.java`. Пути сверены построчно с decompiled-интерфейсом;
  * остальные методы того файла (email/пароль/логин/соцсети/аватар/темы) вне объёма Фазы 7.
  */
-class ProfilePreferenceApi(private val client: HttpClient) {
-
+class ProfilePreferenceApi(
+    private val client: HttpClient,
+) {
     /** `GET profile/preference/my` */
-    suspend fun my(): ProfilePreferenceResponseDto = apiCall {
-        client.get("profile/preference/my").body<ProfilePreferenceResponseDto>().requireOk()
-    }
+    suspend fun my(): ProfilePreferenceResponseDto =
+        apiCall {
+            client.get("profile/preference/my").body<ProfilePreferenceResponseDto>().requireOk()
+        }
 
     /** `POST profile/preference/privacy/stats/edit`, body `{ "permission": ... }`. */
-    suspend fun privacyStatsEdit(permission: Int): SimpleResponseDto = apiCall {
-        client.post("profile/preference/privacy/stats/edit") {
-            contentType(ContentType.Application.Json)
-            setBody(PrivacyEditRequestDto(permission = permission))
-        }.body<SimpleResponseDto>().requireOk()
-    }
+    suspend fun privacyStatsEdit(permission: Int): SimpleResponseDto =
+        apiCall {
+            client
+                .post("profile/preference/privacy/stats/edit") {
+                    contentType(ContentType.Application.Json)
+                    setBody(PrivacyEditRequestDto(permission = permission))
+                }.body<SimpleResponseDto>()
+                .requireOk()
+        }
 
     /** `POST profile/preference/privacy/counts/edit`, body `{ "permission": ... }`. */
-    suspend fun privacyCountsEdit(permission: Int): SimpleResponseDto = apiCall {
-        client.post("profile/preference/privacy/counts/edit") {
-            contentType(ContentType.Application.Json)
-            setBody(PrivacyEditRequestDto(permission = permission))
-        }.body<SimpleResponseDto>().requireOk()
-    }
+    suspend fun privacyCountsEdit(permission: Int): SimpleResponseDto =
+        apiCall {
+            client
+                .post("profile/preference/privacy/counts/edit") {
+                    contentType(ContentType.Application.Json)
+                    setBody(PrivacyEditRequestDto(permission = permission))
+                }.body<SimpleResponseDto>()
+                .requireOk()
+        }
 
     /** `POST profile/preference/privacy/social/edit`, body `{ "permission": ... }`. */
-    suspend fun privacySocialEdit(permission: Int): SimpleResponseDto = apiCall {
-        client.post("profile/preference/privacy/social/edit") {
-            contentType(ContentType.Application.Json)
-            setBody(PrivacyEditRequestDto(permission = permission))
-        }.body<SimpleResponseDto>().requireOk()
-    }
+    suspend fun privacySocialEdit(permission: Int): SimpleResponseDto =
+        apiCall {
+            client
+                .post("profile/preference/privacy/social/edit") {
+                    contentType(ContentType.Application.Json)
+                    setBody(PrivacyEditRequestDto(permission = permission))
+                }.body<SimpleResponseDto>()
+                .requireOk()
+        }
 
     /** `POST profile/preference/privacy/friendRequests/edit`, body `{ "permission": ... }`. */
-    suspend fun privacyFriendRequestsEdit(permission: Int): SimpleResponseDto = apiCall {
-        client.post("profile/preference/privacy/friendRequests/edit") {
-            contentType(ContentType.Application.Json)
-            setBody(PrivacyEditRequestDto(permission = permission))
-        }.body<SimpleResponseDto>().requireOk()
-    }
+    suspend fun privacyFriendRequestsEdit(permission: Int): SimpleResponseDto =
+        apiCall {
+            client
+                .post("profile/preference/privacy/friendRequests/edit") {
+                    contentType(ContentType.Application.Json)
+                    setBody(PrivacyEditRequestDto(permission = permission))
+                }.body<SimpleResponseDto>()
+                .requireOk()
+        }
 
     /** `GET profile/preference/privacy/incognito/edit` — без тела, сервер сам инвертирует флаг. */
-    suspend fun privacyIncognitoEdit(): SimpleResponseDto = apiCall {
-        client.get("profile/preference/privacy/incognito/edit").body<SimpleResponseDto>().requireOk()
-    }
+    suspend fun privacyIncognitoEdit(): SimpleResponseDto =
+        apiCall {
+            client.get("profile/preference/privacy/incognito/edit").body<SimpleResponseDto>().requireOk()
+        }
 }

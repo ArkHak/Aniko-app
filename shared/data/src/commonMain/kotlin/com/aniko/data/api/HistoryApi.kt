@@ -16,22 +16,31 @@ import io.ktor.client.request.get
  * действительно `POST` и отмечают конкретную серию просмотренной — `HistoryApi.add`
  * пишет запись в общую историю позиций (`r_id`/`s_id`/`position`), это отдельная сущность.
  */
-class HistoryApi(private val client: HttpClient) {
-
+class HistoryApi(
+    private val client: HttpClient,
+) {
     /** `GET history/{page}` */
-    suspend fun history(page: Int): PageableResponseDto<ReleaseDto> = apiCall {
-        client.get("history/$page").body<PageableResponseDto<ReleaseDto>>().requireOk()
-    }
+    suspend fun history(page: Int): PageableResponseDto<ReleaseDto> =
+        apiCall {
+            client.get("history/$page").body<PageableResponseDto<ReleaseDto>>().requireOk()
+        }
 
     /** `GET history/add/{r_id}/{s_id}/{position}` */
-    suspend fun add(releaseId: Int, sourceId: Int, position: Int): SimpleResponseDto = apiCall {
-        client.get("history/add/$releaseId/$sourceId/$position")
-            .body<SimpleResponseDto>()
-            .requireOk()
-    }
+    suspend fun add(
+        releaseId: Int,
+        sourceId: Int,
+        position: Int,
+    ): SimpleResponseDto =
+        apiCall {
+            client
+                .get("history/add/$releaseId/$sourceId/$position")
+                .body<SimpleResponseDto>()
+                .requireOk()
+        }
 
     /** `GET history/delete/{r_id}` */
-    suspend fun delete(releaseId: Int): SimpleResponseDto = apiCall {
-        client.get("history/delete/$releaseId").body<SimpleResponseDto>().requireOk()
-    }
+    suspend fun delete(releaseId: Int): SimpleResponseDto =
+        apiCall {
+            client.get("history/delete/$releaseId").body<SimpleResponseDto>().requireOk()
+        }
 }

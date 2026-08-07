@@ -2,8 +2,8 @@ package com.aniko.app.feature.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.aniko.data.paging.PagingState
 import com.aniko.data.paging.Paginator
+import com.aniko.data.paging.PagingState
 import com.aniko.data.repository.ReleaseRepository
 import com.aniko.model.Release
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,7 +30,6 @@ import kotlinx.coroutines.launch
 class SearchViewModel(
     private val releaseRepository: ReleaseRepository,
 ) : ViewModel() {
-
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
@@ -38,22 +37,22 @@ class SearchViewModel(
     private var activePaginator: Paginator<Release>? = null
 
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-    val pagingState: StateFlow<PagingState<Release>> = _query
-        .debounce(SEARCH_DEBOUNCE_MILLIS)
-        .distinctUntilChanged()
-        .flatMapLatest { q ->
-            val trimmed = q.trim()
-            if (trimmed.isEmpty()) {
-                activePaginator = null
-                flowOf(PagingState())
-            } else {
-                val paginator = releaseRepository.searchPaginator(trimmed)
-                activePaginator = paginator
-                viewModelScope.launch { paginator.loadNext() }
-                paginator.state
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), PagingState())
+    val pagingState: StateFlow<PagingState<Release>> =
+        _query
+            .debounce(SEARCH_DEBOUNCE_MILLIS)
+            .distinctUntilChanged()
+            .flatMapLatest { q ->
+                val trimmed = q.trim()
+                if (trimmed.isEmpty()) {
+                    activePaginator = null
+                    flowOf(PagingState())
+                } else {
+                    val paginator = releaseRepository.searchPaginator(trimmed)
+                    activePaginator = paginator
+                    viewModelScope.launch { paginator.loadNext() }
+                    paginator.state
+                }
+            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), PagingState())
 
     fun onQueryChange(newQuery: String) {
         _query.value = newQuery

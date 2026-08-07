@@ -23,11 +23,15 @@ class AuthRepository(
     suspend fun bootstrap() = sessionStore.bootstrap()
 
     /** `auth/signIn` + сохранение токена в [SessionStore]. */
-    suspend fun signIn(login: String, password: String): AuthSession {
+    suspend fun signIn(
+        login: String,
+        password: String,
+    ): AuthSession {
         val response = authApi.signIn(login, password)
         val profile = response.profile ?: throw AnixError.Parsing()
-        val token = response.profileToken?.token?.takeIf { it.isNotBlank() }
-            ?: throw AnixError.Unauthorized()
+        val token =
+            response.profileToken?.token?.takeIf { it.isNotBlank() }
+                ?: throw AnixError.Unauthorized()
 
         sessionStore.save(token, profile.id)
         return AuthSession(profile = profile.toDomain(), token = token)

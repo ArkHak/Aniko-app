@@ -60,21 +60,25 @@ fun ReleaseDetailsScreen(
         when {
             state.isLoading && state.release == null -> AnixLoadingBox(modifier = Modifier.fillMaxSize())
 
-            state.errorMessage != null && state.release == null -> AnixErrorBox(
-                message = state.errorMessage.orEmpty(),
-                onRetry = viewModel::retry,
-                modifier = Modifier.fillMaxSize(),
-            )
+            state.errorMessage != null && state.release == null ->
+                AnixErrorBox(
+                    message = state.errorMessage.orEmpty(),
+                    onRetry = viewModel::retry,
+                    modifier = Modifier.fillMaxSize(),
+                )
 
-            state.release != null -> ReleaseDetailsContent(
-                release = state.release!!,
-                state = state,
-                onSelectVoiceType = viewModel::selectVoiceType,
-                onSelectSource = viewModel::selectSource,
-                onEpisodeClick = { sourceId, position, host -> onEpisodeClick(releaseId, sourceId, position, host) },
-                onChangeListStatus = viewModel::changeListStatus,
-                onToggleFavorite = viewModel::toggleFavorite,
-            )
+            state.release != null ->
+                ReleaseDetailsContent(
+                    release = state.release!!,
+                    state = state,
+                    onSelectVoiceType = viewModel::selectVoiceType,
+                    onSelectSource = viewModel::selectSource,
+                    onEpisodeClick = { sourceId, position, host ->
+                        onEpisodeClick(releaseId, sourceId, position, host)
+                    },
+                    onChangeListStatus = viewModel::changeListStatus,
+                    onToggleFavorite = viewModel::toggleFavorite,
+                )
         }
     }
 }
@@ -92,10 +96,11 @@ private fun ReleaseDetailsContent(
     val dimens = AnixThemeTokens.dimens
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(dimens.spaceM),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(dimens.spaceM),
         verticalArrangement = Arrangement.spacedBy(dimens.spaceM),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceM)) {
@@ -223,11 +228,12 @@ private fun EpisodeSelectionSection(
             // прокручиваемой колонки с неограниченной высотой, `fillMaxSize()` там уронит layout.
             state.isEpisodesStepLoading -> CircularProgressIndicator(modifier = Modifier.padding(dimens.spaceM))
 
-            state.episodesStepError != null -> Text(
-                text = state.episodesStepError,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
+            state.episodesStepError != null ->
+                Text(
+                    text = state.episodesStepError,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
 
             state.episodes.isNotEmpty() -> {
                 SectionLabel("Список серий")
@@ -258,14 +264,18 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun EpisodeRow(episode: Episode, onClick: () -> Unit) {
+private fun EpisodeRow(
+    episode: Episode,
+    onClick: () -> Unit,
+) {
     val dimens = AnixThemeTokens.dimens
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(dimens.cornerS))
-            .padding(dimens.spaceM),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(dimens.cornerS))
+                .padding(dimens.spaceM),
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
     ) {
         Text(
@@ -284,7 +294,10 @@ private fun EpisodeRow(episode: Episode, onClick: () -> Unit) {
 }
 
 @Composable
-private fun InfoRow(label: String, value: String?) {
+private fun InfoRow(
+    label: String,
+    value: String?,
+) {
     if (value.isNullOrBlank()) return
     val dimens = AnixThemeTokens.dimens
     Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
@@ -307,20 +320,22 @@ private fun Release.episodesLabel(): String? {
     }
 }
 
-private fun ReleaseStatus.toDisplayName(): String? = when (this) {
-    ReleaseStatus.ANNOUNCE -> "Анонс"
-    ReleaseStatus.ONGOING -> "Онгоинг"
-    ReleaseStatus.FINISHED -> "Завершён"
-    ReleaseStatus.UNKNOWN -> null
-}
+private fun ReleaseStatus.toDisplayName(): String? =
+    when (this) {
+        ReleaseStatus.ANNOUNCE -> "Анонс"
+        ReleaseStatus.ONGOING -> "Онгоинг"
+        ReleaseStatus.FINISHED -> "Завершён"
+        ReleaseStatus.UNKNOWN -> null
+    }
 
-private fun ListStatus.toDisplayName(): String = when (this) {
-    ListStatus.WATCHING -> "Смотрю"
-    ListStatus.PLANNED -> "В планах"
-    ListStatus.COMPLETED -> "Просмотрено"
-    ListStatus.ON_HOLD -> "Отложено"
-    ListStatus.DROPPED -> "Брошено"
-}
+private fun ListStatus.toDisplayName(): String =
+    when (this) {
+        ListStatus.WATCHING -> "Смотрю"
+        ListStatus.PLANNED -> "В планах"
+        ListStatus.COMPLETED -> "Просмотрено"
+        ListStatus.ON_HOLD -> "Отложено"
+        ListStatus.DROPPED -> "Брошено"
+    }
 
 private fun formatGrade(grade: Double): String {
     val rounded = (grade * 100).toInt() / 100.0

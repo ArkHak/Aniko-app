@@ -54,49 +54,54 @@ fun SearchScreen(
             )
 
             when {
-                query.isBlank() -> AnixEmptyBox(
-                    message = "Введите название, чтобы найти релиз",
-                    modifier = Modifier.fillMaxSize(),
-                )
+                query.isBlank() ->
+                    AnixEmptyBox(
+                        message = "Введите название, чтобы найти релиз",
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
-                pagingState.error != null && pagingState.items.isEmpty() -> AnixErrorBox(
-                    message = pagingState.error?.message ?: "Не удалось выполнить поиск",
-                    onRetry = viewModel::retry,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                pagingState.error != null && pagingState.items.isEmpty() ->
+                    AnixErrorBox(
+                        message = pagingState.error?.message ?: "Не удалось выполнить поиск",
+                        onRetry = viewModel::retry,
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
-                pagingState.items.isEmpty() && pagingState.isLoading -> AnixLoadingBox(
-                    modifier = Modifier.fillMaxSize(),
-                )
+                pagingState.items.isEmpty() && pagingState.isLoading ->
+                    AnixLoadingBox(
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
-                pagingState.isEmpty -> AnixEmptyBox(
-                    message = "Ничего не найдено",
-                    modifier = Modifier.fillMaxSize(),
-                )
+                pagingState.isEmpty ->
+                    AnixEmptyBox(
+                        message = "Ничего не найдено",
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
-                else -> LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = dimens.posterWidth),
-                    contentPadding = PaddingValues(vertical = dimens.spaceM),
-                    horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                    verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    itemsIndexed(pagingState.items, key = { _, release -> release.id }) { index, release ->
-                        if (index >= pagingState.items.size - SEARCH_PREFETCH_THRESHOLD) {
-                            viewModel.loadMore()
+                else ->
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = dimens.posterWidth),
+                        contentPadding = PaddingValues(vertical = dimens.spaceM),
+                        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+                        verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        itemsIndexed(pagingState.items, key = { _, release -> release.id }) { index, release ->
+                            if (index >= pagingState.items.size - SEARCH_PREFETCH_THRESHOLD) {
+                                viewModel.loadMore()
+                            }
+                            ReleaseCard(
+                                release = release,
+                                onClick = { onReleaseClick(release.id) },
+                            )
                         }
-                        ReleaseCard(
-                            release = release,
-                            onClick = { onReleaseClick(release.id) },
-                        )
-                    }
 
-                    if (pagingState.isLoading) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            AnixLoadingBox(modifier = Modifier.fillMaxWidth())
+                        if (pagingState.isLoading) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                AnixLoadingBox(modifier = Modifier.fillMaxWidth())
+                            }
                         }
                     }
-                }
             }
         }
     }

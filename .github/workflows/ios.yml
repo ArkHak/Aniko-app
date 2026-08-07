@@ -1,0 +1,35 @@
+name: iOS (manual)
+
+# P1.T10 (docs/REELWAVE_PLAN.md, Фаза 1): iOS сознательно НЕ входит в обязательный CI
+# (.github/workflows/ci.yml, триггер push/pull_request) — macOS-раннер на GitHub Actions
+# заметно дороже ubuntu-latest (по прайсу GitHub Actions — множитель ~x10 по сравнению с Linux),
+# а полноценная сборка .ipa требует ещё и Apple-подписи (TEAM_ID), которой у CI-раннера нет —
+# см. README.md, раздел про установку через AltStore (ipa собирается вручную в Xcode).
+#
+# Этот workflow — компромисс из плана: запускается только вручную (workflow_dispatch), никогда
+# не триггерится автоматически на push/PR, и не пытается собрать .ipa — только линкует
+# Kotlin/Native-фреймворк под симулятор, чтобы поймать поломки iOS-стороны Kotlin-кода
+# (expect/actual, cinterop) без Xcode/подписи.
+on:
+  workflow_dispatch:
+
+jobs:
+  ios-framework:
+    name: Link iOS simulator framework
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17 + 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Link debug framework for iOS Simulator (arm64)
+        run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64

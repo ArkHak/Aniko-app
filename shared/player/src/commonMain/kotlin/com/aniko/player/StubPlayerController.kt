@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.update
 internal class StubPlayerController(
     private val platformName: String,
 ) : PlayerController {
-
     private val _state = MutableStateFlow(PlaybackState())
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
 

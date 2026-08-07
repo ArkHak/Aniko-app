@@ -39,18 +39,24 @@ fun <T> ChipRow(
             Text(
                 text = label(item),
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (selected) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                modifier = Modifier
-                    .background(
-                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(dimens.cornerL),
-                    )
-                    .clickable { onClick(item) }
-                    .padding(horizontal = dimens.spaceM, vertical = dimens.spaceS),
+                color =
+                    if (selected) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                modifier =
+                    Modifier
+                        .background(
+                            color =
+                                if (selected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
+                            shape = RoundedCornerShape(dimens.cornerL),
+                        ).clickable { onClick(item) }
+                        .padding(horizontal = dimens.spaceM, vertical = dimens.spaceS),
             )
         }
     }

@@ -36,9 +36,10 @@ fun LoginScreen(
 
     Surface(modifier = modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(dimens.spaceL),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(dimens.spaceL),
             verticalArrangement = Arrangement.spacedBy(dimens.spaceM, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -54,10 +55,11 @@ fun LoginScreen(
                 label = { Text("Логин") },
                 singleLine = true,
                 enabled = !state.isLoading,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Text,
-                    capitalization = KeyboardCapitalization.None,
-                ),
+                keyboardOptions =
+                    KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        capitalization = KeyboardCapitalization.None,
+                    ),
                 modifier = Modifier.fillMaxWidth(),
             )
 

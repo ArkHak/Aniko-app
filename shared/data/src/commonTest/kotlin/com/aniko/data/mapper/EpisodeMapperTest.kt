@@ -18,11 +18,11 @@ import kotlin.test.assertTrue
  * несовпадения типа известного поля. Сэмплы см. `docs/api/samples/episode_types_186.json`.
  */
 class EpisodeMapperTest {
-
     @Test
     fun typesResponse_decodesWorkersAsString_notArray() {
         // Сокращённый реальный ответ `GET episode/186` (см. docs/api/samples/episode_types_186.json).
-        val json = """
+        val json =
+            """
             {
                 "code": 0,
                 "types": [
@@ -46,7 +46,7 @@ class EpisodeMapperTest {
                     }
                 ]
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val response = AnixJson.decodeFromString(TypesResponseDto.serializer(), json)
         assertEquals(3, response.types.size)
@@ -91,18 +91,20 @@ class EpisodeMapperTest {
      */
     @Test
     fun episodeTargetDto_toDomain_carriesIframeFlagThrough() {
-        val kodikTarget = EpisodeTargetDto(
-            position = 1,
-            name = "1 серия",
-            url = "https://kodikplayer.com/seria/548657/xxx/720p",
-            iframe = true,
-        ).toDomain()
-        val sibnetTarget = EpisodeTargetDto(
-            position = 0,
-            name = "1 серия",
-            url = "https://video.sibnet.ru/shell.php?videoid=3205851",
-            iframe = false,
-        ).toDomain()
+        val kodikTarget =
+            EpisodeTargetDto(
+                position = 1,
+                name = "1 серия",
+                url = "https://kodikplayer.com/seria/548657/xxx/720p",
+                iframe = true,
+            ).toDomain()
+        val sibnetTarget =
+            EpisodeTargetDto(
+                position = 0,
+                name = "1 серия",
+                url = "https://video.sibnet.ru/shell.php?videoid=3205851",
+                iframe = false,
+            ).toDomain()
 
         assertTrue(kodikTarget.iframe)
         assertFalse(sibnetTarget.iframe)

@@ -13,9 +13,10 @@ import io.ktor.client.HttpClient
 fun createAnixImageLoader(
     context: PlatformContext,
     httpClient: HttpClient,
-): ImageLoader = ImageLoader.Builder(context)
-    .components {
-        add(KtorNetworkFetcherFactory(httpClient = { httpClient }))
-    }
-    .crossfade(true)
-    .build()
+): ImageLoader =
+    ImageLoader
+        .Builder(context)
+        .components {
+            add(KtorNetworkFetcherFactory(httpClient = { httpClient }))
+        }.crossfade(true)
+        .build()

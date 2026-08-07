@@ -8,8 +8,8 @@ import com.aniko.model.FriendRequestVisibility
 import com.aniko.model.PrivacyVisibility
 import com.aniko.model.ProfileDetails
 import com.aniko.model.ProfilePrivacy
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,7 +36,6 @@ data class ProfileUiState(
 class ProfileViewModel(
     private val profileRepository: ProfileRepository,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
@@ -53,21 +52,21 @@ class ProfileViewModel(
                     val privacyDeferred = async { profileRepository.privacyPreferences() }
                     profileDeferred.await() to privacyDeferred.await()
                 }
-            }
-                .onSuccess { (profile, privacy) ->
-                    _uiState.value = _uiState.value.copy(
+            }.onSuccess { (profile, privacy) ->
+                _uiState.value =
+                    _uiState.value.copy(
                         profile = profile,
                         privacy = privacy,
                         isLoading = false,
                         error = null,
                     )
-                }
-                .onFailure { throwable ->
-                    _uiState.value = _uiState.value.copy(
+            }.onFailure { throwable ->
+                _uiState.value =
+                    _uiState.value.copy(
                         isLoading = false,
                         error = throwable as? AnixError ?: AnixError.Unknown(throwable),
                     )
-                }
+            }
         }
     }
 

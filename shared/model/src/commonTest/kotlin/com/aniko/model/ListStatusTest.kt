@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class ListStatusTest {
-
     @Test
     fun apiValuesMatchAnixartContract() {
         assertEquals(1, ListStatus.WATCHING.apiValue)

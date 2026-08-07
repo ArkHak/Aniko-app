@@ -9,8 +9,9 @@ import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 
 /** `FavoriteApi` — избранные релизы пользователя. */
-class FavoriteApi(private val client: HttpClient) {
-
+class FavoriteApi(
+    private val client: HttpClient,
+) {
     /**
      * `GET favorite/all/{page}?sort=&filter_announce=`
      *
@@ -20,21 +21,29 @@ class FavoriteApi(private val client: HttpClient) {
      * и тот же REST-стиль API. `[TODO: verify live]` конкретно для избранного отдельно не
      * проверялось.
      */
-    suspend fun favorites(page: Int, sort: Int = 1, filterAnnounce: Int = 0): PageableResponseDto<ReleaseDto> =
+    suspend fun favorites(
+        page: Int,
+        sort: Int = 1,
+        filterAnnounce: Int = 0,
+    ): PageableResponseDto<ReleaseDto> =
         apiCall {
-            client.get("favorite/all/$page") {
-                parameter("sort", sort)
-                parameter("filter_announce", filterAnnounce)
-            }.body<PageableResponseDto<ReleaseDto>>().requireOk()
+            client
+                .get("favorite/all/$page") {
+                    parameter("sort", sort)
+                    parameter("filter_announce", filterAnnounce)
+                }.body<PageableResponseDto<ReleaseDto>>()
+                .requireOk()
         }
 
     /** `GET favorite/add/{r_id}` */
-    suspend fun addFavorite(releaseId: Int): SimpleResponseDto = apiCall {
-        client.get("favorite/add/$releaseId").body<SimpleResponseDto>().requireOk()
-    }
+    suspend fun addFavorite(releaseId: Int): SimpleResponseDto =
+        apiCall {
+            client.get("favorite/add/$releaseId").body<SimpleResponseDto>().requireOk()
+        }
 
     /** `GET favorite/delete/{r_id}` */
-    suspend fun removeFavorite(releaseId: Int): SimpleResponseDto = apiCall {
-        client.get("favorite/delete/$releaseId").body<SimpleResponseDto>().requireOk()
-    }
+    suspend fun removeFavorite(releaseId: Int): SimpleResponseDto =
+        apiCall {
+            client.get("favorite/delete/$releaseId").body<SimpleResponseDto>().requireOk()
+        }
 }

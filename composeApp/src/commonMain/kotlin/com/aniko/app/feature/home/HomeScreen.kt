@@ -47,9 +47,10 @@ fun HomeScreen(
 
     Surface(modifier = modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(vertical = dimens.spaceM),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(vertical = dimens.spaceM),
             verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
         ) {
             ReleaseSection(
@@ -94,31 +95,34 @@ private fun ReleaseSection(
 
         val error = state.error
         when {
-            error != null && state.items.isEmpty() -> AnixErrorBox(
-                message = error.message ?: "Не удалось загрузить",
-                onRetry = onRetry,
-                modifier = Modifier.fillMaxWidth().height(SECTION_HEIGHT),
-            )
+            error != null && state.items.isEmpty() ->
+                AnixErrorBox(
+                    message = error.message ?: "Не удалось загрузить",
+                    onRetry = onRetry,
+                    modifier = Modifier.fillMaxWidth().height(SECTION_HEIGHT),
+                )
 
-            state.items.isEmpty() && state.isLoading -> AnixLoadingBox(
-                modifier = Modifier.fillMaxWidth().height(SECTION_HEIGHT),
-            )
+            state.items.isEmpty() && state.isLoading ->
+                AnixLoadingBox(
+                    modifier = Modifier.fillMaxWidth().height(SECTION_HEIGHT),
+                )
 
-            else -> LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                contentPadding = PaddingValues(horizontal = dimens.spaceM),
-            ) {
-                itemsIndexed(state.items, key = { _, release -> release.id }) { index, release ->
-                    if (index >= state.items.size - PREFETCH_THRESHOLD) {
-                        onLoadMore()
+            else ->
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+                    contentPadding = PaddingValues(horizontal = dimens.spaceM),
+                ) {
+                    itemsIndexed(state.items, key = { _, release -> release.id }) { index, release ->
+                        if (index >= state.items.size - PREFETCH_THRESHOLD) {
+                            onLoadMore()
+                        }
+                        AnixPoster(
+                            url = release.posterUrl,
+                            contentDescription = release.title,
+                            modifier = Modifier.clickable { onReleaseClick(release.id) },
+                        )
                     }
-                    AnixPoster(
-                        url = release.posterUrl,
-                        contentDescription = release.title,
-                        modifier = Modifier.clickable { onReleaseClick(release.id) },
-                    )
                 }
-            }
         }
     }
 }

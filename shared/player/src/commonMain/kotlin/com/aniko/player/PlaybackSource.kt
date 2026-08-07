@@ -10,7 +10,6 @@ import com.aniko.model.VideoHost
  * два случая на уровне типов, иначе логика расползётся по UI.
  */
 sealed interface PlaybackSource {
-
     val host: VideoHost
 
     /** Прямой поток: HLS/MP4, играется нативным плеером платформы. */

@@ -53,9 +53,10 @@ fun ReleaseCard(
 
             if (release.isFavorite || release.myListStatus != null) {
                 Column(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(dimens.spaceXs),
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(dimens.spaceXs),
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(dimens.spaceXs),
                 ) {
@@ -82,10 +83,11 @@ fun ReleaseCard(
 @Composable
 private fun FavoriteBadge() {
     Box(
-        modifier = Modifier
-            .size(OVERLAY_BADGE_SIZE)
-            .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.55f)),
+        modifier =
+            Modifier
+                .size(OVERLAY_BADGE_SIZE)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.55f)),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -100,10 +102,11 @@ private fun FavoriteBadge() {
 @Composable
 private fun ListStatusBadge(status: ListStatus) {
     Box(
-        modifier = Modifier
-            .size(OVERLAY_BADGE_SIZE)
-            .clip(CircleShape)
-            .background(status.badgeColor()),
+        modifier =
+            Modifier
+                .size(OVERLAY_BADGE_SIZE)
+                .clip(CircleShape)
+                .background(status.badgeColor()),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -116,22 +119,24 @@ private fun ListStatusBadge(status: ListStatus) {
 }
 
 /** Короткое обозначение статуса списка для компактного бейджа поверх постера. */
-private fun ListStatus.shortLabel(): String = when (this) {
-    ListStatus.WATCHING -> "С"
-    ListStatus.PLANNED -> "П"
-    ListStatus.COMPLETED -> "✓"
-    ListStatus.ON_HOLD -> "О"
-    ListStatus.DROPPED -> "Б"
-}
+private fun ListStatus.shortLabel(): String =
+    when (this) {
+        ListStatus.WATCHING -> "С"
+        ListStatus.PLANNED -> "П"
+        ListStatus.COMPLETED -> "✓"
+        ListStatus.ON_HOLD -> "О"
+        ListStatus.DROPPED -> "Б"
+    }
 
 @Composable
-private fun ListStatus.badgeColor(): Color = when (this) {
-    ListStatus.WATCHING -> MaterialTheme.colorScheme.primary
-    ListStatus.PLANNED -> MaterialTheme.colorScheme.secondary
-    ListStatus.COMPLETED -> MaterialTheme.colorScheme.tertiary
-    ListStatus.ON_HOLD -> MaterialTheme.colorScheme.outline
-    ListStatus.DROPPED -> MaterialTheme.colorScheme.errorContainer
-}
+private fun ListStatus.badgeColor(): Color =
+    when (this) {
+        ListStatus.WATCHING -> MaterialTheme.colorScheme.primary
+        ListStatus.PLANNED -> MaterialTheme.colorScheme.secondary
+        ListStatus.COMPLETED -> MaterialTheme.colorScheme.tertiary
+        ListStatus.ON_HOLD -> MaterialTheme.colorScheme.outline
+        ListStatus.DROPPED -> MaterialTheme.colorScheme.errorContainer
+    }
 
 private val OVERLAY_BADGE_SIZE = 20.dp
 private val OVERLAY_ICON_SIZE = 12.dp

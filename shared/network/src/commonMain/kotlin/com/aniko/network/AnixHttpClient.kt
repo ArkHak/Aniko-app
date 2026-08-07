@@ -21,12 +21,13 @@ import kotlinx.serialization.json.Json
  * `ignoreUnknownKeys = true` — обязательное требование: API Anixart недокументирован
  * и меняется без предупреждения, любое новое поле не должно ронять клиент.
  */
-val AnixJson: Json = Json {
-    ignoreUnknownKeys = true
-    isLenient = true
-    explicitNulls = false
-    coerceInputValues = true
-}
+val AnixJson: Json =
+    Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        explicitNulls = false
+        coerceInputValues = true
+    }
 
 /**
  * Собирает готовый к работе [HttpClient]: base URL, JSON, таймауты, логирование
@@ -37,63 +38,64 @@ fun createAnixHttpClient(
     tokenProvider: TokenProvider = TokenProvider.Anonymous,
     sessionInvalidator: SessionInvalidator = NoOpSessionInvalidator,
     json: Json = AnixJson,
-): HttpClient = createPlatformHttpClient {
-    expectSuccess = true
+): HttpClient =
+    createPlatformHttpClient {
+        expectSuccess = true
 
-    install(ContentNegotiation) {
-        json(json)
-    }
-
-    install(AnixTokenPlugin) {
-        this.tokenProvider = tokenProvider
-    }
-
-    // 401/403 от бэкенда — токен протух/отозван. Кроме самого `auth/*`: там 401/403 значит
-    // «неверный логин/пароль», а не «сессия умерла», и рушить сессию из-за него нельзя.
-    // Обработчик ничего не бросает и не ретраит запрос — оригинальное исключение от
-    // `expectSuccess = true` пробрасывается дальше как обычно.
-    HttpResponseValidator {
-        handleResponseExceptionWithRequest { cause, request ->
-            val responseException = cause as? ResponseException ?: return@handleResponseExceptionWithRequest
-            val status = responseException.response.status
-            if (status != HttpStatusCode.Unauthorized && status != HttpStatusCode.Forbidden) {
-                return@handleResponseExceptionWithRequest
-            }
-
-            val path = request.url.encodedPath.removePrefix("/")
-            if (path.startsWith(AUTH_PATH_PREFIX)) {
-                return@handleResponseExceptionWithRequest
-            }
-
-            sessionInvalidator.onUnauthorized()
+        install(ContentNegotiation) {
+            json(json)
         }
-    }
 
-    install(HttpTimeout) {
-        requestTimeoutMillis = apiConfig.requestTimeoutMillis
-        connectTimeoutMillis = apiConfig.requestTimeoutMillis
-        socketTimeoutMillis = apiConfig.requestTimeoutMillis
-    }
+        install(AnixTokenPlugin) {
+            this.tokenProvider = tokenProvider
+        }
 
-    if (apiConfig.enableLogging) {
-        install(Logging) {
-            // HEADERS, а не INFO/ALL: тело ответа `auth/signIn` содержит токен.
-            level = LogLevel.HEADERS
-            // URL печатается на любом уровне, а токен живёт в query — поэтому санитайзер обязателен.
-            logger = RedactingLogger(Logger.SIMPLE)
-            sanitizeHeader { header ->
-                header.equals(HttpHeaders.Authorization, ignoreCase = true) ||
-                    header.equals(HttpHeaders.Cookie, ignoreCase = true) ||
-                    header.equals(HttpHeaders.SetCookie, ignoreCase = true)
+        // 401/403 от бэкенда — токен протух/отозван. Кроме самого `auth/*`: там 401/403 значит
+        // «неверный логин/пароль», а не «сессия умерла», и рушить сессию из-за него нельзя.
+        // Обработчик ничего не бросает и не ретраит запрос — оригинальное исключение от
+        // `expectSuccess = true` пробрасывается дальше как обычно.
+        HttpResponseValidator {
+            handleResponseExceptionWithRequest { cause, request ->
+                val responseException = cause as? ResponseException ?: return@handleResponseExceptionWithRequest
+                val status = responseException.response.status
+                if (status != HttpStatusCode.Unauthorized && status != HttpStatusCode.Forbidden) {
+                    return@handleResponseExceptionWithRequest
+                }
+
+                val path = request.url.encodedPath.removePrefix("/")
+                if (path.startsWith(AUTH_PATH_PREFIX)) {
+                    return@handleResponseExceptionWithRequest
+                }
+
+                sessionInvalidator.onUnauthorized()
             }
         }
-    }
 
-    defaultRequest {
-        url(apiConfig.baseUrl)
-        apiConfig.apiVersionHeader?.let { headers.append(ApiConfig.API_VERSION_HEADER, it) }
+        install(HttpTimeout) {
+            requestTimeoutMillis = apiConfig.requestTimeoutMillis
+            connectTimeoutMillis = apiConfig.requestTimeoutMillis
+            socketTimeoutMillis = apiConfig.requestTimeoutMillis
+        }
+
+        if (apiConfig.enableLogging) {
+            install(Logging) {
+                // HEADERS, а не INFO/ALL: тело ответа `auth/signIn` содержит токен.
+                level = LogLevel.HEADERS
+                // URL печатается на любом уровне, а токен живёт в query — поэтому санитайзер обязателен.
+                logger = RedactingLogger(Logger.SIMPLE)
+                sanitizeHeader { header ->
+                    header.equals(HttpHeaders.Authorization, ignoreCase = true) ||
+                        header.equals(HttpHeaders.Cookie, ignoreCase = true) ||
+                        header.equals(HttpHeaders.SetCookie, ignoreCase = true)
+                }
+            }
+        }
+
+        defaultRequest {
+            url(apiConfig.baseUrl)
+            apiConfig.apiVersionHeader?.let { headers.append(ApiConfig.API_VERSION_HEADER, it) }
+        }
     }
-}
 
 /** Путь `auth/signIn` и всё, что под ним, — 401/403 там не значит «сессия умерла». */
 private const val AUTH_PATH_PREFIX = "auth/"

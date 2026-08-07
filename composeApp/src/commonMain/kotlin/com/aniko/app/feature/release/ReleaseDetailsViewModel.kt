@@ -21,7 +21,6 @@ data class ReleaseDetailsUiState(
     val isLoading: Boolean = false,
     val release: Release? = null,
     val errorMessage: String? = null,
-
     // Флоу выбора серии: типы озвучки → источники → серии (см. `docs/api/ENDPOINTS.md`).
     val voiceTypes: List<VoiceType> = emptyList(),
     val selectedTypeId: Int? = null,
@@ -51,7 +50,6 @@ class ReleaseDetailsViewModel(
     private val episodeRepository: EpisodeRepository,
     private val libraryRepository: LibraryRepository,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(ReleaseDetailsUiState())
     val uiState: StateFlow<ReleaseDetailsUiState> = _uiState.asStateFlow()
 
@@ -185,7 +183,11 @@ class ReleaseDetailsViewModel(
         _uiState.update { it.copy(release = it.release?.copy(isFavorite = nextFavorite)) }
         viewModelScope.launch {
             runCatching {
-                if (nextFavorite) libraryRepository.addFavorite(release.id) else libraryRepository.removeFavorite(release.id)
+                if (nextFavorite) {
+                    libraryRepository.addFavorite(release.id)
+                } else {
+                    libraryRepository.removeFavorite(release.id)
+                }
             }.onFailure {
                 _uiState.update { it.copy(release = it.release?.copy(isFavorite = previousFavorite)) }
             }
@@ -193,9 +195,7 @@ class ReleaseDetailsViewModel(
     }
 }
 
-private inline fun MutableStateFlow<ReleaseDetailsUiState>.update(
-    block: (ReleaseDetailsUiState) -> ReleaseDetailsUiState,
-) {
+private inline fun MutableStateFlow<ReleaseDetailsUiState>.update(block: (ReleaseDetailsUiState) -> ReleaseDetailsUiState) {
     value = block(value)
 }
 

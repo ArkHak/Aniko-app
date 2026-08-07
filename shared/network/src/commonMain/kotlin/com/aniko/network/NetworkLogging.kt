@@ -23,12 +23,15 @@ private val queryTokenRegex = Regex("""([?&]${ApiConfig.TOKEN_QUERY_PARAM}=)[^&\
 private val jsonTokenRegex = Regex(""""token"\s*:\s*"[^"]*"""", RegexOption.IGNORE_CASE)
 
 /** Заменяет значение токена на [REDACTED] в query-строке и в JSON-теле. */
-internal fun redactSecrets(message: String): String = message
-    .replace(queryTokenRegex) { match -> match.groupValues[1] + REDACTED }
-    .replace(jsonTokenRegex) { "\"token\":\"$REDACTED\"" }
+internal fun redactSecrets(message: String): String =
+    message
+        .replace(queryTokenRegex) { match -> match.groupValues[1] + REDACTED }
+        .replace(jsonTokenRegex) { "\"token\":\"$REDACTED\"" }
 
 /** Обёртка над любым [Logger], пропускающая сообщения через [redactSecrets]. */
-internal class RedactingLogger(private val delegate: Logger) : Logger {
+internal class RedactingLogger(
+    private val delegate: Logger,
+) : Logger {
     override fun log(message: String) {
         delegate.log(redactSecrets(message))
     }

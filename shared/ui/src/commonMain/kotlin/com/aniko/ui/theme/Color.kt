@@ -16,23 +16,25 @@ internal object AnixPalette {
     val OnLight = Color(0xFF1A1720)
 }
 
-internal val AnixDarkColors = darkColorScheme(
-    primary = AnixPalette.Purple,
-    onPrimary = Color.White,
-    secondary = AnixPalette.Coral,
-    background = AnixPalette.SurfaceDark,
-    onBackground = AnixPalette.OnDark,
-    surface = AnixPalette.SurfaceDark,
-    onSurface = AnixPalette.OnDark,
-    surfaceVariant = AnixPalette.SurfaceDarkElevated,
-)
+internal val AnixDarkColors =
+    darkColorScheme(
+        primary = AnixPalette.Purple,
+        onPrimary = Color.White,
+        secondary = AnixPalette.Coral,
+        background = AnixPalette.SurfaceDark,
+        onBackground = AnixPalette.OnDark,
+        surface = AnixPalette.SurfaceDark,
+        onSurface = AnixPalette.OnDark,
+        surfaceVariant = AnixPalette.SurfaceDarkElevated,
+    )
 
-internal val AnixLightColors = lightColorScheme(
-    primary = AnixPalette.PurpleDark,
-    onPrimary = Color.White,
-    secondary = AnixPalette.Coral,
-    background = AnixPalette.SurfaceLight,
-    onBackground = AnixPalette.OnLight,
-    surface = AnixPalette.SurfaceLight,
-    onSurface = AnixPalette.OnLight,
-)
+internal val AnixLightColors =
+    lightColorScheme(
+        primary = AnixPalette.PurpleDark,
+        onPrimary = Color.White,
+        secondary = AnixPalette.Coral,
+        background = AnixPalette.SurfaceLight,
+        onBackground = AnixPalette.OnLight,
+        surface = AnixPalette.SurfaceLight,
+        onSurface = AnixPalette.OnLight,
+    )

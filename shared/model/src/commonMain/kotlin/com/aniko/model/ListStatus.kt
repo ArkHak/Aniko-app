@@ -7,7 +7,9 @@ package com.aniko.model
  * `profile/list/add/{status}/{r_id}` и `profile/list/all/{status}/{page}`.
  * Расшифровка взята из `docs/api/ENDPOINTS.md` (секция «Статусы списков»).
  */
-enum class ListStatus(val apiValue: Int) {
+enum class ListStatus(
+    val apiValue: Int,
+) {
     /** «Смотрю» — `status_watching`. */
     WATCHING(1),
 
@@ -26,7 +28,6 @@ enum class ListStatus(val apiValue: Int) {
 
     companion object {
         /** Возвращает статус по значению из API либо `null`, если релиз не в списке. */
-        fun fromApiValue(apiValue: Int?): ListStatus? =
-            entries.firstOrNull { it.apiValue == apiValue }
+        fun fromApiValue(apiValue: Int?): ListStatus? = entries.firstOrNull { it.apiValue == apiValue }
     }
 }

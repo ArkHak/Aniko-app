@@ -21,11 +21,12 @@ class LibraryRepository(
     private val favoriteApi: FavoriteApi,
     private val historyApi: HistoryApi,
 ) {
-
     // ---- Списки по статусу ------------------------------------------------------------
 
-    suspend fun myList(status: ListStatus, page: Int): Paged<Release> =
-        profileListApi.myList(status, page).toDomain { it.toDomain() }
+    suspend fun myList(
+        status: ListStatus,
+        page: Int,
+    ): Paged<Release> = profileListApi.myList(status, page).toDomain { it.toDomain() }
 
     /** Готовый пагинатор для экрана списка по статусу. */
     fun listPaginator(status: ListStatus): Paginator<Release> = Paginator { page -> myList(status, page) }
@@ -41,18 +42,23 @@ class LibraryRepository(
      * официальным приложением. Сознательный трейдофф для MVP — один запрос вместо двух и без
      * гонки состояния между `remove`+`add`.
      */
-    suspend fun addToList(status: ListStatus, releaseId: Int) {
+    suspend fun addToList(
+        status: ListStatus,
+        releaseId: Int,
+    ) {
         profileListApi.addToList(status, releaseId)
     }
 
-    suspend fun removeFromList(status: ListStatus, releaseId: Int) {
+    suspend fun removeFromList(
+        status: ListStatus,
+        releaseId: Int,
+    ) {
         profileListApi.removeFromList(status, releaseId)
     }
 
     // ---- Избранное ----------------------------------------------------------------------
 
-    suspend fun favorites(page: Int): Paged<Release> =
-        favoriteApi.favorites(page).toDomain { it.toDomain() }
+    suspend fun favorites(page: Int): Paged<Release> = favoriteApi.favorites(page).toDomain { it.toDomain() }
 
     /** Готовый пагинатор для экрана избранного. */
     fun favoritesPaginator(): Paginator<Release> = Paginator { page -> favorites(page) }
@@ -67,13 +73,16 @@ class LibraryRepository(
 
     // ---- История просмотра ---------------------------------------------------------------
 
-    suspend fun history(page: Int): Paged<Release> =
-        historyApi.history(page).toDomain { it.toDomain() }
+    suspend fun history(page: Int): Paged<Release> = historyApi.history(page).toDomain { it.toDomain() }
 
     /** Готовый пагинатор для экрана истории просмотра. */
     fun historyPaginator(): Paginator<Release> = Paginator { page -> history(page) }
 
-    suspend fun addHistory(releaseId: Int, sourceId: Int, position: Int) {
+    suspend fun addHistory(
+        releaseId: Int,
+        sourceId: Int,
+        position: Int,
+    ) {
         historyApi.add(releaseId, sourceId, position)
     }
 

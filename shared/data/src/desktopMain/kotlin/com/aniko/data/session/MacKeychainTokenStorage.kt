@@ -23,55 +23,66 @@ import kotlinx.coroutines.withContext
  * в argv.
  */
 class MacKeychainTokenStorage : SecureTokenStorage {
+    override suspend fun get(): String? =
+        withContext(Dispatchers.IO) {
+            val process =
+                ProcessBuilder(
+                    "security",
+                    "find-generic-password",
+                    "-s",
+                    SERVICE,
+                    "-a",
+                    ACCOUNT,
+                    "-w",
+                ).start()
 
-    override suspend fun get(): String? = withContext(Dispatchers.IO) {
-        val process = ProcessBuilder(
-            "security", "find-generic-password",
-            "-s", SERVICE,
-            "-a", ACCOUNT,
-            "-w",
-        ).start()
+            val stdout = process.inputStream.bufferedReader().use { it.readText() }
+            val stderr = process.errorStream.bufferedReader().use { it.readText() }
+            val exitCode = process.waitFor()
 
-        val stdout = process.inputStream.bufferedReader().use { it.readText() }
-        val stderr = process.errorStream.bufferedReader().use { it.readText() }
-        val exitCode = process.waitFor()
-
-        when (exitCode) {
-            0 -> stdout.trim().ifEmpty { null }
-            ERR_ITEM_NOT_FOUND -> null
-            else -> error("security find-generic-password завершился с кодом $exitCode: $stderr")
+            when (exitCode) {
+                0 -> stdout.trim().ifEmpty { null }
+                ERR_ITEM_NOT_FOUND -> null
+                else -> error("security find-generic-password завершился с кодом $exitCode: $stderr")
+            }
         }
-    }
 
-    override suspend fun set(token: String): Unit = withContext(Dispatchers.IO) {
-        // Экранируем `\` и `"`: команда для `security -i` парсится как shell-подобная строка,
-        // токен передаётся в кавычках, чтобы пробелы/спецсимволы (если появятся) не разбили её.
-        val escapedToken = token.replace("\\", "\\\\").replace("\"", "\\\"")
-        runSecurityInteractive(
-            """add-generic-password -U -a $ACCOUNT -s $SERVICE -w "$escapedToken"""",
-        )
-    }
-
-    override suspend fun clear(): Unit = withContext(Dispatchers.IO) {
-        val process = ProcessBuilder(
-            "security", "delete-generic-password",
-            "-s", SERVICE,
-            "-a", ACCOUNT,
-        ).start()
-
-        val stderr = process.errorStream.bufferedReader().use { it.readText() }
-        val exitCode = process.waitFor()
-
-        check(exitCode == 0 || exitCode == ERR_ITEM_NOT_FOUND) {
-            "security delete-generic-password завершился с кодом $exitCode: $stderr"
+    override suspend fun set(token: String): Unit =
+        withContext(Dispatchers.IO) {
+            // Экранируем `\` и `"`: команда для `security -i` парсится как shell-подобная строка,
+            // токен передаётся в кавычках, чтобы пробелы/спецсимволы (если появятся) не разбили её.
+            val escapedToken = token.replace("\\", "\\\\").replace("\"", "\\\"")
+            runSecurityInteractive(
+                """add-generic-password -U -a $ACCOUNT -s $SERVICE -w "$escapedToken"""",
+            )
         }
-    }
+
+    override suspend fun clear(): Unit =
+        withContext(Dispatchers.IO) {
+            val process =
+                ProcessBuilder(
+                    "security",
+                    "delete-generic-password",
+                    "-s",
+                    SERVICE,
+                    "-a",
+                    ACCOUNT,
+                ).start()
+
+            val stderr = process.errorStream.bufferedReader().use { it.readText() }
+            val exitCode = process.waitFor()
+
+            check(exitCode == 0 || exitCode == ERR_ITEM_NOT_FOUND) {
+                "security delete-generic-password завершился с кодом $exitCode: $stderr"
+            }
+        }
 
     /** Пишет одну команду `security` в stdin интерактивной сессии — секрет не попадает в argv. */
     private fun runSecurityInteractive(command: String) {
-        val process = ProcessBuilder("security", "-i")
-            .redirectErrorStream(true)
-            .start()
+        val process =
+            ProcessBuilder("security", "-i")
+                .redirectErrorStream(true)
+                .start()
 
         process.outputStream.bufferedWriter().use { writer ->
             writer.write(command)

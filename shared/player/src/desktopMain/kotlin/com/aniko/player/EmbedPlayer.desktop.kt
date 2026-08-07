@@ -34,7 +34,11 @@ import java.net.URI
  * `:shared:player` намеренно не тянет зависимость на compose.material3 ради одной заглушки.
  */
 @Composable
-actual fun EmbedPlayerView(url: String, referer: String?, modifier: Modifier) {
+actual fun EmbedPlayerView(
+    url: String,
+    referer: String?,
+    modifier: Modifier,
+) {
     var reopenSignal by remember(url) { mutableIntStateOf(0) }
 
     LaunchedEffect(url, reopenSignal) {
@@ -54,10 +58,11 @@ actual fun EmbedPlayerView(url: String, referer: String?, modifier: Modifier) {
                 style = TextStyle(color = Color.White),
             )
             Box(
-                modifier = Modifier
-                    .border(width = 1.dp, color = Color.White, shape = RoundedCornerShape(8.dp))
-                    .clickable { reopenSignal++ }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier =
+                    Modifier
+                        .border(width = 1.dp, color = Color.White, shape = RoundedCornerShape(8.dp))
+                        .clickable { reopenSignal++ }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 BasicText(
                     text = "Открыть ещё раз",

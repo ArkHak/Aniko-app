@@ -1,0 +1,116 @@
+name: CI
+
+# P1.T10 (docs/REELWAVE_PLAN.md, Фаза 1): обязательный CI на push/PR в main —
+# Android debug APK, Desktop-упаковка (без DMG, чтобы не требовать macOS-раннер), commonTest,
+# ktlint/detekt. iOS сюда намеренно не входит — см. .github/workflows/ios.yml и README там же.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Общая причина JDK 17 + 21 в каждой job: JDK 17 — jvmTarget проекта (AGP 8.13.2 требует минимум
+# JDK 17 для самого Gradle; Kotlin/Compose-код компилируется в байткод 17) и одновременно JDK, на
+# котором явно запускается detekt (build-logic/convention/.../aniko.lint.gradle.kts, через
+# javaToolchains.launcherFor) — detekt 1.23.8 не понимает JDK новее 22 (падает с
+# IllegalArgumentException при парсинге версии JVM демона), поэтому запускается не на JDK самого
+# Gradle-демона, а на явно зафиксированном JDK 17. JDK 21 добавлен с запасом на случай, если у
+# демона окажется современный JAVA_HOME по умолчанию — `gradle-daemon-jvm.properties` в этом
+# репозитории нет (в .gitignore, машинно-специфичный файл), поэтому демон в CI берёт JDK из
+# стандартного окружения раннера/`actions/setup-java`, а не из явного пина.
+env:
+  GRADLE_OPTS: -Dorg.gradle.daemon=false
+
+jobs:
+  android:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17 + 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Assemble Android debug APK
+        run: ./gradlew :composeApp:assembleDebug
+
+  desktop:
+    name: Desktop package (uber jar)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17 + 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Полный packageDmg требует macOS-раннер (jpackage под нужную ОС) — здесь только
+      # кросс-платформенная проверка, что desktop-таргет собирается и упаковывается в jar.
+      # DMG остаётся ручным релизным шагом (см. README, раздел релиза).
+      - name: Package desktop uber jar
+        run: ./gradlew :composeApp:packageUberJarForCurrentOS
+
+  common-test:
+    name: commonTest (shared:*)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17 + 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # commonTest сам по себе не отдельная Gradle-таска — общий Kotlin-код прогоняется через
+      # JVM-таргеты (desktopTest = jvm("desktop"), testDebugUnitTest = androidTarget). Без
+      # macOS-раннера нельзя прогнать iosSimulatorArm64Test (нужен симулятор), поэтому тут не
+      # участвует — как и вся сборка iOS-таргета, см. .github/workflows/ios.yml.
+      - name: Run desktop + Android unit tests
+        run: ./gradlew desktopTest testDebugUnitTest
+
+  lint:
+    name: ktlint + detekt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17 + 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: ktlintCheck
+        run: ./gradlew ktlintCheck
+
+      # Только JVM-варианты (metadata/common + androidDebug + desktopMain) — iosArm64/
+      # iosSimulatorArm64 варианты detekt требуют Kotlin/Native-компиляции под Apple-таргеты,
+      # которая недоступна на Linux-раннере (см. комментарий про iOS выше).
+      - name: detekt
+        run: ./gradlew detektMetadataCommonMain detektAndroidDebug detektDesktopMain

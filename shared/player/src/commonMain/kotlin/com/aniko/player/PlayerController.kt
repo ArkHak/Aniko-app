@@ -25,9 +25,13 @@ interface PlayerController {
     val state: StateFlow<PlaybackState>
 
     fun load(source: PlaybackSource)
+
     fun play()
+
     fun pause()
+
     fun seekTo(positionMs: Long)
+
     fun release()
 }
 

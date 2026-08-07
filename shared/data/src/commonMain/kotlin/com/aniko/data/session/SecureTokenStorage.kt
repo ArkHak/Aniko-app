@@ -21,7 +21,6 @@ package com.aniko.data.session
  * не должен об этом думать.
  */
 interface SecureTokenStorage {
-
     /** Текущий сохранённый токен либо `null`, если его нет. */
     suspend fun get(): String?
 

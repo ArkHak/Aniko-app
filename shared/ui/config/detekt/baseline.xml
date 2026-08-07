@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:Color.kt$AnixPalette$0xFF121016</ID>
+    <ID>MagicNumber:Color.kt$AnixPalette$0xFF1A1720</ID>
+    <ID>MagicNumber:Color.kt$AnixPalette$0xFF1C1922</ID>
+    <ID>MagicNumber:Color.kt$AnixPalette$0xFF5B32CC</ID>
+    <ID>MagicNumber:Color.kt$AnixPalette$0xFF7C4DFF</ID>
+    <ID>MagicNumber:Color.kt$AnixPalette$0xFFEDE8F2</ID>
+    <ID>MagicNumber:Color.kt$AnixPalette$0xFFFDFBFF</ID>
+    <ID>MagicNumber:Color.kt$AnixPalette$0xFFFF6E6E</ID>
+    <ID>MagicNumber:Dimens.kt$AnixDimens$3f</ID>
+    <ID>MatchingDeclarationName:Color.kt$AnixPalette</ID>
+    <ID>MatchingDeclarationName:Dimens.kt$AnixDimens</ID>
+  </CurrentIssues>
+</SmellBaseline>

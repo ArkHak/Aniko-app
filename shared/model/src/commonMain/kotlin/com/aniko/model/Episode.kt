@@ -57,7 +57,9 @@ data class EpisodeTarget(
  * Хосты-плееры, встречающиеся в пакете `utils.parser` оригинального APK.
  * Часть из них отдаёт прямую ссылку, часть — только embed-страницу.
  */
-enum class VideoHost(val key: String) {
+enum class VideoHost(
+    val key: String,
+) {
     KODIK("kodik"),
     SIBNET("sibnet"),
     RUTUBE("rutube"),

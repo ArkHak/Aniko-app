@@ -26,8 +26,8 @@ import kotlin.test.assertFailsWith
  * `AnixError.Api` через общий `requireOk()` из `ApiCall.kt`.
  */
 class LibraryRepositoryTest {
-
-    private val sampleReleaseJson = """
+    private val sampleReleaseJson =
+        """
         {
             "id": 186,
             "title_ru": "Тестовый релиз",
@@ -41,9 +41,10 @@ class LibraryRepositoryTest {
             "profile_list_status": 1,
             "is_favorite": true
         }
-    """.trimIndent()
+        """.trimIndent()
 
-    private fun pageableResponse(code: Int = 0): String = """
+    private fun pageableResponse(code: Int = 0): String =
+        """
         {
             "code": $code,
             "content": [$sampleReleaseJson],
@@ -51,23 +52,28 @@ class LibraryRepositoryTest {
             "total_page_count": 3,
             "total_count": 42
         }
-    """.trimIndent()
+        """.trimIndent()
 
     private fun simpleResponse(code: Int = 0): String = """{"code": $code}"""
 
-    private fun repository(expectedPath: String, responseBody: String): LibraryRepository {
-        val mockEngine = MockEngine { request ->
-            val path = request.url.encodedPath
-            check(path == expectedPath) { "Unexpected path: $path, expected: $expectedPath" }
-            respond(
-                content = responseBody,
-                status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, "application/json"),
-            )
-        }
-        val httpClient = HttpClient(mockEngine) {
-            install(ContentNegotiation) { json(AnixJson) }
-        }
+    private fun repository(
+        expectedPath: String,
+        responseBody: String,
+    ): LibraryRepository {
+        val mockEngine =
+            MockEngine { request ->
+                val path = request.url.encodedPath
+                check(path == expectedPath) { "Unexpected path: $path, expected: $expectedPath" }
+                respond(
+                    content = responseBody,
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+            }
+        val httpClient =
+            HttpClient(mockEngine) {
+                install(ContentNegotiation) { json(AnixJson) }
+            }
         return LibraryRepository(
             profileListApi = ProfileListApi(client = httpClient),
             favoriteApi = FavoriteApi(client = httpClient),
@@ -78,161 +84,179 @@ class LibraryRepositoryTest {
     // ---- Списки по статусу ------------------------------------------------------------
 
     @Test
-    fun myList_happyPath_returnsMappedPage() = runTest {
-        val repository = repository("/profile/list/all/1/0", pageableResponse())
+    fun myList_happyPath_returnsMappedPage() =
+        runTest {
+            val repository = repository("/profile/list/all/1/0", pageableResponse())
 
-        val page = repository.myList(ListStatus.WATCHING, page = 0)
+            val page = repository.myList(ListStatus.WATCHING, page = 0)
 
-        assertEquals(1, page.items.size)
-        assertEquals(186, page.items.first().id)
-        assertEquals(0, page.currentPage)
-        assertEquals(3, page.totalPages)
-    }
-
-    @Test
-    fun myList_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/profile/list/all/1/0", pageableResponse(code = 7))
-
-        assertFailsWith<AnixError.Api> {
-            repository.myList(ListStatus.WATCHING, page = 0)
+            assertEquals(1, page.items.size)
+            assertEquals(186, page.items.first().id)
+            assertEquals(0, page.currentPage)
+            assertEquals(3, page.totalPages)
         }
-    }
 
     @Test
-    fun addToList_happyPath_callsAddEndpoint() = runTest {
-        val repository = repository("/profile/list/add/1/186", simpleResponse())
+    fun myList_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/profile/list/all/1/0", pageableResponse(code = 7))
 
-        repository.addToList(ListStatus.WATCHING, releaseId = 186)
-    }
+            assertFailsWith<AnixError.Api> {
+                repository.myList(ListStatus.WATCHING, page = 0)
+            }
+        }
 
     @Test
-    fun addToList_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/profile/list/add/1/186", simpleResponse(code = 5))
+    fun addToList_happyPath_callsAddEndpoint() =
+        runTest {
+            val repository = repository("/profile/list/add/1/186", simpleResponse())
 
-        assertFailsWith<AnixError.Api> {
             repository.addToList(ListStatus.WATCHING, releaseId = 186)
         }
-    }
 
     @Test
-    fun removeFromList_happyPath_callsDeleteEndpoint() = runTest {
-        val repository = repository("/profile/list/delete/1/186", simpleResponse())
+    fun addToList_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/profile/list/add/1/186", simpleResponse(code = 5))
 
-        repository.removeFromList(ListStatus.WATCHING, releaseId = 186)
-    }
+            assertFailsWith<AnixError.Api> {
+                repository.addToList(ListStatus.WATCHING, releaseId = 186)
+            }
+        }
 
     @Test
-    fun removeFromList_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/profile/list/delete/1/186", simpleResponse(code = 5))
+    fun removeFromList_happyPath_callsDeleteEndpoint() =
+        runTest {
+            val repository = repository("/profile/list/delete/1/186", simpleResponse())
 
-        assertFailsWith<AnixError.Api> {
             repository.removeFromList(ListStatus.WATCHING, releaseId = 186)
         }
-    }
+
+    @Test
+    fun removeFromList_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/profile/list/delete/1/186", simpleResponse(code = 5))
+
+            assertFailsWith<AnixError.Api> {
+                repository.removeFromList(ListStatus.WATCHING, releaseId = 186)
+            }
+        }
 
     // ---- Избранное ----------------------------------------------------------------------
 
     @Test
-    fun favorites_happyPath_returnsMappedPage() = runTest {
-        val repository = repository("/favorite/all/0", pageableResponse())
+    fun favorites_happyPath_returnsMappedPage() =
+        runTest {
+            val repository = repository("/favorite/all/0", pageableResponse())
 
-        val page = repository.favorites(page = 0)
+            val page = repository.favorites(page = 0)
 
-        assertEquals(1, page.items.size)
-        assertEquals(true, page.items.first().isFavorite)
-    }
-
-    @Test
-    fun favorites_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/favorite/all/0", pageableResponse(code = 3))
-
-        assertFailsWith<AnixError.Api> {
-            repository.favorites(page = 0)
+            assertEquals(1, page.items.size)
+            assertEquals(true, page.items.first().isFavorite)
         }
-    }
 
     @Test
-    fun addFavorite_happyPath_callsAddEndpoint() = runTest {
-        val repository = repository("/favorite/add/186", simpleResponse())
+    fun favorites_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/favorite/all/0", pageableResponse(code = 3))
 
-        repository.addFavorite(releaseId = 186)
-    }
+            assertFailsWith<AnixError.Api> {
+                repository.favorites(page = 0)
+            }
+        }
 
     @Test
-    fun addFavorite_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/favorite/add/186", simpleResponse(code = 4))
+    fun addFavorite_happyPath_callsAddEndpoint() =
+        runTest {
+            val repository = repository("/favorite/add/186", simpleResponse())
 
-        assertFailsWith<AnixError.Api> {
             repository.addFavorite(releaseId = 186)
         }
-    }
 
     @Test
-    fun removeFavorite_happyPath_callsDeleteEndpoint() = runTest {
-        val repository = repository("/favorite/delete/186", simpleResponse())
+    fun addFavorite_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/favorite/add/186", simpleResponse(code = 4))
 
-        repository.removeFavorite(releaseId = 186)
-    }
+            assertFailsWith<AnixError.Api> {
+                repository.addFavorite(releaseId = 186)
+            }
+        }
 
     @Test
-    fun removeFavorite_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/favorite/delete/186", simpleResponse(code = 4))
+    fun removeFavorite_happyPath_callsDeleteEndpoint() =
+        runTest {
+            val repository = repository("/favorite/delete/186", simpleResponse())
 
-        assertFailsWith<AnixError.Api> {
             repository.removeFavorite(releaseId = 186)
         }
-    }
+
+    @Test
+    fun removeFavorite_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/favorite/delete/186", simpleResponse(code = 4))
+
+            assertFailsWith<AnixError.Api> {
+                repository.removeFavorite(releaseId = 186)
+            }
+        }
 
     // ---- История просмотра ---------------------------------------------------------------
 
     @Test
-    fun history_happyPath_returnsMappedPage() = runTest {
-        val repository = repository("/history/0", pageableResponse())
+    fun history_happyPath_returnsMappedPage() =
+        runTest {
+            val repository = repository("/history/0", pageableResponse())
 
-        val page = repository.history(page = 0)
+            val page = repository.history(page = 0)
 
-        assertEquals(1, page.items.size)
-        assertEquals(186, page.items.first().id)
-    }
-
-    @Test
-    fun history_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/history/0", pageableResponse(code = 2))
-
-        assertFailsWith<AnixError.Api> {
-            repository.history(page = 0)
+            assertEquals(1, page.items.size)
+            assertEquals(186, page.items.first().id)
         }
-    }
 
     @Test
-    fun addHistory_happyPath_callsAddEndpoint() = runTest {
-        val repository = repository("/history/add/186/8/1", simpleResponse())
+    fun history_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/history/0", pageableResponse(code = 2))
 
-        repository.addHistory(releaseId = 186, sourceId = 8, position = 1)
-    }
+            assertFailsWith<AnixError.Api> {
+                repository.history(page = 0)
+            }
+        }
 
     @Test
-    fun addHistory_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/history/add/186/8/1", simpleResponse(code = 1))
+    fun addHistory_happyPath_callsAddEndpoint() =
+        runTest {
+            val repository = repository("/history/add/186/8/1", simpleResponse())
 
-        assertFailsWith<AnixError.Api> {
             repository.addHistory(releaseId = 186, sourceId = 8, position = 1)
         }
-    }
 
     @Test
-    fun removeFromHistory_happyPath_callsDeleteEndpoint() = runTest {
-        val repository = repository("/history/delete/186", simpleResponse())
+    fun addHistory_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/history/add/186/8/1", simpleResponse(code = 1))
 
-        repository.removeFromHistory(releaseId = 186)
-    }
+            assertFailsWith<AnixError.Api> {
+                repository.addHistory(releaseId = 186, sourceId = 8, position = 1)
+            }
+        }
 
     @Test
-    fun removeFromHistory_nonZeroCode_throwsAnixErrorApi() = runTest {
-        val repository = repository("/history/delete/186", simpleResponse(code = 1))
+    fun removeFromHistory_happyPath_callsDeleteEndpoint() =
+        runTest {
+            val repository = repository("/history/delete/186", simpleResponse())
 
-        assertFailsWith<AnixError.Api> {
             repository.removeFromHistory(releaseId = 186)
         }
-    }
+
+    @Test
+    fun removeFromHistory_nonZeroCode_throwsAnixErrorApi() =
+        runTest {
+            val repository = repository("/history/delete/186", simpleResponse(code = 1))
+
+            assertFailsWith<AnixError.Api> {
+                repository.removeFromHistory(releaseId = 186)
+            }
+        }
 }

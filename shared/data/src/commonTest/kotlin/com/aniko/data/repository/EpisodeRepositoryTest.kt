@@ -30,61 +30,69 @@ import kotlin.test.assertIs
  * поэтому тестам больше не нужно предварительно вызывать `sources()`.
  */
 class EpisodeRepositoryTest {
-
     @Test
-    fun resolvePlaybackSource_kodikIframeTrue_returnsEmbed() = runTest {
-        val repository = repositoryWithTarget(url = "https://kodikplayer.com/seria/548657/xxx/720p", iframe = true)
+    fun resolvePlaybackSource_kodikIframeTrue_returnsEmbed() =
+        runTest {
+            val repository = repositoryWithTarget(url = "https://kodikplayer.com/seria/548657/xxx/720p", iframe = true)
 
-        val source = repository.resolvePlaybackSource(releaseId = 186, sourceId = 8, position = 1, host = VideoHost.KODIK)
+            val source = repository.resolvePlaybackSource(releaseId = 186, sourceId = 8, position = 1, host = VideoHost.KODIK)
 
-        val embed = assertIs<PlaybackSource.Embed>(source)
-        assertEquals("https://kodikplayer.com/seria/548657/xxx/720p", embed.url)
-        assertEquals(VideoHost.KODIK, embed.host)
-    }
-
-    @Test
-    fun resolvePlaybackSource_sibnetIframeFalse_stillReturnsEmbed() = runTest {
-        val repository = repositoryWithTarget(url = "https://video.sibnet.ru/shell.php?videoid=1", iframe = false)
-
-        val source = repository.resolvePlaybackSource(releaseId = 186, sourceId = 1, position = 0, host = VideoHost.SIBNET)
-
-        val embed = assertIs<PlaybackSource.Embed>(source)
-        assertEquals(VideoHost.SIBNET, embed.host)
-    }
-
-    @Test
-    fun resolvePlaybackSource_blankUrl_throwsPlaybackResolve() = runTest {
-        val repository = repositoryWithTarget(url = "", iframe = false)
-
-        assertFailsWith<AnixError.PlaybackResolve> {
-            repository.resolvePlaybackSource(releaseId = 186, sourceId = 1, position = 0, host = VideoHost.SIBNET)
+            val embed = assertIs<PlaybackSource.Embed>(source)
+            assertEquals("https://kodikplayer.com/seria/548657/xxx/720p", embed.url)
+            assertEquals(VideoHost.KODIK, embed.host)
         }
-    }
 
-    private fun repositoryWithTarget(url: String, iframe: Boolean): EpisodeRepository {
-        val mockEngine = MockEngine { request ->
-            val path = request.url.encodedPath
-            check(path.startsWith("/episode/target/")) { "Unexpected path: $path" }
-            respond(
-                content = """
-                    {
-                        "code": 0,
-                        "episode": {
-                            "position": 0,
-                            "name": "1 серия",
-                            "url": "$url",
-                            "iframe": $iframe
+    @Test
+    fun resolvePlaybackSource_sibnetIframeFalse_stillReturnsEmbed() =
+        runTest {
+            val repository = repositoryWithTarget(url = "https://video.sibnet.ru/shell.php?videoid=1", iframe = false)
+
+            val source = repository.resolvePlaybackSource(releaseId = 186, sourceId = 1, position = 0, host = VideoHost.SIBNET)
+
+            val embed = assertIs<PlaybackSource.Embed>(source)
+            assertEquals(VideoHost.SIBNET, embed.host)
+        }
+
+    @Test
+    fun resolvePlaybackSource_blankUrl_throwsPlaybackResolve() =
+        runTest {
+            val repository = repositoryWithTarget(url = "", iframe = false)
+
+            assertFailsWith<AnixError.PlaybackResolve> {
+                repository.resolvePlaybackSource(releaseId = 186, sourceId = 1, position = 0, host = VideoHost.SIBNET)
+            }
+        }
+
+    private fun repositoryWithTarget(
+        url: String,
+        iframe: Boolean,
+    ): EpisodeRepository {
+        val mockEngine =
+            MockEngine { request ->
+                val path = request.url.encodedPath
+                check(path.startsWith("/episode/target/")) { "Unexpected path: $path" }
+                respond(
+                    content =
+                        """
+                        {
+                            "code": 0,
+                            "episode": {
+                                "position": 0,
+                                "name": "1 серия",
+                                "url": "$url",
+                                "iframe": $iframe
+                            }
                         }
-                    }
-                """.trimIndent(),
-                status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, "application/json"),
-            )
-        }
+                        """.trimIndent(),
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+            }
 
-        val httpClient = HttpClient(mockEngine) {
-            install(ContentNegotiation) { json(AnixJson) }
-        }
+        val httpClient =
+            HttpClient(mockEngine) {
+                install(ContentNegotiation) { json(AnixJson) }
+            }
 
         return EpisodeRepository(episodeApi = EpisodeApi(client = httpClient))
     }

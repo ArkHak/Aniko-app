@@ -39,9 +39,10 @@ fun AnixAvatar(
     size: Dp = 64.dp,
 ) {
     Box(
-        modifier = modifier
-            .size(size)
-            .clip(CircleShape),
+        modifier =
+            modifier
+                .size(size)
+                .clip(CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         if (avatarUrl != null) {
@@ -59,21 +60,29 @@ fun AnixAvatar(
     }
 }
 
-/** Заглушка аватарки: цветной круг с первой буквой логина. Используется, пока нет url, идёт загрузка или произошла ошибка. */
+/**
+ * Заглушка аватарки: цветной круг с первой буквой логина.
+ * Используется, пока нет url, идёт загрузка или произошла ошибка.
+ */
 @Composable
-private fun AvatarFallback(login: String, size: Dp) {
+private fun AvatarFallback(
+    login: String,
+    size: Dp,
+) {
     Box(
-        modifier = Modifier
-            .size(size)
-            .background(MaterialTheme.colorScheme.primaryContainer),
+        modifier =
+            Modifier
+                .size(size)
+                .background(MaterialTheme.colorScheme.primaryContainer),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = login.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontSize = (size.value * 0.4f).sp,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            ),
+            style =
+                MaterialTheme.typography.titleMedium.copy(
+                    fontSize = (size.value * 0.4f).sp,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
         )
     }
 }

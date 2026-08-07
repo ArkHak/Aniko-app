@@ -27,17 +27,21 @@ import io.ktor.http.contentType
  * `{ related, releases }` без пагинации), но по правилам R3 живой трафик приоритетнее
  * статического анализа APK — вероятно, эндпоинт на сервере изменился после версии 9.0-beta-19.
  */
-class SearchApi(private val client: HttpClient) {
-
+class SearchApi(
+    private val client: HttpClient,
+) {
     /** `POST search/releases/{page}`, body `SearchRequest`. */
     suspend fun releaseSearch(
         page: Int,
         query: String,
         searchBy: Int = 0,
-    ): PageableResponseDto<ReleaseDto> = apiCall {
-        client.post("search/releases/$page") {
-            contentType(ContentType.Application.Json)
-            setBody(SearchRequestDto(query = query, searchBy = searchBy))
-        }.body<PageableResponseDto<ReleaseDto>>().requireOk()
-    }
+    ): PageableResponseDto<ReleaseDto> =
+        apiCall {
+            client
+                .post("search/releases/$page") {
+                    contentType(ContentType.Application.Json)
+                    setBody(SearchRequestDto(query = query, searchBy = searchBy))
+                }.body<PageableResponseDto<ReleaseDto>>()
+                .requireOk()
+        }
 }

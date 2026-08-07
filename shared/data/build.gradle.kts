@@ -1,6 +1,7 @@
 plugins {
     id("aniko.kmp.library")
     id("aniko.kmp.serialization")
+    id("aniko.lint")
 }
 
 android {

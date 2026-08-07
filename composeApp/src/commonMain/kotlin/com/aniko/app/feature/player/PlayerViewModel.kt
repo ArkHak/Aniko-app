@@ -33,15 +33,24 @@ class PlayerViewModel(
     private val episodeRepository: EpisodeRepository,
     private val libraryRepository: LibraryRepository,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
-    private data class LoadKey(val releaseId: Int, val sourceId: Int, val position: Int, val host: VideoHost)
+    private data class LoadKey(
+        val releaseId: Int,
+        val sourceId: Int,
+        val position: Int,
+        val host: VideoHost,
+    )
 
     private var loadedKey: LoadKey? = null
 
-    fun load(releaseId: Int, sourceId: Int, position: Int, host: VideoHost) {
+    fun load(
+        releaseId: Int,
+        sourceId: Int,
+        position: Int,
+        host: VideoHost,
+    ) {
         val key = LoadKey(releaseId, sourceId, position, host)
         // Не повторяем загрузку, если тот же эпизод уже грузится или уже успешно загружен.
         // Ошибочное состояние (errorMessage != null) НЕ блокирует повтор — иначе повторный тап

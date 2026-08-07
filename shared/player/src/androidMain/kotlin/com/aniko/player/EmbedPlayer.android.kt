@@ -32,30 +32,39 @@ import androidx.compose.ui.viewinterop.AndroidView
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-actual fun EmbedPlayerView(url: String, referer: String?, modifier: Modifier) {
+actual fun EmbedPlayerView(
+    url: String,
+    referer: String?,
+    modifier: Modifier,
+) {
     val headers = referer?.let { mapOf("Referer" to it) } ?: emptyMap()
     AndroidView(
         factory = { context ->
             WebView(context).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                )
+                layoutParams =
+                    ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    )
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.mediaPlaybackRequiresUserGesture = false
                 // Без гранта PROTECTED_MEDIA_ID WebView отклоняет запрос EME/Widevine, который
                 // делает html5-плеер при инициализации видео — экран остаётся чёрным без единой
                 // ошибки в логе. Оригинал (`KodikAdActivity$webChromeClient$1`) грантит его же.
-                webChromeClient = object : WebChromeClient() {
-                    override fun onPermissionRequest(request: PermissionRequest) {
-                        request.grant(request.resources)
+                webChromeClient =
+                    object : WebChromeClient() {
+                        override fun onPermissionRequest(request: PermissionRequest) {
+                            request.grant(request.resources)
+                        }
                     }
-                }
-                webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean =
-                        !isSafeEmbedUrl(request.url.toString())
-                }
+                webViewClient =
+                    object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView,
+                            request: android.webkit.WebResourceRequest,
+                        ): Boolean = !isSafeEmbedUrl(request.url.toString())
+                    }
                 loadEmbed(url, referer, headers)
             }
         },
@@ -68,7 +77,11 @@ actual fun EmbedPlayerView(url: String, referer: String?, modifier: Modifier) {
     )
 }
 
-private fun WebView.loadEmbed(url: String, referer: String?, headers: Map<String, String>) {
+private fun WebView.loadEmbed(
+    url: String,
+    referer: String?,
+    headers: Map<String, String>,
+) {
     if (!isSafeEmbedUrl(url)) return
     // Для Kodik грузим не сам [url] через `loadUrl`, а HTML-обёртку через `loadDataWithBaseURL` —
     // после неё `WebView.getUrl()` возвращает `baseUrl` (referer), а не [url], поэтому сравнивать

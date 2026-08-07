@@ -21,10 +21,11 @@ expect fun platformModule(): Module
  * Android вызывает её из `Application.onCreate` с `androidContext { ... }`,
  * Desktop — из `main()`, iOS — из `MainViewController()`.
  */
-fun initKoin(config: KoinAppDeclaration? = null): KoinApplication = startKoin {
-    config?.invoke(this)
-    modules(platformModule(), dataModule, appModule)
-}
+fun initKoin(config: KoinAppDeclaration? = null): KoinApplication =
+    startKoin {
+        config?.invoke(this)
+        modules(platformModule(), dataModule, appModule)
+    }
 
 private var koinStarted = false
 

@@ -1,6 +1,7 @@
 plugins {
     id("aniko.kmp.library")
     id("aniko.kmp.compose")
+    id("aniko.lint")
 }
 
 android {

@@ -56,27 +56,31 @@ class Paginator<T>(
         runPageLoad(firstPage, append = false)
     }
 
-    private suspend fun runPageLoad(page: Int, append: Boolean) {
+    private suspend fun runPageLoad(
+        page: Int,
+        append: Boolean,
+    ) {
         val result = runCatching { fetch(page) }
         mutex.withLock {
             result
                 .onSuccess { paged ->
                     nextPage = paged.currentPage + 1
                     val merged = if (append) _state.value.items + paged.items else paged.items
-                    _state.value = PagingState(
-                        items = merged,
-                        isLoading = false,
-                        isRefreshing = false,
-                        endReached = !paged.hasNextPage,
-                        error = null,
-                    )
-                }
-                .onFailure { throwable ->
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        error = throwable as? AnixError ?: AnixError.Unknown(throwable),
-                    )
+                    _state.value =
+                        PagingState(
+                            items = merged,
+                            isLoading = false,
+                            isRefreshing = false,
+                            endReached = !paged.hasNextPage,
+                            error = null,
+                        )
+                }.onFailure { throwable ->
+                    _state.value =
+                        _state.value.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            error = throwable as? AnixError ?: AnixError.Unknown(throwable),
+                        )
                 }
         }
     }

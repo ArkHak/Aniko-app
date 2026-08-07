@@ -16,4 +16,6 @@ dependencies {
     implementation(libs.plugin.kotlin.serialization)
     implementation(libs.plugin.compose.compiler)
     implementation(libs.plugin.compose.multiplatform)
+    implementation(libs.plugin.ktlint)
+    implementation(libs.plugin.detekt)
 }

@@ -22,7 +22,6 @@ class ProfileRepository(
     private val profilePreferenceApi: ProfilePreferenceApi,
     private val sessionStore: SessionStore,
 ) {
-
     /** Профиль текущего пользователя. Бросает [AnixError.Unauthorized], если нет активной сессии. */
     suspend fun myProfile(): ProfileDetails {
         val profileId = sessionStore.profileId() ?: throw AnixError.Unauthorized()
