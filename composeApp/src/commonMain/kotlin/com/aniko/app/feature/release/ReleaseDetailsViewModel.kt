@@ -15,6 +15,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class ReleaseDetailsUiState(
@@ -68,6 +69,16 @@ class ReleaseDetailsViewModel(
 
     private var loadedReleaseId: Int? = null
 
+    /**
+     * Реактивная загрузка через `ReleaseRepository.observeRelease` (P4.T7, S3) — БД остаётся SSOT,
+     * поэтому оптимистичные локальные записи `changeListStatus`/`toggleFavorite` доходят до UI без
+     * ручного патчинга стейта.
+     *
+     * `cacheFirstFlow` (см. `CacheFirst.kt`, не трогать) — не вечная подписка, а один
+     * (max два: кэш + сеть) эмит на вызов, после чего сам поток завершается — поэтому именно
+     * здесь, после успешного `collect`, как и раньше, запускается [loadVoiceTypes]: точка «релиз
+     * успешно получен» не изменилась, изменился только источник (кэш вместо прямого сетевого вызова).
+     */
     fun load(releaseId: Int) {
         val state = _uiState.value
         if (loadedReleaseId == releaseId && state.release != null && state.errorMessage == null) return
@@ -76,8 +87,9 @@ class ReleaseDetailsViewModel(
         _uiState.value = ReleaseDetailsUiState(isLoading = true)
         viewModelScope.launch {
             try {
-                val release = releaseRepository.release(releaseId)
-                _uiState.value = ReleaseDetailsUiState(release = release)
+                releaseRepository.observeRelease(releaseId).collect { cached ->
+                    _uiState.update { it.copy(isLoading = false, release = cached.value, errorMessage = null) }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -162,49 +174,61 @@ class ReleaseDetailsViewModel(
     }
 
     /**
-     * Меняет статус релиза в списке пользователя ([status] `null` — снять статус). Обновляет
-     * `state.release` оптимистично и, в отличие от `PlayerViewModel`'а с его молчаливым
-     * `runCatching { episodeRepository.markWatched(...) }`, откатывает локальное состояние при
-     * ошибке сети — здесь это видимый переключатель в UI, и разъехавшийся с сервером статус
-     * пользователь заметит.
+     * Меняет статус релиза в списке пользователя ([status] `null` — снять статус).
+     *
+     * `LibraryRepository.addToList`/`removeFromList` (P4.T7) сами пишут новый статус в БД
+     * оптимистично, синхронно, до постановки в офлайн-очередь — тут больше не нужен ручной
+     * `_uiState`-патчинг с откатом: провал отправки на сервер (сеть/401/перманентная ошибка)
+     * теперь забота `SyncQueueWorker` (см. его KDoc про last-write-wins и обработку ошибок), а не
+     * этого ViewModel. [refreshRelease] сразу после — перечитывает уже обновлённую строку из кэша
+     * (см. KDoc [refreshRelease] про то, почему это одноразовое чтение, а не продолжение
+     * подписки [load]).
      */
     fun changeListStatus(status: ListStatus?) {
         val release = _uiState.value.release ?: return
-        val previousStatus = release.myListStatus
-        if (previousStatus == status) return
+        if (release.myListStatus == status) return
 
-        _uiState.update { it.copy(release = it.release?.copy(myListStatus = status)) }
         viewModelScope.launch {
-            runCatching {
-                if (status != null) {
-                    libraryRepository.addToList(status, release.id)
-                } else {
-                    previousStatus?.let { libraryRepository.removeFromList(it, release.id) }
-                }
-            }.onFailure {
-                _uiState.update { it.copy(release = it.release?.copy(myListStatus = previousStatus)) }
+            if (status != null) {
+                libraryRepository.addToList(status, release.id)
+            } else {
+                libraryRepository.removeFromList(release.id)
             }
+            refreshRelease(release.id)
         }
     }
 
-    /** Тоггл избранного — та же схема оптимистичного обновления с откатом при ошибке, см. [changeListStatus]. */
+    /**
+     * Тоггл избранного — та же схема, что и [changeListStatus] (оптимистичная запись в БД
+     * репозиторием + перечитывание).
+     */
     fun toggleFavorite() {
         val release = _uiState.value.release ?: return
-        val previousFavorite = release.isFavorite
-        val nextFavorite = !previousFavorite
 
-        _uiState.update { it.copy(release = it.release?.copy(isFavorite = nextFavorite)) }
         viewModelScope.launch {
-            runCatching {
-                if (nextFavorite) {
-                    libraryRepository.addFavorite(release.id)
-                } else {
-                    libraryRepository.removeFavorite(release.id)
-                }
-            }.onFailure {
-                _uiState.update { it.copy(release = it.release?.copy(isFavorite = previousFavorite)) }
+            if (release.isFavorite) {
+                libraryRepository.removeFavorite(release.id)
+            } else {
+                libraryRepository.addFavorite(release.id)
             }
+            refreshRelease(release.id)
         }
+    }
+
+    /**
+     * Одноразовое чтение свежего значения релиза из кэша после мутации `LibraryRepository`.
+     *
+     * Не переиспользует уже запущенный в [load] `collect`: `cacheFirstFlow` (см. `CacheFirst.kt`)
+     * — не вечная подписка на БД, а один (максимум два — кэш, затем сеть) эмит на вызов, после
+     * чего сам поток завершается, так что коллектор из [load] к этому моменту уже неактивен.
+     * Локальная запись `LibraryRepository.addToList`/... происходит синхронно до возврата из
+     * suspend-функции, поэтому здесь `observeRelease(...).first()` гарантированно видит
+     * обновлённый JOIN с `listMembership`, не задевая сеть (штамп свежести самого релиза при
+     * этом не менялся).
+     */
+    private suspend fun refreshRelease(releaseId: Int) {
+        val cached = releaseRepository.observeRelease(releaseId).first()
+        _uiState.update { it.copy(release = cached.value) }
     }
 }
 

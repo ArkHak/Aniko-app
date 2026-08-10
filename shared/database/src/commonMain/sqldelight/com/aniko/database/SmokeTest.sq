@@ -1,0 +1,13 @@
+-- Билд-спайк (P4.S0): проверка, что кодогенерация SQLDelight работает на всех таргетах
+-- (androidTarget/jvm("desktop")/iosArm64/iosSimulatorArm64) и что подключённые платформенные
+-- драйверы реально создают/читают схему. Реальная схема кэша/офлайн-очереди приходит в S2.
+CREATE TABLE smokeEntity (
+    id INTEGER NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+insertSmoke:
+INSERT INTO smokeEntity(id, value) VALUES (?, ?);
+
+selectAllSmoke:
+SELECT * FROM smokeEntity;

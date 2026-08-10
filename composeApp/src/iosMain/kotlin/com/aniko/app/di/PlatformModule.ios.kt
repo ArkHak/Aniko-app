@@ -2,6 +2,8 @@ package com.aniko.app.di
 
 import com.aniko.data.session.IosKeychainTokenStorage
 import com.aniko.data.session.SecureTokenStorage
+import com.aniko.database.driver.DatabaseDriverFactory
+import com.aniko.database.driver.IosDatabaseDriverFactory
 import com.russhwolf.settings.NSUserDefaultsSettings
 import com.russhwolf.settings.Settings
 import org.koin.core.module.Module
@@ -14,4 +16,5 @@ actual fun platformModule(): Module =
             NSUserDefaultsSettings(NSUserDefaults.standardUserDefaults)
         }
         single<SecureTokenStorage> { IosKeychainTokenStorage() }
+        single<DatabaseDriverFactory> { IosDatabaseDriverFactory() }
     }

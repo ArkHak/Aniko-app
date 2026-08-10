@@ -18,13 +18,19 @@ import com.aniko.data.repository.EpisodeRepository
 import com.aniko.data.repository.LibraryRepository
 import com.aniko.data.repository.ProfileRepository
 import com.aniko.data.repository.ReleaseRepository
+import com.aniko.data.repository.ScheduleRepository
 import com.aniko.data.session.SessionStore
+import com.aniko.data.sync.SyncQueueWorker
 import com.aniko.network.ApiConfig
 import com.aniko.network.SessionInvalidator
 import com.aniko.network.TokenProvider
 import com.aniko.network.createAnixHttpClient
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import kotlin.time.Clock
 
 /**
  * Koin-модуль data-слоя.
@@ -34,6 +40,9 @@ import org.koin.dsl.module
  */
 val dataModule =
     module {
+        single<Clock> { Clock.System }
+        single<CoroutineDispatcher>(named("io")) { Dispatchers.IO }
+
         single { ApiConfig() }
 
         single { SessionStore(settings = get(), secureStorage = get()) }
@@ -62,9 +71,60 @@ val dataModule =
         single { ScheduleApi(client = get()) }
         single { FilterApi(client = get()) }
 
+        single {
+            SyncQueueWorker(
+                queue = get(),
+                membership = get(),
+                progress = get(),
+                profileListApi = get(),
+                favoriteApi = get(),
+                historyApi = get(),
+                episodeApi = get(),
+                clock = get(),
+            )
+        }
+
         single { AuthRepository(authApi = get(), sessionStore = get()) }
-        single { ReleaseRepository(releaseApi = get(), searchApi = get()) }
-        single { EpisodeRepository(episodeApi = get()) }
-        single { LibraryRepository(profileListApi = get(), favoriteApi = get(), historyApi = get()) }
+        single {
+            ReleaseRepository(
+                releaseApi = get(),
+                searchApi = get(),
+                releaseCacheStore = get(),
+                releaseListStore = get(),
+                listMembershipStore = get(),
+                clock = get(),
+            )
+        }
+        single {
+            ScheduleRepository(
+                scheduleApi = get(),
+                releaseCacheStore = get(),
+                releaseListStore = get(),
+                listMembershipStore = get(),
+                clock = get(),
+            )
+        }
+        single {
+            EpisodeRepository(
+                episodeApi = get(),
+                episodeProgressStore = get(),
+                syncQueueStore = get(),
+                syncQueueWorker = get(),
+                clock = get(),
+            )
+        }
+        single {
+            LibraryRepository(
+                profileListApi = get(),
+                favoriteApi = get(),
+                historyApi = get(),
+                listMembershipStore = get(),
+                releaseCacheStore = get(),
+                releaseListStore = get(),
+                syncQueueStore = get(),
+                syncQueueWorker = get(),
+                clock = get(),
+            )
+        }
         single { ProfileRepository(profileApi = get(), profilePreferenceApi = get(), sessionStore = get()) }
     }

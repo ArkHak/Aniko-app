@@ -1,0 +1,26 @@
+-- Упорядоченный индекс одной страницы листинга релизов (каталог, мои списки, избранное, история,
+-- расписание — все они через `ReleaseRepository`/`LibraryRepository`/`ScheduleApi` дают
+-- `Paged<Release>` одной и той же формы, поэтому используют один и тот же механизм кэша:
+-- `LibraryRepository.history` — тоже обычный `Paged<Release>`-листинг, отдельная таблица
+-- watchHistoryEntry из черновика схемы не нужна). Хранит только release_id, сами релизы читаются
+-- через releaseEntity (см. Release.sq) по этим id — без дублирования данных релиза в каждой
+-- странице каждого листинга, в котором он встречается.
+CREATE TABLE releaseListEntry (
+    cache_key  TEXT    NOT NULL,
+    sort_order INTEGER NOT NULL,
+    release_id INTEGER NOT NULL,
+    PRIMARY KEY (cache_key, sort_order)
+);
+CREATE INDEX releaseListEntry_release ON releaseListEntry(release_id);
+
+selectByKey:
+SELECT release_id FROM releaseListEntry WHERE cache_key = ? ORDER BY sort_order;
+
+deleteByKey:
+DELETE FROM releaseListEntry WHERE cache_key = ?;
+
+deleteByKeyPrefix:
+DELETE FROM releaseListEntry WHERE cache_key LIKE ? || '%';
+
+insertEntry:
+INSERT INTO releaseListEntry(cache_key, sort_order, release_id) VALUES (?, ?, ?);

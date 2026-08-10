@@ -1,8 +1,16 @@
 package com.aniko.data.repository
 
+import com.aniko.data.api.EpisodeApi
 import com.aniko.data.api.FavoriteApi
 import com.aniko.data.api.HistoryApi
 import com.aniko.data.api.ProfileListApi
+import com.aniko.data.cache.FakeClock
+import com.aniko.data.cache.FakeReleaseCacheStore
+import com.aniko.data.cache.FakeReleaseListStore
+import com.aniko.data.sync.FakeEpisodeProgressStore
+import com.aniko.data.sync.FakeListMembershipStore
+import com.aniko.data.sync.FakeSyncQueueStore
+import com.aniko.data.sync.SyncQueueWorker
 import com.aniko.model.AnixError
 import com.aniko.model.ListStatus
 import com.aniko.network.AnixJson
@@ -14,18 +22,33 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /**
- * Happy-path тесты `LibraryRepository` (Фаза 6) поверх `MockEngine` — по образцу
- * `EpisodeRepositoryTest`. Каждый тест проверяет: (а) репозиторий доходит до правильного
- * пути `Api`-класса и маппит DTO в домен, (б) `code != 0` в ответе превращается в
- * `AnixError.Api` через общий `requireOk()` из `ApiCall.kt`.
+ * Тесты `LibraryRepository` (Фаза 6 + P4.T7/S3) поверх `MockEngine`.
+ *
+ * Методы чтения (`myList`/`favorites`/`history`) — прямые suspend-вызовы `Api`, поведение не
+ * изменилось (Фаза 6): (а) репозиторий доходит до правильного пути и маппит DTO в домен,
+ * (б) `code != 0` в ответе превращается в `AnixError.Api`.
+ *
+ * Методы записи (`addToList`/`removeFromList`/`addFavorite`/`removeFavorite`/`addHistory`/
+ * `removeFromHistory`) с P4.T7 больше НЕ бьют в `Api` напрямую и не бросают исключение при сбое
+ * сети/API — они пишут оптимистично в локальный стор и уходят через `SyncQueueStore`/
+ * `SyncQueueWorker.drain()` (см. `SyncQueuePlannerTest` про сам воркер). Здесь проверяется
+ * интеграция: (а) локальный стор обновлён сразу после вызова репозитория, (б) `drain()` внутри
+ * репозитория действительно достучался до правильного эндпоинта и вычистил очередь при успехе
+ * либо при перманентной доменной ошибке (без исключения наружу).
  */
 class LibraryRepositoryTest {
+    private val now = Instant.fromEpochMilliseconds(0)
+
     private val sampleReleaseJson =
         """
         {
@@ -56,10 +79,17 @@ class LibraryRepositoryTest {
 
     private fun simpleResponse(code: Int = 0): String = """{"code": $code}"""
 
-    private fun repository(
+    /** Пучок фейков одного теста — [membership]/[queue] нужны наружу, чтобы проверить их состояние после вызова. */
+    private class Fixture(
+        val repository: LibraryRepository,
+        val membership: FakeListMembershipStore,
+        val queue: FakeSyncQueueStore,
+    )
+
+    private fun fixture(
         expectedPath: String,
         responseBody: String,
-    ): LibraryRepository {
+    ): Fixture {
         val mockEngine =
             MockEngine { request ->
                 val path = request.url.encodedPath
@@ -74,11 +104,32 @@ class LibraryRepositoryTest {
             HttpClient(mockEngine) {
                 install(ContentNegotiation) { json(AnixJson) }
             }
-        return LibraryRepository(
-            profileListApi = ProfileListApi(client = httpClient),
-            favoriteApi = FavoriteApi(client = httpClient),
-            historyApi = HistoryApi(client = httpClient),
-        )
+        val membership = FakeListMembershipStore()
+        val queue = FakeSyncQueueStore()
+        val worker =
+            SyncQueueWorker(
+                queue = queue,
+                membership = membership,
+                progress = FakeEpisodeProgressStore(),
+                profileListApi = ProfileListApi(httpClient),
+                favoriteApi = FavoriteApi(httpClient),
+                historyApi = HistoryApi(httpClient),
+                episodeApi = EpisodeApi(httpClient),
+                clock = FakeClock(now),
+            )
+        val repository =
+            LibraryRepository(
+                profileListApi = ProfileListApi(client = httpClient),
+                favoriteApi = FavoriteApi(client = httpClient),
+                historyApi = HistoryApi(client = httpClient),
+                listMembershipStore = membership,
+                releaseCacheStore = FakeReleaseCacheStore(),
+                releaseListStore = FakeReleaseListStore(),
+                syncQueueStore = queue,
+                syncQueueWorker = worker,
+                clock = FakeClock(now),
+            )
+        return Fixture(repository, membership, queue)
     }
 
     // ---- Списки по статусу ------------------------------------------------------------
@@ -86,7 +137,7 @@ class LibraryRepositoryTest {
     @Test
     fun myList_happyPath_returnsMappedPage() =
         runTest {
-            val repository = repository("/profile/list/all/1/0", pageableResponse())
+            val repository = fixture("/profile/list/all/1/0", pageableResponse()).repository
 
             val page = repository.myList(ListStatus.WATCHING, page = 0)
 
@@ -99,7 +150,7 @@ class LibraryRepositoryTest {
     @Test
     fun myList_nonZeroCode_throwsAnixErrorApi() =
         runTest {
-            val repository = repository("/profile/list/all/1/0", pageableResponse(code = 7))
+            val repository = fixture("/profile/list/all/1/0", pageableResponse(code = 7)).repository
 
             assertFailsWith<AnixError.Api> {
                 repository.myList(ListStatus.WATCHING, page = 0)
@@ -107,39 +158,54 @@ class LibraryRepositoryTest {
         }
 
     @Test
-    fun addToList_happyPath_callsAddEndpoint() =
+    fun addToList_happyPath_writesLocalStatus_andClearsQueue() =
         runTest {
-            val repository = repository("/profile/list/add/1/186", simpleResponse())
+            val fixture = fixture("/profile/list/add/1/186", simpleResponse())
 
-            repository.addToList(ListStatus.WATCHING, releaseId = 186)
+            fixture.repository.addToList(ListStatus.WATCHING, releaseId = 186)
+
+            assertEquals(ListStatus.WATCHING, fixture.membership.observeStatus(186).first())
+            assertTrue(fixture.queue.snapshot().isEmpty())
         }
 
     @Test
-    fun addToList_nonZeroCode_throwsAnixErrorApi() =
+    fun addToList_nonZeroCode_doesNotThrow_keepsOptimisticWrite_dropsFromQueue() =
         runTest {
-            val repository = repository("/profile/list/add/1/186", simpleResponse(code = 5))
+            // HTTP 200, но code != 0 — доменная ошибка API, permanent (см. SyncQueueWorker.classify) —
+            // операция снимается с очереди, а не ретраится, и addToList не бросает исключение.
+            val fixture = fixture("/profile/list/add/1/186", simpleResponse(code = 5))
 
-            assertFailsWith<AnixError.Api> {
-                repository.addToList(ListStatus.WATCHING, releaseId = 186)
-            }
+            fixture.repository.addToList(ListStatus.WATCHING, releaseId = 186)
+
+            assertEquals(ListStatus.WATCHING, fixture.membership.observeStatus(186).first())
+            assertTrue(fixture.queue.snapshot().isEmpty())
         }
 
     @Test
-    fun removeFromList_happyPath_callsDeleteEndpoint() =
+    fun removeFromList_happyPath_clearsLocalStatus_andClearsQueue() =
         runTest {
-            val repository = repository("/profile/list/delete/1/186", simpleResponse())
+            val fixture = fixture("/profile/list/delete/1/186", simpleResponse())
+            fixture.membership.seedStatus(186, ListStatus.WATCHING)
 
-            repository.removeFromList(ListStatus.WATCHING, releaseId = 186)
+            fixture.repository.removeFromList(releaseId = 186)
+
+            assertNull(fixture.membership.observeStatus(186).first())
+            assertTrue(fixture.queue.snapshot().isEmpty())
         }
 
     @Test
-    fun removeFromList_nonZeroCode_throwsAnixErrorApi() =
+    fun removeFromList_capturesPreviousStatus_beforeClearingIt_soWorkerCanResolveDeleteUrl() =
         runTest {
-            val repository = repository("/profile/list/delete/1/186", simpleResponse(code = 5))
+            // Регрессия: если бы репозиторий не передал старый статус явно в SyncOperation,
+            // SyncQueueWorker.resolveRemovalStatus прочитал бы уже обнулённый ListMembershipStore
+            // и решил бы, что удалять нечего — запрос на "/profile/list/delete/1/186" не ушёл бы
+            // вовсе, и MockEngine здесь упал бы с "Unexpected path" на любой другой запрос.
+            val fixture = fixture("/profile/list/delete/1/186", simpleResponse())
+            fixture.membership.seedStatus(186, ListStatus.WATCHING)
 
-            assertFailsWith<AnixError.Api> {
-                repository.removeFromList(ListStatus.WATCHING, releaseId = 186)
-            }
+            fixture.repository.removeFromList(releaseId = 186)
+
+            assertTrue(fixture.queue.snapshot().isEmpty())
         }
 
     // ---- Избранное ----------------------------------------------------------------------
@@ -147,7 +213,7 @@ class LibraryRepositoryTest {
     @Test
     fun favorites_happyPath_returnsMappedPage() =
         runTest {
-            val repository = repository("/favorite/all/0", pageableResponse())
+            val repository = fixture("/favorite/all/0", pageableResponse()).repository
 
             val page = repository.favorites(page = 0)
 
@@ -158,7 +224,7 @@ class LibraryRepositoryTest {
     @Test
     fun favorites_nonZeroCode_throwsAnixErrorApi() =
         runTest {
-            val repository = repository("/favorite/all/0", pageableResponse(code = 3))
+            val repository = fixture("/favorite/all/0", pageableResponse(code = 3)).repository
 
             assertFailsWith<AnixError.Api> {
                 repository.favorites(page = 0)
@@ -166,39 +232,26 @@ class LibraryRepositoryTest {
         }
 
     @Test
-    fun addFavorite_happyPath_callsAddEndpoint() =
+    fun addFavorite_happyPath_writesLocalFavorite_andClearsQueue() =
         runTest {
-            val repository = repository("/favorite/add/186", simpleResponse())
+            val fixture = fixture("/favorite/add/186", simpleResponse())
 
-            repository.addFavorite(releaseId = 186)
+            fixture.repository.addFavorite(releaseId = 186)
+
+            assertTrue(fixture.membership.observeFavorite(186).first())
+            assertTrue(fixture.queue.snapshot().isEmpty())
         }
 
     @Test
-    fun addFavorite_nonZeroCode_throwsAnixErrorApi() =
+    fun removeFavorite_happyPath_clearsLocalFavorite_andClearsQueue() =
         runTest {
-            val repository = repository("/favorite/add/186", simpleResponse(code = 4))
+            val fixture = fixture("/favorite/delete/186", simpleResponse())
+            fixture.membership.setFavorite(186, isFavorite = true, updatedAt = now)
 
-            assertFailsWith<AnixError.Api> {
-                repository.addFavorite(releaseId = 186)
-            }
-        }
+            fixture.repository.removeFavorite(releaseId = 186)
 
-    @Test
-    fun removeFavorite_happyPath_callsDeleteEndpoint() =
-        runTest {
-            val repository = repository("/favorite/delete/186", simpleResponse())
-
-            repository.removeFavorite(releaseId = 186)
-        }
-
-    @Test
-    fun removeFavorite_nonZeroCode_throwsAnixErrorApi() =
-        runTest {
-            val repository = repository("/favorite/delete/186", simpleResponse(code = 4))
-
-            assertFailsWith<AnixError.Api> {
-                repository.removeFavorite(releaseId = 186)
-            }
+            assertEquals(false, fixture.membership.observeFavorite(186).first())
+            assertTrue(fixture.queue.snapshot().isEmpty())
         }
 
     // ---- История просмотра ---------------------------------------------------------------
@@ -206,7 +259,7 @@ class LibraryRepositoryTest {
     @Test
     fun history_happyPath_returnsMappedPage() =
         runTest {
-            val repository = repository("/history/0", pageableResponse())
+            val repository = fixture("/history/0", pageableResponse()).repository
 
             val page = repository.history(page = 0)
 
@@ -217,7 +270,7 @@ class LibraryRepositoryTest {
     @Test
     fun history_nonZeroCode_throwsAnixErrorApi() =
         runTest {
-            val repository = repository("/history/0", pageableResponse(code = 2))
+            val repository = fixture("/history/0", pageableResponse(code = 2)).repository
 
             assertFailsWith<AnixError.Api> {
                 repository.history(page = 0)
@@ -225,38 +278,22 @@ class LibraryRepositoryTest {
         }
 
     @Test
-    fun addHistory_happyPath_callsAddEndpoint() =
+    fun addHistory_happyPath_clearsQueueAfterDrain() =
         runTest {
-            val repository = repository("/history/add/186/8/1", simpleResponse())
+            val fixture = fixture("/history/add/186/8/1", simpleResponse())
 
-            repository.addHistory(releaseId = 186, sourceId = 8, position = 1)
+            fixture.repository.addHistory(releaseId = 186, sourceId = 8, position = 1)
+
+            assertTrue(fixture.queue.snapshot().isEmpty())
         }
 
     @Test
-    fun addHistory_nonZeroCode_throwsAnixErrorApi() =
+    fun removeFromHistory_happyPath_clearsQueueAfterDrain() =
         runTest {
-            val repository = repository("/history/add/186/8/1", simpleResponse(code = 1))
+            val fixture = fixture("/history/delete/186", simpleResponse())
 
-            assertFailsWith<AnixError.Api> {
-                repository.addHistory(releaseId = 186, sourceId = 8, position = 1)
-            }
-        }
+            fixture.repository.removeFromHistory(releaseId = 186)
 
-    @Test
-    fun removeFromHistory_happyPath_callsDeleteEndpoint() =
-        runTest {
-            val repository = repository("/history/delete/186", simpleResponse())
-
-            repository.removeFromHistory(releaseId = 186)
-        }
-
-    @Test
-    fun removeFromHistory_nonZeroCode_throwsAnixErrorApi() =
-        runTest {
-            val repository = repository("/history/delete/186", simpleResponse(code = 1))
-
-            assertFailsWith<AnixError.Api> {
-                repository.removeFromHistory(releaseId = 186)
-            }
+            assertTrue(fixture.queue.snapshot().isEmpty())
         }
 }

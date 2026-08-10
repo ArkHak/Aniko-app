@@ -1,0 +1,63 @@
+-- Тип `Boolean` в сгенерированном SQLDelight-коде без явного импорта резолвится как `import
+-- Boolean` (без пакета) и не компилируется — известная особенность кодогенерации для колонок
+-- `AS Boolean` (в отличие от Long/String, которые получают полный `kotlin.*`-импорт сами).
+import kotlin.Boolean;
+
+-- Офлайн-очередь неотправленных мутаций (P4.T1/T5, реализует SyncQueueStore). Колонки namespaced
+-- 1:1 под `com.aniko.database.sync.SyncOperation` — плоская схема без per-kind таблиц, какие поля
+-- релевантны определяется значением kind (см. KDoc SyncOperation).
+CREATE TABLE syncOperation (
+    id               INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    kind             TEXT    NOT NULL,
+    entity_key       TEXT    NOT NULL,
+    release_id       INTEGER NOT NULL,
+    source_id        INTEGER,
+    position         INTEGER,
+    status_api_value INTEGER,
+    bool_arg         INTEGER AS Boolean,
+    created_at       INTEGER NOT NULL,
+    updated_at       INTEGER NOT NULL,
+    attempt_count    INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at  INTEGER,
+    last_error       TEXT
+);
+CREATE UNIQUE INDEX syncOperation_entity ON syncOperation(entity_key);
+CREATE INDEX syncOperation_ready ON syncOperation(next_attempt_at, id);
+
+-- Коалесcинг: повторные намерения по одному entity_key схлопываются в одну операцию — id и
+-- created_at сохраняются (порядок FIFO по id не ломается), backoff/ошибка сбрасываются, т.к. это
+-- по сути новая попытка отправить актуальное состояние.
+enqueue:
+INSERT INTO syncOperation(kind, entity_key, release_id, source_id, position, status_api_value,
+                          bool_arg, created_at, updated_at, attempt_count, next_attempt_at, last_error)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, NULL)
+ON CONFLICT(entity_key) DO UPDATE SET
+    kind             = excluded.kind,
+    release_id       = excluded.release_id,
+    source_id        = excluded.source_id,
+    position         = excluded.position,
+    status_api_value = excluded.status_api_value,
+    bool_arg         = excluded.bool_arg,
+    updated_at       = excluded.updated_at,
+    attempt_count    = 0,
+    next_attempt_at  = NULL,
+    last_error       = NULL;
+
+selectIdByEntityKey:
+SELECT id FROM syncOperation WHERE entity_key = ?;
+
+selectAllPending:
+SELECT * FROM syncOperation ORDER BY id ASC;
+
+-- next_attempt_at IS NULL — операция ещё ни разу не проваливалась, готова сразу.
+selectDue:
+SELECT * FROM syncOperation WHERE next_attempt_at IS NULL OR next_attempt_at <= ? ORDER BY id ASC;
+
+recordAttempt:
+UPDATE syncOperation SET attempt_count = attempt_count + 1, next_attempt_at = ?, last_error = ? WHERE id = ?;
+
+remove:
+DELETE FROM syncOperation WHERE id = ?;
+
+countPending:
+SELECT count(*) FROM syncOperation;

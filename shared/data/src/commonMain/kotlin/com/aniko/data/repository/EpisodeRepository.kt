@@ -2,6 +2,11 @@ package com.aniko.data.repository
 
 import com.aniko.data.api.EpisodeApi
 import com.aniko.data.mapper.toDomain
+import com.aniko.data.sync.SyncQueueWorker
+import com.aniko.database.store.EpisodeProgressStore
+import com.aniko.database.store.SyncQueueStore
+import com.aniko.database.sync.SyncOperation
+import com.aniko.database.sync.SyncOperationKind
 import com.aniko.model.AnixError
 import com.aniko.model.Episode
 import com.aniko.model.EpisodeSource
@@ -9,13 +14,23 @@ import com.aniko.model.VideoHost
 import com.aniko.model.VoiceType
 import com.aniko.player.PlaybackSource
 import com.aniko.player.isKodikEmbedUrl
+import kotlinx.coroutines.flow.Flow
+import kotlin.time.Clock
 
 /**
  * Цепочка резолвинга плеера из `docs/api/ENDPOINTS.md`:
  * types → sources → episodes → target.
+ *
+ * P4.T7 (S3 — интеграция): [markWatched]/[markUnwatched] теперь пишут прогресс оптимистично в
+ * [episodeProgressStore] и уходят на сервер через [SyncQueueStore]/[syncQueueWorker], а не бьют
+ * в [episodeApi] напрямую — переживают офлайн (P4.T5), как и мутации `LibraryRepository`.
  */
 class EpisodeRepository(
     private val episodeApi: EpisodeApi,
+    private val episodeProgressStore: EpisodeProgressStore,
+    private val syncQueueStore: SyncQueueStore,
+    private val syncQueueWorker: SyncQueueWorker,
+    private val clock: Clock,
 ) {
     suspend fun voiceTypes(releaseId: Int): List<VoiceType> = episodeApi.types(releaseId).types.map { it.toDomain() }
 
@@ -67,12 +82,25 @@ class EpisodeRepository(
         }
     }
 
+    /** Отмечена ли конкретная серия просмотренной — прямой passthrough локальной истины, TTL не нужен. */
+    fun observeWatched(
+        releaseId: Int,
+        sourceId: Int,
+        position: Int,
+    ): Flow<Boolean> = episodeProgressStore.observeWatched(releaseId, sourceId, position)
+
+    /** Все просмотренные позиции релиза в рамках источника — для массовой отрисовки списка серий. */
+    fun observeWatchedPositions(
+        releaseId: Int,
+        sourceId: Int,
+    ): Flow<Set<Int>> = episodeProgressStore.observeWatchedPositions(releaseId, sourceId)
+
     suspend fun markWatched(
         releaseId: Int,
         sourceId: Int,
         position: Int,
     ) {
-        episodeApi.markWatched(releaseId, sourceId, position)
+        setWatchedAndEnqueue(releaseId, sourceId, position, isWatched = true)
     }
 
     suspend fun markUnwatched(
@@ -80,7 +108,35 @@ class EpisodeRepository(
         sourceId: Int,
         position: Int,
     ) {
-        episodeApi.markUnwatched(releaseId, sourceId, position)
+        setWatchedAndEnqueue(releaseId, sourceId, position, isWatched = false)
+    }
+
+    private suspend fun setWatchedAndEnqueue(
+        releaseId: Int,
+        sourceId: Int,
+        position: Int,
+        isWatched: Boolean,
+    ) {
+        val now = clock.now()
+        episodeProgressStore.setWatched(releaseId, sourceId, position, isWatched, now)
+        syncQueueStore.enqueue(
+            SyncOperation(
+                id = 0,
+                kind = SyncOperationKind.EPISODE_SET_WATCHED,
+                entityKey = "episode:$releaseId:$sourceId:$position",
+                releaseId = releaseId,
+                sourceId = sourceId,
+                position = position,
+                statusApiValue = null,
+                boolArg = isWatched,
+                createdAt = now,
+                updatedAt = now,
+                attemptCount = 0,
+                nextAttemptAt = null,
+                lastError = null,
+            ),
+        )
+        syncQueueWorker.drain()
     }
 
     /*

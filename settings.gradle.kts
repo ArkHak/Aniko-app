@@ -33,6 +33,7 @@ dependencyResolutionManagement {
 include(":detekt-rules")
 include(":shared:model")
 include(":shared:network")
+include(":shared:database")
 include(":shared:data")
 include(":shared:player")
 include(":shared:ui")

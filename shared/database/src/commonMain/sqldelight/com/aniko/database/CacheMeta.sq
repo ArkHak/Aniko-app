@@ -1,0 +1,24 @@
+-- Свежесть и пагинация ЗАПРОСА (одной страницы листинга), не отдельных строк — используется
+-- вместе с releaseListEntry (см. ReleaseList.sq) для реализации ReleaseListStore. Одна запись на
+-- cache_key (см. `com.aniko.database.cache.CacheKeys`), каждый cache_key — ровно одна страница.
+CREATE TABLE cacheMeta (
+    cache_key    TEXT    NOT NULL PRIMARY KEY,
+    fetched_at   INTEGER NOT NULL,
+    current_page INTEGER NOT NULL,
+    total_pages  INTEGER NOT NULL,
+    total_count  INTEGER
+);
+
+upsert:
+INSERT OR REPLACE INTO cacheMeta VALUES (?, ?, ?, ?, ?);
+
+selectByKey:
+SELECT * FROM cacheMeta WHERE cache_key = ?;
+
+deleteByKey:
+DELETE FROM cacheMeta WHERE cache_key = ?;
+
+-- Инвалидация листинга целиком: CacheKeys.listPrefix(key) даёт общий префикс всех страниц одного
+-- логического листинга (например, всех страниц "Смотрю") без обхода каждой страницы по одной.
+deleteByKeyPrefix:
+DELETE FROM cacheMeta WHERE cache_key LIKE ? || '%';

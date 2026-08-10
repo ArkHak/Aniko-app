@@ -44,6 +44,9 @@ androidxSecurityCrypto = "1.1.0"
 ktlintGradle = "14.2.0"
 detekt = "1.23.8"
 
+# --- Local storage (P4.S0) ---
+sqldelight = "2.3.2"
+
 [libraries]
 # Gradle plugin artifacts, consumed by build-logic convention plugins (not by app modules)
 plugin-android-gradle = { module = "com.android.tools.build:gradle", version.ref = "agp" }
@@ -59,6 +62,7 @@ plugin-detekt = { module = "io.gitlab.arturbosch.detekt:detekt-gradle-plugin", v
 # detekt-api — API для кастомного detekt-правила (P2.T10, `:detekt-rules`). Обычный библиотечный
 # артефакт (не Gradle-плагин), поэтому в отдельной секции [libraries], а не среди plugin-*.
 detekt-api = { module = "io.gitlab.arturbosch.detekt:detekt-api", version.ref = "detekt" }
+plugin-sqldelight = { module = "app.cash.sqldelight:gradle-plugin", version.ref = "sqldelight" }
 
 # Kotlin
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -101,6 +105,17 @@ lyricist = { module = "cafe.adriel.lyricist:lyricist", version.ref = "lyricist" 
 # Android-only
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "androidxSecurityCrypto" }
+
+# SQLDelight (P4.S0)
+sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
+sqldelight-coroutines-extensions = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
+sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
+sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
+sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
+# Дефолтный диалект SQLDelight (sqlite-3-18) не понимает `ON CONFLICT ... DO UPDATE SET`
+# (UPSERT, ReleaseCacheStore.upsert) — он появился в SQLite 3.24. Все реальные драйверы проекта
+# (Android SQLite, JDBC sqlite-driver на Desktop, native SQLite на iOS) давно новее 3.24.
+sqldelight-dialect-sqlite338 = { module = "app.cash.sqldelight:sqlite-3-38-dialect", version.ref = "sqldelight" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

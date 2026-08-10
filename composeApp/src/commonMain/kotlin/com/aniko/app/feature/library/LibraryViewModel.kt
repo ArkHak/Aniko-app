@@ -127,13 +127,20 @@ class LibraryViewModel(
         }
     }
 
+    /**
+     * [status] больше не передаётся в `LibraryRepository.removeFromList` (P4.T7: снятие статуса
+     * теперь уходит через офлайн-очередь без URL-параметра статуса, см. `SyncQueueWorker`) —
+     * параметр остался в сигнатуре только потому, что вызывающая сторона (кнопка «Убрать» в
+     * контекстном меню конкретной вкладки статуса, `LibraryScreen`) естественно оперирует
+     * статусом текущей вкладки.
+     */
     fun removeFromList(
         release: Release,
-        status: ListStatus,
+        @Suppress("UNUSED_PARAMETER") status: ListStatus,
     ) {
         hideInCurrentTab(release.id)
         viewModelScope.launch {
-            runCatching { libraryRepository.removeFromList(status, release.id) }
+            runCatching { libraryRepository.removeFromList(release.id) }
                 .onFailure { unhideInCurrentTab(release.id) }
         }
     }

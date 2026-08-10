@@ -3,24 +3,59 @@ package com.aniko.data.repository
 import com.aniko.data.api.FavoriteApi
 import com.aniko.data.api.HistoryApi
 import com.aniko.data.api.ProfileListApi
+import com.aniko.data.cache.Cached
+import com.aniko.data.cache.ReleaseCacheStores
+import com.aniko.data.cache.cacheFirstFlow
+import com.aniko.data.cache.hydratePagedIds
+import com.aniko.data.cache.persistPagedReleases
 import com.aniko.data.mapper.toDomain
 import com.aniko.data.paging.Paginator
+import com.aniko.data.sync.SyncQueueWorker
+import com.aniko.database.cache.CacheKeys
+import com.aniko.database.cache.CachePolicy
+import com.aniko.database.store.ListMembershipStore
+import com.aniko.database.store.ReleaseCacheStore
+import com.aniko.database.store.ReleaseListStore
+import com.aniko.database.store.SyncQueueStore
+import com.aniko.database.sync.SyncOperation
+import com.aniko.database.sync.SyncOperationKind
 import com.aniko.model.ListStatus
 import com.aniko.model.Paged
 import com.aniko.model.Release
+import com.aniko.model.ReleaseId
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 /**
  * Фаза 6 — «Списки и синхронизация»: списки по статусу, избранное и история просмотра.
+ * P4.T7 (S3 — интеграция): мутации теперь оптимистично пишутся в локальную БД и уходят на сервер
+ * через [SyncQueueStore]/[syncQueueWorker], а не бьют в `Api` напрямую — переживают офлайн (P4.T5).
  *
  * Токен в запросы не передаётся явно — `AnixTokenPlugin` (см. `:shared:network`) дописывает
  * `?token=` в каждый исходящий запрос сам, читая его из `TokenProvider`, поэтому здесь (как и в
  * `ReleaseRepository`/`EpisodeRepository`) о нём заботиться не нужно.
+ *
+ * `@Suppress("LongParameterList")`: 3 Api-класса (по одному на REST-неймспейс) + 3 стора кэша +
+ * очередь + воркер + `Clock` — та же самая намеренная агрегация зависимостей одного
+ * координирующего класса, что и в `SyncQueueWorker` (см. его KDoc) — не ветвящаяся логика в
+ * конструкторе, разбивать ради формального лимита детекта было бы косвенностью без пользы.
  */
+@Suppress("LongParameterList")
 class LibraryRepository(
     private val profileListApi: ProfileListApi,
     private val favoriteApi: FavoriteApi,
     private val historyApi: HistoryApi,
+    private val listMembershipStore: ListMembershipStore,
+    private val releaseCacheStore: ReleaseCacheStore,
+    private val releaseListStore: ReleaseListStore,
+    private val syncQueueStore: SyncQueueStore,
+    private val syncQueueWorker: SyncQueueWorker,
+    private val clock: Clock,
 ) {
+    private val stores = ReleaseCacheStores(releaseCacheStore, releaseListStore, listMembershipStore)
+
     // ---- Списки по статусу ------------------------------------------------------------
 
     suspend fun myList(
@@ -31,8 +66,26 @@ class LibraryRepository(
     /** Готовый пагинатор для экрана списка по статусу. */
     fun listPaginator(status: ListStatus): Paginator<Release> = Paginator { page -> myList(status, page) }
 
+    /** `null` — релиз не числится ни в одном списке. Прямой passthrough локальной истины, TTL не нужен. */
+    fun observeListStatus(releaseId: ReleaseId): Flow<ListStatus?> = listMembershipStore.observeStatus(releaseId)
+
+    fun observeMyList(
+        status: ListStatus,
+        page: Int,
+    ): Flow<Cached<Paged<Release>>> {
+        val key = CacheKeys.myList(status.apiValue, page)
+        return cacheFirstFlow(
+            local = hydratePagedIds(releaseListStore.observePage(key), releaseCacheStore),
+            stampAt = { releaseListStore.fetchedAt(key) },
+            policy = CachePolicy.CatalogListing,
+            refresh = { persistPagedReleases(key, myList(status, page), stores, clock.now()) },
+            clock = clock,
+        )
+    }
+
     /**
-     * Добавляет релиз в список со статусом [status].
+     * Добавляет релиз в список со статусом [status] — оптимистично локально, отправка на сервер
+     * через [SyncQueueStore] (переживает офлайн, P4.T5).
      *
      * `[TODO: verify live]` (архитектурное допущение Фазы 6, не проверено живым запросом):
      * предполагаем, что статус в `profile/list/...` на сервере эксклюзивный, и повторный
@@ -44,16 +97,43 @@ class LibraryRepository(
      */
     suspend fun addToList(
         status: ListStatus,
-        releaseId: Int,
+        releaseId: ReleaseId,
     ) {
-        profileListApi.addToList(status, releaseId)
+        val now = clock.now()
+        listMembershipStore.setStatus(releaseId, status, now)
+        enqueue(
+            kind = SyncOperationKind.LIST_SET_STATUS,
+            entityKey = "list:$releaseId",
+            releaseId = releaseId,
+            statusApiValue = status.apiValue,
+            now = now,
+        )
+        syncQueueWorker.drain()
     }
 
-    suspend fun removeFromList(
-        status: ListStatus,
-        releaseId: Int,
-    ) {
-        profileListApi.removeFromList(status, releaseId)
+    /**
+     * Читает текущий статус ДО его локального обнуления и кладёт в
+     * [SyncOperation.statusApiValue] — не потому, что этот кейс задокументирован для
+     * [SyncOperationKind.LIST_REMOVE] как основной (KDoc `SyncOperation.statusApiValue` описывает
+     * его как поле [SyncOperationKind.LIST_SET_STATUS]), а потому что без этого
+     * `SyncQueueWorker.resolveRemovalStatus` (см. его KDoc, пункт 2 — он допускает это ровно как
+     * подстраховку) не смог бы узнать, какой статус удалять на сервере: сам он читает
+     * `ListMembershipStore` уже ПОСЛЕ того, как строка ниже успела оптимистично записать туда
+     * `null` — иначе `profile/list/delete/{status}/{r_id}` никогда бы не ушёл на сервер, а
+     * `LIST_REMOVE` каждый раз тихо считался бы «уже выполненным».
+     */
+    suspend fun removeFromList(releaseId: ReleaseId) {
+        val now = clock.now()
+        val previousStatus = listMembershipStore.observeStatus(releaseId).first()
+        listMembershipStore.setStatus(releaseId, null, now)
+        enqueue(
+            kind = SyncOperationKind.LIST_REMOVE,
+            entityKey = "list:$releaseId",
+            releaseId = releaseId,
+            statusApiValue = previousStatus?.apiValue,
+            now = now,
+        )
+        syncQueueWorker.drain()
     }
 
     // ---- Избранное ----------------------------------------------------------------------
@@ -63,12 +143,41 @@ class LibraryRepository(
     /** Готовый пагинатор для экрана избранного. */
     fun favoritesPaginator(): Paginator<Release> = Paginator { page -> favorites(page) }
 
-    suspend fun addFavorite(releaseId: Int) {
-        favoriteApi.addFavorite(releaseId)
+    fun observeFavorite(releaseId: ReleaseId): Flow<Boolean> = listMembershipStore.observeFavorite(releaseId)
+
+    fun observeFavorites(page: Int): Flow<Cached<Paged<Release>>> {
+        val key = CacheKeys.favorites(page)
+        return cacheFirstFlow(
+            local = hydratePagedIds(releaseListStore.observePage(key), releaseCacheStore),
+            stampAt = { releaseListStore.fetchedAt(key) },
+            policy = CachePolicy.CatalogListing,
+            refresh = { persistPagedReleases(key, favorites(page), stores, clock.now()) },
+            clock = clock,
+        )
     }
 
-    suspend fun removeFavorite(releaseId: Int) {
-        favoriteApi.removeFavorite(releaseId)
+    suspend fun addFavorite(releaseId: ReleaseId) {
+        setFavoriteAndEnqueue(releaseId, isFavorite = true)
+    }
+
+    suspend fun removeFavorite(releaseId: ReleaseId) {
+        setFavoriteAndEnqueue(releaseId, isFavorite = false)
+    }
+
+    private suspend fun setFavoriteAndEnqueue(
+        releaseId: ReleaseId,
+        isFavorite: Boolean,
+    ) {
+        val now = clock.now()
+        listMembershipStore.setFavorite(releaseId, isFavorite, now)
+        enqueue(
+            kind = SyncOperationKind.FAVORITE_SET,
+            entityKey = "favorite:$releaseId",
+            releaseId = releaseId,
+            boolArg = isFavorite,
+            now = now,
+        )
+        syncQueueWorker.drain()
     }
 
     // ---- История просмотра ---------------------------------------------------------------
@@ -78,15 +187,79 @@ class LibraryRepository(
     /** Готовый пагинатор для экрана истории просмотра. */
     fun historyPaginator(): Paginator<Release> = Paginator { page -> history(page) }
 
+    fun observeHistory(page: Int): Flow<Cached<Paged<Release>>> {
+        val key = CacheKeys.history(page)
+        return cacheFirstFlow(
+            local = hydratePagedIds(releaseListStore.observePage(key), releaseCacheStore),
+            stampAt = { releaseListStore.fetchedAt(key) },
+            policy = CachePolicy.CatalogListing,
+            refresh = { persistPagedReleases(key, history(page), stores, clock.now()) },
+            clock = clock,
+        )
+    }
+
+    /**
+     * История — единственная мутация без локального стора-зеркала (нет отдельного
+     * "историйного" стора в S1-контракте, только очередь): читается она через [observeHistory]/
+     * [history] напрямую из кэша листинга, без промежуточной оптимистичной локальной таблицы.
+     */
     suspend fun addHistory(
-        releaseId: Int,
+        releaseId: ReleaseId,
         sourceId: Int,
         position: Int,
     ) {
-        historyApi.add(releaseId, sourceId, position)
+        val now = clock.now()
+        enqueue(
+            kind = SyncOperationKind.HISTORY_ADD,
+            entityKey = "history:$releaseId",
+            releaseId = releaseId,
+            sourceId = sourceId,
+            position = position,
+            now = now,
+        )
+        syncQueueWorker.drain()
     }
 
-    suspend fun removeFromHistory(releaseId: Int) {
-        historyApi.delete(releaseId)
+    suspend fun removeFromHistory(releaseId: ReleaseId) {
+        val now = clock.now()
+        enqueue(
+            kind = SyncOperationKind.HISTORY_REMOVE,
+            entityKey = "history:$releaseId",
+            releaseId = releaseId,
+            now = now,
+        )
+        syncQueueWorker.drain()
+    }
+
+    // ---- Общие хелперы --------------------------------------------------------------------
+
+    @Suppress("LongParameterList")
+    private suspend fun enqueue(
+        kind: SyncOperationKind,
+        entityKey: String,
+        releaseId: ReleaseId,
+        now: Instant,
+        sourceId: Int? = null,
+        position: Int? = null,
+        statusApiValue: Int? = null,
+        boolArg: Boolean? = null,
+    ) {
+        syncQueueStore.enqueue(
+            SyncOperation(
+                id = 0,
+                kind = kind,
+                entityKey = entityKey,
+                releaseId = releaseId,
+                sourceId = sourceId,
+                position = position,
+                statusApiValue = statusApiValue,
+                boolArg = boolArg,
+                createdAt = now,
+                updatedAt = now,
+                attemptCount = 0,
+                nextAttemptAt = null,
+                lastError = null,
+            ),
+        )
     }
 }

@@ -38,6 +38,7 @@ import com.aniko.app.navigation.AnixDestination
 import com.aniko.data.locale.LocaleStore
 import com.aniko.data.repository.AuthRepository
 import com.aniko.data.session.SessionState
+import com.aniko.data.sync.SyncQueueWorker
 import com.aniko.model.VideoHost
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.i18n.LocalStrings
@@ -58,6 +59,7 @@ fun App() {
         val httpClient = koinInject<HttpClient>()
         val authRepository = koinInject<AuthRepository>()
         val localeStore = koinInject<LocaleStore>()
+        val syncQueueWorker = koinInject<SyncQueueWorker>()
         val platformContext = LocalPlatformContext.current
 
         // Coil ходит в сеть тем же Ktor-клиентом, что и API.
@@ -72,6 +74,13 @@ fun App() {
         // bootstrap() идемпотентен, повторный вызов из HomeViewModel (если он там остался) — no-op.
         LaunchedEffect(authRepository) {
             authRepository.bootstrap()
+        }
+
+        // Разовый прогон офлайн-очереди на старте — не потерять то, что скопилось за время
+        // оффлайна между запусками (P4.T7). Полноценный фоновый воркер с реакцией на
+        // восстановление сети — Фаза 10, здесь только этот единичный дренаж.
+        LaunchedEffect(syncQueueWorker) {
+            syncQueueWorker.drain()
         }
 
         // Язык — читается из LocaleStore (P2.T11) и прокидывается в ProvideAppStrings (P2.T7/T8),

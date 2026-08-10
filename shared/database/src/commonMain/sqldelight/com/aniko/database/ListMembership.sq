@@ -1,0 +1,69 @@
+-- Тип `Boolean` в сгенерированном SQLDelight-коде без явного импорта резолвится как `import
+-- Boolean` (без пакета) и не компилируется — известная особенность кодогенерации для колонок
+-- `AS Boolean` (в отличие от Long/String, которые получают полный `kotlin.*`-импорт сами).
+import kotlin.Boolean;
+
+-- Локальное зеркало членства релиза в списках пользователя (P4.T1/T5, реализует
+-- ListMembershipStore). Отдельно от releaseEntity намеренно (см. KDoc ListMembershipStore) — эти
+-- поля меняются оптимистично из UI даже офлайн, с собственным LWW по updated_at.
+--
+-- status и is_favorite имеют НЕЗАВИСИМЫЕ таймстампы (status_updated_at/favorite_updated_at), а не
+-- один общий updated_at на всю строку: ListMembershipStore.setStatus/setFavorite — два отдельных
+-- метода, каждый со своим updatedAt, и меняют пользователя независимо друг от друга (можно
+-- добавить в избранное, не трогая статус списка, и наоборот) — общий таймстамп заставил бы правку
+-- одного поля переписывать LWW-историю другого.
+CREATE TABLE listMembership (
+    release_id          INTEGER NOT NULL PRIMARY KEY,
+    status               INTEGER,                             -- ListStatus.apiValue; NULL = не в списке
+    status_updated_at    INTEGER,                              -- NULL = статус ещё не выставлялся
+    is_favorite           INTEGER AS Boolean NOT NULL DEFAULT 0,
+    favorite_updated_at   INTEGER                               -- NULL = избранное ещё не выставлялось
+);
+
+-- LWW: новое значение применяется только если его updatedAt не старше уже сохранённого
+-- (NULL-таймстамп в базе = ещё не было записи, новое значение всегда побеждает). Единый метод и
+-- для локальных оптимистичных правок, и для значений, пришедших с сервера (ReleaseDto) — вызывающая
+-- сторона (репозиторий) сама решает, какой updatedAt передать в каждом случае.
+setStatus:
+INSERT INTO listMembership(release_id, status, status_updated_at, is_favorite, favorite_updated_at)
+VALUES (?, ?, ?, 0, NULL)
+ON CONFLICT(release_id) DO UPDATE SET
+    status = CASE
+        WHEN listMembership.status_updated_at IS NULL OR excluded.status_updated_at >= listMembership.status_updated_at
+        THEN excluded.status ELSE listMembership.status END,
+    status_updated_at = CASE
+        WHEN listMembership.status_updated_at IS NULL OR excluded.status_updated_at >= listMembership.status_updated_at
+        THEN excluded.status_updated_at ELSE listMembership.status_updated_at END;
+
+setFavorite:
+INSERT INTO listMembership(release_id, status, status_updated_at, is_favorite, favorite_updated_at)
+VALUES (?, NULL, NULL, ?, ?)
+ON CONFLICT(release_id) DO UPDATE SET
+    is_favorite = CASE
+        WHEN listMembership.favorite_updated_at IS NULL OR excluded.favorite_updated_at >= listMembership.favorite_updated_at
+        THEN excluded.is_favorite ELSE listMembership.is_favorite END,
+    favorite_updated_at = CASE
+        WHEN listMembership.favorite_updated_at IS NULL OR excluded.favorite_updated_at >= listMembership.favorite_updated_at
+        THEN excluded.favorite_updated_at ELSE listMembership.favorite_updated_at END;
+
+-- Первичная синхронизация "сервер → listMembership" (P4.T4/T6, найдено ревью S3): заводит строку
+-- ТОЛЬКО если её ещё не было (INSERT OR IGNORE, конфликт по PRIMARY KEY на release_id — никогда
+-- не перезаписывает существующую). Существующая строка — это либо уже просинканное с сервера
+-- значение (второй раз трогать незачем), либо несинканная локальная оптимистичная правка
+-- (перезаписать её здесь значило бы затереть pending-мутацию свежим, но по факту устаревшим для
+-- сервера, ответом — ровно тот риск, ради которого releaseEntity.upsert сам НЕ трогает эту
+-- таблицу, см. KDoc Release.sq). Односторонний компромисс: если статус в списке меняется на
+-- ДРУГОМ устройстве уже ПОСЛЕ первой синхронизации на этом, локальная копия сама не обновится —
+-- подхватится следующей локальной мутацией; полноценная server-wins сверка — вне объёма Фазы 4.
+initFromServer:
+INSERT OR IGNORE INTO listMembership(release_id, status, status_updated_at, is_favorite, favorite_updated_at)
+VALUES (?, ?, ?, ?, ?);
+
+selectByReleaseId:
+SELECT * FROM listMembership WHERE release_id = ?;
+
+observeStatus:
+SELECT status FROM listMembership WHERE release_id = ?;
+
+observeFavorite:
+SELECT is_favorite FROM listMembership WHERE release_id = ?;

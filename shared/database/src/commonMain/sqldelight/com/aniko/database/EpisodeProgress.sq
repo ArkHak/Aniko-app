@@ -1,0 +1,31 @@
+-- Тип `Boolean` в сгенерированном SQLDelight-коде без явного импорта резолвится как `import
+-- Boolean` (без пакета) и не компилируется — известная особенность кодогенерации для колонок
+-- `AS Boolean` (в отличие от Long/String, которые получают полный `kotlin.*`-импорт сами).
+import kotlin.Boolean;
+
+-- Локальный прогресс просмотра серий (P4.T1/T5, реализует EpisodeProgressStore). Ключ серии —
+-- тройка (release_id, source_id, position), как в самом API (`episode/watch|unwatch/{releaseId}/
+-- {sourceId}/{position}`) — БЕЗ typeId, потому что write-эндпоинт его не принимает.
+CREATE TABLE episodeProgress (
+    release_id  INTEGER NOT NULL,
+    source_id   INTEGER NOT NULL,
+    position    INTEGER NOT NULL,
+    is_watched  INTEGER AS Boolean NOT NULL,
+    updated_at  INTEGER NOT NULL,
+    PRIMARY KEY (release_id, source_id, position)
+);
+
+-- LWW по updated_at, тот же принцип, что и в ListMembership.sq — единый метод что для локальных
+-- оптимистичных отметок, что для значений, синхронизированных с сервера.
+setWatched:
+INSERT INTO episodeProgress(release_id, source_id, position, is_watched, updated_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(release_id, source_id, position) DO UPDATE SET
+    is_watched = CASE WHEN excluded.updated_at >= episodeProgress.updated_at THEN excluded.is_watched ELSE episodeProgress.is_watched END,
+    updated_at = CASE WHEN excluded.updated_at >= episodeProgress.updated_at THEN excluded.updated_at ELSE episodeProgress.updated_at END;
+
+observeWatched:
+SELECT is_watched FROM episodeProgress WHERE release_id = ? AND source_id = ? AND position = ?;
+
+observeWatchedPositions:
+SELECT position FROM episodeProgress WHERE release_id = ? AND source_id = ? AND is_watched = 1;

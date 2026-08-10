@@ -13,6 +13,7 @@ kotlin {
         commonMain.dependencies {
             api(project(":shared:model"))
             api(project(":shared:network"))
+            api(project(":shared:database"))
             // `EpisodeRepository.resolvePlaybackSource` возвращает `PlaybackSource` — публичный
             // тип из :shared:player, поэтому api(), а не implementation(): модули, которые
             // зависят от :shared:data и читают этот тип, не обязаны подключать :shared:player сами.

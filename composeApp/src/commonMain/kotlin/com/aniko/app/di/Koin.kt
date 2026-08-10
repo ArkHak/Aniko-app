@@ -1,6 +1,7 @@
 package com.aniko.app.di
 
 import com.aniko.data.di.dataModule
+import com.aniko.database.di.databaseModule
 import com.russhwolf.settings.Settings
 import org.koin.core.KoinApplication
 import org.koin.core.context.startKoin
@@ -24,7 +25,7 @@ expect fun platformModule(): Module
 fun initKoin(config: KoinAppDeclaration? = null): KoinApplication =
     startKoin {
         config?.invoke(this)
-        modules(platformModule(), dataModule, appModule)
+        modules(platformModule(), databaseModule, dataModule, appModule)
     }
 
 private var koinStarted = false

@@ -1,0 +1,84 @@
+-- Кэш отдельных релизов (P4.T1/T4, реализует ReleaseCacheStore).
+--
+-- Без FOREIGN KEY на listMembership/releaseListEntry (архитектурное решение S2) — кэш-таблицы
+-- независимы, осиротевшие строки чистит deleteOrphans, а не констрейнт.
+CREATE TABLE releaseEntity (
+    id                INTEGER NOT NULL PRIMARY KEY,
+    title             TEXT    NOT NULL,
+    original_title    TEXT,
+    poster_url        TEXT,
+    description       TEXT,
+    year              INTEGER,
+    episodes_total    INTEGER,
+    episodes_released INTEGER,
+    grade             REAL,
+    status            TEXT    NOT NULL,
+    genres            TEXT    NOT NULL,
+    fetched_at        INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL
+);
+
+-- ReleaseCacheStore.upsert принимает уже готовый домен-Release целиком (единая точка записи —
+-- в отличие от исходного черновика схемы, интерфейс НЕ различает summary/full вызовы), поэтому
+-- "деградированные" данные листинга (search/releases/{page} не даёт status, листинги вообще не
+-- дают description) не должны затирать более полную карточку. Реализовано per-field CASE-защитой
+-- прямо в этом единственном запросе, а не парой upsertSummary/upsertFull:
+--   * description не затирается NULL'ом;
+--   * status не откатывается в 'UNKNOWN';
+--   * genres не затираются пустой строкой.
+-- listMembership этим запросом НЕ трогается и НЕ пишется намеренно: ReleaseDto несёт
+-- profile_list_status/is_favorite, но ReleaseCacheStore.upsert() вызывается при каждом сетевом
+-- фетче релиза (включая фоновые фетчи листингов) — если бы он писал listMembership напрямую с
+-- fetchedAt в качестве LWW-таймстампа, свежий фетч мог бы затереть ещё не отправленную в API
+-- оптимистичную правку (fetchedAt "сейчас" — не момент реального изменения статуса на сервере,
+-- он не отражает pending-мутации из SyncQueueStore). Синхронизация "сервер -> listMembership"
+-- поэтому явно делается через ListMembershipStore отдельным вызовом на уровне репозитория
+-- (вне зоны трека A), где есть возможность учесть очередь синхронизации.
+upsert:
+INSERT INTO releaseEntity(id, title, original_title, poster_url, description, year,
+                          episodes_total, episodes_released, grade, status, genres,
+                          fetched_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+    title             = excluded.title,
+    original_title    = excluded.original_title,
+    poster_url        = excluded.poster_url,
+    description       = CASE WHEN excluded.description IS NULL THEN releaseEntity.description ELSE excluded.description END,
+    year              = excluded.year,
+    episodes_total    = excluded.episodes_total,
+    episodes_released = excluded.episodes_released,
+    grade             = excluded.grade,
+    status            = CASE WHEN excluded.status = 'UNKNOWN' THEN releaseEntity.status ELSE excluded.status END,
+    genres            = CASE WHEN excluded.genres = '' THEN releaseEntity.genres ELSE excluded.genres END,
+    fetched_at        = excluded.fetched_at,
+    updated_at        = excluded.updated_at;
+
+-- LEFT JOIN listMembership — членство в списках читается отдельно от TTL-кэша самого релиза
+-- (см. ListMembership.sq). SQLDelight 2.x распознаёт LEFT JOIN и генерирует my_list_status/
+-- my_is_favorite как nullable, даже при NOT NULL DEFAULT 0 у listMembership.is_favorite —
+-- на Kotlin-стороне (мапперы стора) is_favorite подставляется как `?: false`.
+selectById:
+SELECT r.*, m.status AS my_list_status, m.is_favorite AS my_is_favorite
+FROM releaseEntity r
+LEFT JOIN listMembership m ON m.release_id = r.id
+WHERE r.id = ?;
+
+selectByIds:
+SELECT r.*, m.status AS my_list_status, m.is_favorite AS my_is_favorite
+FROM releaseEntity r
+LEFT JOIN listMembership m ON m.release_id = r.id
+WHERE r.id IN ?;
+
+fetchedAt:
+SELECT fetched_at FROM releaseEntity WHERE id = ?;
+
+delete:
+DELETE FROM releaseEntity WHERE id = ?;
+
+-- Чистит закэшированные релизы, на которые больше не ссылается ни один листинг и у которых нет
+-- локального членства в списках/избранном — используется профилактически (не вызывается треком A
+-- автоматически), т.к. решение "когда чистить" — компетенция вызывающего слоя.
+deleteOrphans:
+DELETE FROM releaseEntity
+WHERE id NOT IN (SELECT release_id FROM releaseListEntry)
+  AND id NOT IN (SELECT release_id FROM listMembership);

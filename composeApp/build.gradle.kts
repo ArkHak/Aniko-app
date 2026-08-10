@@ -33,6 +33,7 @@ kotlin {
         commonMain.dependencies {
             implementation(project(":shared:model"))
             implementation(project(":shared:network"))
+            implementation(project(":shared:database"))
             implementation(project(":shared:data"))
             implementation(project(":shared:player"))
             implementation(project(":shared:ui"))

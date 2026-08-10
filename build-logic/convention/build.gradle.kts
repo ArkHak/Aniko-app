@@ -18,4 +18,5 @@ dependencies {
     implementation(libs.plugin.compose.multiplatform)
     implementation(libs.plugin.ktlint)
     implementation(libs.plugin.detekt)
+    implementation(libs.plugin.sqldelight)
 }

@@ -3,6 +3,8 @@ package com.aniko.app.di
 import android.content.Context
 import com.aniko.data.session.AndroidSecureTokenStorage
 import com.aniko.data.session.SecureTokenStorage
+import com.aniko.database.driver.AndroidDatabaseDriverFactory
+import com.aniko.database.driver.DatabaseDriverFactory
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.SharedPreferencesSettings
 import org.koin.android.ext.koin.androidContext
@@ -17,4 +19,5 @@ actual fun platformModule(): Module =
             )
         }
         single<SecureTokenStorage> { AndroidSecureTokenStorage(androidContext()) }
+        single<DatabaseDriverFactory> { AndroidDatabaseDriverFactory(androidContext()) }
     }
