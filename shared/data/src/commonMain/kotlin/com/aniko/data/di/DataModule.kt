@@ -3,11 +3,14 @@ package com.aniko.data.di
 import com.aniko.data.api.AuthApi
 import com.aniko.data.api.EpisodeApi
 import com.aniko.data.api.FavoriteApi
+import com.aniko.data.api.FilterApi
 import com.aniko.data.api.HistoryApi
 import com.aniko.data.api.ProfileApi
 import com.aniko.data.api.ProfileListApi
 import com.aniko.data.api.ProfilePreferenceApi
 import com.aniko.data.api.ReleaseApi
+import com.aniko.data.api.ReleaseCommentApi
+import com.aniko.data.api.ScheduleApi
 import com.aniko.data.api.SearchApi
 import com.aniko.data.locale.LocaleStore
 import com.aniko.data.repository.AuthRepository
@@ -55,6 +58,9 @@ val dataModule =
         single { SearchApi(client = get()) }
         single { ProfileApi(client = get()) }
         single { ProfilePreferenceApi(client = get()) }
+        single { ReleaseCommentApi(client = get()) }
+        single { ScheduleApi(client = get()) }
+        single { FilterApi(client = get()) }
 
         single { AuthRepository(authApi = get(), sessionStore = get()) }
         single { ReleaseRepository(releaseApi = get(), searchApi = get()) }

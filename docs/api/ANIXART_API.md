@@ -20,7 +20,7 @@ Kotlin-клиент (`shared/network`, `shared/data/.../api/*.kt`). Значен
 | Формат ошибок | HTTP-статус почти всегда `200`; реальный результат — в поле `code` тела ответа (`Response.java`) | `ApiCall.kt` |
 | Коды `code` | `0` = SUCCESSFUL, `1` = FAILED, `402` = BANNED, `403` = PERM_BANNED | `Response.java`, `ApiCall.CODE_OK` |
 | Resiliency base-URL | **В текущей реализации отсутствует.** Задокументированная (в декомпиле оригинального APK) цепочка: `ConstantNetFetcher` → `ConfigNetFetcher` (`config/urls`) → `FirebaseNetFetcher` → `GithubPagesNetFetcher` (fallback `anixhelper.github.io`). В проекте Aniko базовый URL — константа (`DEFAULT_BASE_URL = "https://api-s.anixsekai.com/"`); `baseUrl` вынесен параметром конфигурации (`ApiConfig.kt`, строка 12) для будущей реализации fallback-цепочки, но сама логика переключения не кодирована — это план развития, а не текущая фишка. Реализация может быть добавлена в `AnixHttpClient.kt` как plugin, см. P0.T7 в `docs/REELWAVE_PLAN.md`. | `ApiConfig.kt`, `AnixHttpClient.kt`, `ChainedNetFetcher.java` (APK) |
-| Статика/CDN | **Расхождение**: код проекта/старый черновик указывают `static.anixart.tv`, но живые ответы отдают реальные хосты постеров/иконок — `https://s.anixmirai.com/posters/...`, `https://s3.anixmirai.com/voiceovers/...`. Требует перепроверки/фикса в `ApiConfig` | сэмплы в `docs/api/samples/` |
+| Статика/CDN | Реальные хосты постеров/аватаров/скриншотов — `https://s.anixmirai.com/posters/...`; отдельный хост `https://s3.anixmirai.com/voiceovers/...` — только для озвучек. Исправлено в `ApiConfig.kt`: `DEFAULT_STATIC_BASE_URL` теперь `https://s.anixmirai.com/` (был неверный `static.anixart.tv`) | сэмплы в `docs/api/samples/`, `ApiConfig.kt` |
 | JSON-парсинг | Android-клиент — Jackson (`@JsonProperty`); в проекте — kotlinx.serialization с `ignoreUnknownKeys=true, isLenient=true, coerceInputValues=true` (осознанная терпимость к недокументированному/меняющемуся API) | `shared/network` |
 | 401/403 | Инвалидируют локальную сессию везде, **кроме** `auth/*` (там это «неверный пароль», а не «токен протух») | `shared/network` HttpResponseValidator |
 
@@ -70,11 +70,40 @@ Kotlin-клиент (`shared/network`, `shared/data/.../api/*.kt`). Значен
 - `search/feed/{page}` → `FeedSearchResponse`
 - `search/profile/list/{status}/{page}`, `search/favorites/{page}`, `search/history/{page}`, `search/collections/{page}`, `search/profiles/{page}`, `search/channels/{page}`, `search/articles/{page}` → аналогично, `PageableResponse<...>`
 
-**`FilterApi`** — `POST filter/{page}`, body `FilterRequest` — расширенный фильтр каталога (жанры/год/статус/тип и т.п.).
+**`FilterApi`** — `POST filter/{page}?extended_mode=&token=`, body `FilterRequest` — расширенный фильтр каталога (жанры/год/статус/тип и т.п.). Ответ — обычный `PageableResponse<Release>` (проверено вживую 2026-08-10, `POST filter/0` с телом `{"sort":0,"genres":[],"types":[],"age_ratings":[],"profile_list_exclusions":[]}` → HTTP 200).
+
+Поля `FilterRequest` (`FilterRequestDto.kt`, все опциональны кроме `sort`/списков/`isGenresExcludeModeEnabled`, у которых есть дефолты):
+
+| Kotlin-поле | JSON-ключ | Тип | Дефолт |
+|---|---|---|---|
+| `categoryId` | `category_id` | `Long?` | `null` |
+| `statusId` | `status_id` | `Long?` | `null` |
+| `startYear` | `start_year` | `Int?` | `null` |
+| `endYear` | `end_year` | `Int?` | `null` |
+| `studio` | `studio` | `String?` | `null` |
+| `source` | `source` | `String?` | `null` |
+| `episodesFrom` | `episodes_from` | `Int?` | `null` |
+| `episodesTo` | `episodes_to` | `Int?` | `null` |
+| `sort` | `sort` | `Int` | `0` |
+| `country` | `country` | `String?` | `null` |
+| `season` | `season` | `Int?` | `null` |
+| `episodeDurationFrom` | `episode_duration_from` | `Int?` | `null` |
+| `episodeDurationTo` | `episode_duration_to` | `Int?` | `null` |
+| `genres` | `genres` | `List<String>` | `[]` |
+| `profileListExclusions` | `profile_list_exclusions` | `List<Int>` | `[]` |
+| `types` | `types` | `List<Long>` | `[]` |
+| `ageRatings` | `age_ratings` | `List<Int>` | `[]` |
+| `isGenresExcludeModeEnabled` | `is_genres_exclude_mode_enabled` | `Boolean` | `false` |
+| `genresMode` | `genres_mode` | `Int?` | `null` |
+
+Именованные константы (`FilterRequestDto.Companion`, из декомпила `FilterRequest.java`):
+- `sort`: `0`=дата обновления убыв., `1`=оценка убыв., `2`=год убыв., `3`=популярность убыв., `4`=дата обновления возр., `5`=оценка возр., `6`=год возр., `7`=популярность возр.
+- `genresMode`: `0`=ALL, `1`=ANY, `2`=EXCLUDE.
+- `ageRatings`: `1`=`LESS_THAN_13`, `2`=`MORE_THAN_13`, `3`=`MORE_THAN_26`, `4`=`MORE_THAN_100` — судя по именам констант в декомпиле, это, вероятно, диапазоны **количества серий**, а не возрастной рейтинг, несмотря на название поля; не подтверждено вживую, оставлено как наблюдение.
 
 **`TypeApi`** — управление типами озвучки: pin/unpin, hide-widget.
 
-**В проекте реализован только `SearchApi.releaseSearch`.**
+**В проекте реализованы `SearchApi.releaseSearch` и `FilterApi.filter`.**
 
 ## 5. Релиз
 
@@ -86,7 +115,22 @@ Kotlin-клиент (`shared/network`, `shared/data/.../api/*.kt`). Значен
 
 **`RelatedApi`** — `related/{relatedId}/{page}` (заголовок `API-Version`) — сиквелы/приквелы/спин-оффы.
 
-**`ReleaseCommentApi`** — комментарии к релизу: добавление/редактирование/удаление/голосование/ответы (реплаи).
+**`ReleaseCommentApi`** — комментарии к релизу (P3.T12, `shared/data/.../api/ReleaseCommentApi.kt`, реализовано полностью):
+
+| Метод | Путь | Параметры | Ответ |
+|---|---|---|---|
+| GET | `release/comment/all/{releaseId}/{page}` | query: `sort`, `token` | `PageableResponse<ReleaseComment>` — живьём проверен 2026-08-10 |
+| GET | `release/comment/{id}` | query: `token` | `ReleaseComment` — одиночный, не пагинированный; в decompile параметр назван `releaseId`, но по форме пути (рядом с `.../delete/{commentId}`, `.../edit/{commentId}`) вероятнее означает id комментария, `[TODO: verify live]` |
+| POST | `release/comment/add/{releaseId}` | body `CommentAddRequest{parentCommentId?, replyToProfileId?, message, spoiler}`, query: `token` | `CommentAddResponse<ReleaseComment>{code, comment}` |
+| POST | `release/comment/edit/{commentId}` | body `CommentEditRequest{message, spoiler}`, query: `token` | `CommentEditResponse{code}` — коды: `2`=NOT_FOUND, `3`=TOO_SHORT, `4`=TOO_LONG, `5`=NOT_OWNED, `6`=WAS_DELETED, `7`=EMBEDDABLE_NOT_FOUND |
+| GET | `release/comment/delete/{commentId}` | query: `token` | `CommentDeleteResponse{code}` — коды: `2`=NOT_FOUND, `3`=NOT_OWNED |
+| GET | `release/comment/vote/{commentId}/{vote}` | query: `token` | `SimpleResponse{code}` |
+| POST | `release/comment/replies/{commentId}/{page}` | query: `sort`, `token` | `PageableResponse<ReleaseComment>` |
+| GET | `release/comment/votes/{commentId}/{page}` | query: `sort`, `token` | `PageableResponse<Profile>` в decompile; реализовано как `PageableResponse<ProfileCompact>` по аналогии с профилем внутри комментария (`[TODO: verify live]`) |
+| GET | `release/comment/all/profile/{p_id}/{page}` | query: `sort`, `token` | `PageableResponse<ReleaseComment>` — комментарии произвольного профиля |
+| POST | `release/comment/process/{commentId}` | body `CommentProcessRequest{message?, reason?, banReason?, banExpires?, isSpoiler, isDeleted, isBanned}`, query: `token` | `SimpleResponse{code}` — модераторский эндпоинт, не для обычных пользователей |
+
+Первые ~5 комментариев релиза уже приходят прямо в `GET release/{id}?extended_mode=true` → `comments[]` (тот же формат `ReleaseComment`), без похода в `ReleaseCommentApi` — см. аудит Title Detail в `docs/REELWAVE_PLAN.md`.
 
 **`ReleaseStreamingPlatformApi`** — легальные стриминг-площадки, где доступен релиз.
 
@@ -185,6 +229,26 @@ Kotlin-клиент (`shared/network`, `shared/data/.../api/*.kt`). Значен
 заголовком/метаданными `X-Amz-Meta-Is-Explicit` — точная механика (заголовок vs поле тела) не перепроверена
 живым трафиком, см. открытые вопросы.
 
+## 8a. Расписание — `ScheduleApi`
+
+**`ScheduleApi`** — `GET schedule`, без токена и без параметров.
+
+Проверено вживую 2026-08-10: `curl -s 'https://api-s.anixsekai.com/schedule'` без токена вернул
+`HTTP 200`, тело `{"code": 0, "monday": [...], "tuesday": [...], ..., "sunday": [...]}`. Каждый
+день недели — массив ПОЛНЫХ объектов `Release` (те же ~76 полей, что и в `discover/watching`,
+`release/{id}`), поэтому в клиенте переиспользован уже существующий `ReleaseDto` — отдельный DTO
+релиза для расписания не заводился. Статически подтверждено декомпилом:
+`ScheduleResponse.java extends Response` (значит есть `code`), 7 полей `monday..sunday:
+List<Release>` с дефолтом `emptyList()`, без `@JsonProperty` (имена полей — lowercase день
+недели, совпадают с JSON as-is); `ScheduleApi.java` — интерфейс с единственным методом
+`@GET("schedule") schedule()`, без параметров вообще (ни `token`, ни пагинации). Точного времени
+выхода серии в ответе нет — только группировка по дню недели (см. `docs/REELWAVE_PLAN.md`,
+раздел Schedule).
+
+В проекте: `ScheduleApi.kt` (`shared/data/.../api`), `ScheduleResponseDto` (`.../dto/ScheduleResponseDto.kt`),
+маппер `ScheduleResponseDto.toDomain(): Schedule` (`.../mapper/ScheduleMapper.kt`) в доменную
+модель `Schedule`/`WeekDay` (`shared/model/.../Schedule.kt`).
+
 ## 9. Контент-сообщество (не реализовано в проекте)
 
 - **`ArticleApi` / `ArticleCommentApi` / `ArticleSuggestionApi`** — статьи блога: CRUD, голосование, репосты, комментарии, модерация предложенных статей.
@@ -193,7 +257,6 @@ Kotlin-клиент (`shared/network`, `shared/data/.../api/*.kt`). Значен
 - **`FeedApi`** — лента статей по каналам/датам.
 - **`NotificationApi` / `NotificationPreferenceApi`** — уведомления (друзья, эпизоды, комментарии, статьи, related-релизы) + тонкая настройка по типам.
 - **`ReportApi`** — жалобы на 8 типов сущностей (release/collection/episode/profile/channel/article/comments), у каждого свой `GET .../reasons`.
-- **`ScheduleApi`** — `GET schedule` (без параметров) — расписание выхода эпизодов.
 - **`ConfigApi`** — `config/anixplayer`, `config/toggles`, `config/urls` (feature-флаги и resiliency-цепочка базового URL).
 
 ## 10. Сводная таблица: что уже реализовано в Kotlin-клиенте Aniko
@@ -204,18 +267,32 @@ Kotlin-клиент (`shared/network`, `shared/data/.../api/*.kt`). Значен
 | `DiscoverApi` | частично, встроен в `ReleaseApi.kt` (watching/recommendations/interesting) |
 | `EpisodeApi` | полностью — вся цепочка резолвинга + watch/unwatch |
 | `FavoriteApi` | полностью |
+| `FilterApi` | полностью — `POST filter/{page}`, переиспользует `ReleaseDto` |
 | `HistoryApi` | полностью |
 | `ProfileApi` | частично — только `profile/{id}` |
 | `ProfileListApi` | полностью |
 | `ProfilePreferenceApi` | частично — только privacy-эндпоинты |
 | `ReleaseApi` | полностью (+ discover) |
+| `ReleaseCommentApi` | полностью |
+| `ScheduleApi` | полностью — `GET schedule`, переиспользует `ReleaseDto` |
 | `SearchApi` | частично — только `releaseSearch` |
-| остальные ~32 класса (Article*, Channel*, Collection*, Notification*, Report, Schedule, Type, Filter, Related, Export/Import, Profile{Badge,BlockList,Deletion,Friend,Health,RoleList}, ReleaseVideo*, ReleaseStreamingPlatform, ReleaseComment, Config) | не реализованы |
+| остальные ~29 классов (Article*, Channel*, Collection*, Notification*, Report, Type, Related, Export/Import, Profile{Badge,BlockList,Deletion,Friend,Health,RoleList}, ReleaseVideo*, ReleaseStreamingPlatform, Config) | не реализованы |
 
 ## 11. Открытые вопросы / что стоит перепроверить
 
-1. Реальный хост статики/CDN (`s.anixmirai.com` / `s3.anixmirai.com` vs `static.anixart.tv` в `ApiConfig`).
+1. ~~Реальный хост статики/CDN (`s.anixmirai.com` / `s3.anixmirai.com` vs `static.anixart.tv` в `ApiConfig`).~~
+   **Исправлено (P3.T10, 2026-08-10)**: `ApiConfig.DEFAULT_STATIC_BASE_URL` теперь `https://s.anixmirai.com/`.
 2. Точная схема `search/releases/{page}` могла измениться на сервере относительно decompiled APK 9.0-beta-19 — стоит держать в уме при добавлении новых полей поиска.
 3. Полные JSON-схемы `Article*`, `Channel*`, `Collection*`, `Notification*` не сверялись с живыми сэмплами (только с decompile) — при реализации этих фич сначала снять живой сэмпл.
 4. Механика 18+ toggle (`X-Amz-Meta-Is-Explicit`) в `profile/preference/my` не подтверждена живым трафиком.
-5. Сверить семантику полей (не путей — пути уже подтверждены из APK) со сторонними reverse-engineered клиентами (`Nekonyx/anixart-api`, `anixart.py`, `AniAnglia`) на предмет расхождений.
+5. `[TODO: verify live]` в `ReleaseCommentApi`: смысл параметра в `GET release/comment/{id}` (releaseId или commentId?) и точный тип элемента `release/comment/votes/{commentId}/{page}` (`Profile` в decompile vs реализованный `ProfileCompact`) — низкий приоритет, не блокирует использование остальных методов.
+
+### P3.T14 — сверка со сторонними reverse-engineered клиентами (2026-08-10)
+
+Сверены пути и формы `ScheduleApi`/`ReleaseCommentApi`/`FilterApi` с тремя открытыми проектами (как дополнение к декомпилу, не как основной источник — см. правило R3):
+
+- **[`Nekonyx/anixart-api`](https://github.com/Nekonyx/anixart-api)** (TypeScript). Проверено дерево репозитория (`src/api/auth.ts`, `release.ts`, `contracts/{auth,profile,release}.ts`) — покрывает только `auth`/`release`/`profile`. **Schedule, Comment и Filter в этом клиенте не реализованы вообще** — сверять не с чем, расхождений нет по определению.
+- **[`vraestoren/anixart.py`](https://github.com/vraestoren/anixart.py)** (Python, `src/anixart.py`). Совпадает 1:1 по путям с нашей реализацией: `GET /schedule` (`get_schedule`, хотя в этом клиенте токен всё равно подставляется — не противоречит нашей живой проверке "токен не обязателен", просто клиент не обязан его опускать), `GET /release/comment/all/{release_id}/{page}?sort=` (`get_release_comments`), `POST /release/comment/add/{release_id}` с полем `parentCommentId` в теле (`send_comment`), `POST /release/comment/edit/{release_comment_id}` (`edit_comment`), `GET /release/comment/votes/{comment_id}/{page}?sort=` (`get_release_comment_votes`), `GET /release/comment/all/profile/{user_id}/{page}?sort=` (`get_user_comments`). **Filter не реализован** в этом клиенте — сверить не с чем.
+- **[`AnAgTeam/AniAnglia`](https://github.com/AnAgTeam/AniAnglia)** (Objective-C++, iOS). Низкоуровневый HTTP-слой — часть невключённой в этот чекаут библиотеки, прямых путей не нашлось, но **структура `FilterRequest` независимо совпадает** с нашей `FilterRequestDto` (`AniAnglia/Main/Search/FilterViewController.mm`): поля `status`, `category`, `country`, `studio`, `season`, `episodes_count_from/to`, `is_genres_exclude_mode`, и enum `Sort{DateUpdate, Grade, Year, Popular}` в том же порядке, что и наши `SORT_DATE_UPDATE_DESC=0, SORT_GRADE_DESC=1, SORT_YEAR_DESC=2, SORT_POPULAR_DESC=3` — независимое (другой язык, другая кодовая база) подтверждение формы `FilterRequest` из декомпила. Также есть отдельный `CommentsPageableDataProvider`/`CommentRepliesViewController`, подтверждающий модель пагинированных комментариев с ответами (реплаями).
+
+**Итог**: расхождений с уже реализованным не найдено; два из трёх клиентов не реализуют Filter, один не реализует ни один из трёх новых эндпоинтов — это ограничивает полноту сверки, но там где сверка была возможна (Schedule, Comment у `anixart.py`; форма `FilterRequest` у `AniAnglia`), она подтвердила декомпил и живые проверки без противоречий.

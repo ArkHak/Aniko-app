@@ -24,7 +24,17 @@ data class ApiConfig(
 ) {
     companion object {
         const val DEFAULT_BASE_URL: String = "https://api-s.anixsekai.com/"
-        const val DEFAULT_STATIC_BASE_URL: String = "https://static.anixart.tv/"
+
+        /**
+         * Живые JSON-сэмплы (`docs/api/samples/`, проверено 2026-08-10) показывают, что
+         * реальный CDN — `s.anixmirai.com` (постеры/аватары/скриншоты), а не `static.anixart.tv`
+         * (был неверный дефолт, см. P3.T10 в `docs/REELWAVE_PLAN.md`). Отдельный хост
+         * `s3.anixmirai.com` используется только для озвучек (`voiceovers/...`) и здесь не
+         * задействован. На практике API всегда отдаёт `image`/`avatar`/`poster` уже абсолютным
+         * URL (см. KDoc `ReleaseDto.kt`), поэтому этот дефолт — чисто defensive fallback на
+         * случай относительного пути от сервера, а не то, что реально используется в проде.
+         */
+        const val DEFAULT_STATIC_BASE_URL: String = "https://s.anixmirai.com/"
 
         /** Имя query-параметра, в котором Anixart ожидает токен (НЕ заголовок). */
         const val TOKEN_QUERY_PARAM: String = "token"
