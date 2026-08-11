@@ -28,10 +28,11 @@ fun <T> ChipRow(
     isSelected: (T) -> Boolean,
     label: (T) -> String,
     onClick: (T) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
     ) {
         items.forEach { item ->

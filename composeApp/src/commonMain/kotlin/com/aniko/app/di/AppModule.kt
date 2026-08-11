@@ -1,12 +1,14 @@
 package com.aniko.app.di
 
 import com.aniko.app.feature.auth.LoginViewModel
+import com.aniko.app.feature.comments.CommentsViewModel
 import com.aniko.app.feature.gallery.TokenGalleryViewModel
 import com.aniko.app.feature.home.HomeViewModel
 import com.aniko.app.feature.library.LibraryViewModel
 import com.aniko.app.feature.player.PlayerViewModel
 import com.aniko.app.feature.profile.ProfileViewModel
 import com.aniko.app.feature.release.ReleaseDetailsViewModel
+import com.aniko.app.feature.schedule.ScheduleViewModel
 import com.aniko.app.feature.search.SearchViewModel
 import com.aniko.app.feature.settings.SettingsViewModel
 import org.koin.core.module.dsl.viewModelOf
@@ -30,4 +32,6 @@ val appModule =
         viewModelOf(::LibraryViewModel)
         viewModelOf(::ProfileViewModel)
         viewModelOf(::TokenGalleryViewModel)
+        viewModelOf(::ScheduleViewModel)
+        viewModelOf(::CommentsViewModel)
     }

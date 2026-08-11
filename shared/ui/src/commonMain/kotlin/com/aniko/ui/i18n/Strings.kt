@@ -34,6 +34,7 @@ data class Strings(
     val navSearch: String,
     val navLibrary: String,
     val navSettings: String,
+    val navSchedule: String,
     val sessionExpiredMessage: String,
     val backContentDescription: String,
     // --- Статусы списка (ListStatus) — переиспользуются в Library/Release/Profile/ReleaseCard ---
@@ -112,6 +113,7 @@ data class Strings(
     val settingsMyProfile: String,
     val settingsSignOut: String,
     val settingsDesignGallery: String,
+    val settingsLanguage: String,
     // --- Экран-галерея токенов (P2.T12) ---
     val galleryTitle: String,
     val galleryColorsSection: String,
@@ -123,6 +125,22 @@ data class Strings(
     val galleryThemeLight: String,
     val galleryThemeDark: String,
     val galleryLanguageSystem: String,
+    // --- Фаза 5 — адаптивный каркас ---
+    // Заголовок экрана расписания (AnixDestination.Schedule).
+    val scheduleTitle: String,
+    // Заголовок экрана комментариев к релизу (AnixDestination.ReleaseComments).
+    val commentsTitle: String,
+    // Плейсхолдер detail-панели на wide-экранах (ListDetailPaneScaffold, P5.T3), когда список
+    // ничего не выбрал.
+    val detailPaneEmptyTitle: String,
+    val detailPaneEmptyMessage: String,
+    // --- Desktop-меню (macOS `MenuBar`, P5.T6) ---
+    val menuAbout: String,
+    val menuQuit: String,
+    val menuView: String,
+    val menuLanguage: String,
+    val menuGo: String,
+    val menuBack: String,
 )
 
 /** Дефолт — [EnStrings]: тот же выбор, что `defaultLanguageTag = "en"` в `ProvideAppStrings`. */

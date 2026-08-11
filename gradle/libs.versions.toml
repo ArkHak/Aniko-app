@@ -47,6 +47,15 @@ detekt = "1.23.8"
 # --- Local storage (P4.S0) ---
 sqldelight = "2.3.2"
 
+# --- Adaptive layout (P5.T3/P5.T4) ---
+# ВНИМАНИЕ: группа org.jetbrains.compose.material3.adaptive версионируется НЕЗАВИСИМО и от плагина
+# Compose Multiplatform (1.11.1), и от material3 (compose.material3 резолвится в 1.9.0 — версии
+# material3:1.11.1 НЕ существует, не пытаться подставить). 1.2.0 — последняя стабильная; таргеты
+# android/desktop/iosArm64/iosSimulatorArm64/iosX64 подтверждены. Транзитивно тянет
+# org.jetbrains.androidx.window:window-core:1.4.0 (обычный Maven Central артефакт, доп. правок в
+# settings.gradle.kts не требует).
+material3Adaptive = "1.2.0"
+
 [libraries]
 # Gradle plugin artifacts, consumed by build-logic convention plugins (not by app modules)
 plugin-android-gradle = { module = "com.android.tools.build:gradle", version.ref = "agp" }
@@ -116,6 +125,10 @@ sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", versi
 # (UPSERT, ReleaseCacheStore.upsert) — он появился в SQLite 3.24. Все реальные драйверы проекта
 # (Android SQLite, JDBC sqlite-driver на Desktop, native SQLite на iOS) давно новее 3.24.
 sqldelight-dialect-sqlite338 = { module = "app.cash.sqldelight:sqlite-3-38-dialect", version.ref = "sqldelight" }
+
+# Adaptive layout (P5.T3/P5.T4)
+material3-adaptive = { module = "org.jetbrains.compose.material3.adaptive:adaptive", version.ref = "material3Adaptive" }
+material3-adaptive-layout = { module = "org.jetbrains.compose.material3.adaptive:adaptive-layout", version.ref = "material3Adaptive" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

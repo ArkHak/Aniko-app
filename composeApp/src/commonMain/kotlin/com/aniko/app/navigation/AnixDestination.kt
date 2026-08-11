@@ -53,4 +53,16 @@ sealed interface AnixDestination {
         val position: Int,
         val hostKey: String,
     ) : AnixDestination
+
+    /** Расписание выхода эпизодов по дням недели (Фаза 3: ScheduleApi, Фаза 4: ScheduleRepository). */
+    @Serializable
+    data object Schedule : AnixDestination
+
+    /** Комментарии к релизу — отдельный маршрут (не параметр ReleaseDetails), см. журнал Фазы 5:
+     * своя пагинация/сортировка (ReleaseCommentApi), не раздувает ReleaseDetailsUiState, и на
+     * wide-экранах открывается как отдельный элемент pane-стека поверх Details. */
+    @Serializable
+    data class ReleaseComments(
+        val releaseId: Int,
+    ) : AnixDestination
 }

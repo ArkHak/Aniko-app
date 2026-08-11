@@ -27,7 +27,6 @@ import com.aniko.network.TokenProvider
 import com.aniko.network.createAnixHttpClient
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import kotlin.time.Clock
@@ -41,7 +40,7 @@ import kotlin.time.Clock
 val dataModule =
     module {
         single<Clock> { Clock.System }
-        single<CoroutineDispatcher>(named("io")) { Dispatchers.IO }
+        single<CoroutineDispatcher>(named("io")) { ioDispatcher }
 
         single { ApiConfig() }
 

@@ -54,6 +54,9 @@ kotlin {
             implementation(libs.koin.compose.viewmodel)
 
             implementation(libs.multiplatform.settings)
+
+            implementation(libs.material3.adaptive)
+            implementation(libs.material3.adaptive.layout)
         }
 
         androidMain.dependencies {

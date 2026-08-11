@@ -1,48 +1,64 @@
 package com.aniko.app.feature.home
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.aniko.data.paging.PagingState
+import com.aniko.app.mvi.BaseViewModel
+import com.aniko.data.paging.Paginator
 import com.aniko.data.repository.ReleaseRepository
 import com.aniko.model.Release
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
 /**
- * ViewModel главного экрана: секции «Продолжить смотреть» и «Рекомендации».
+ * ViewModel главного экрана: секции «Продолжить смотреть» и «Рекомендации» (MVI-контракт,
+ * см. `HomeContract.kt`, P5.T8 — эталонный экран для миграции на [BaseViewModel]).
  *
  * Оба списка — независимые [com.aniko.data.paging.Paginator] из `ReleaseRepository`, каждый
- * грузит свою первую страницу сразу при создании ViewModel (см. `init`). `HomeScreen` сам решает,
- * когда просить следующую страницу (см. [loadMoreWatching]/[loadMoreRecommendations]) —
- * обычно это подскролл горизонтального списка к последним элементам.
+ * грузит свою первую страницу сразу при создании ViewModel (см. `init`). Их `PagingState`
+ * сведены в один [HomeState] через `combine`, поэтому `HomeScreen` собирает один `StateFlow`
+ * вместо двух. `HomeScreen` сам решает, когда просить следующую страницу (см.
+ * [HomeIntent.LoadMoreWatching]/[HomeIntent.LoadMoreRecommendations]) — обычно это подскролл
+ * горизонтального списка к последним элементам.
  */
 class HomeViewModel(
     private val releaseRepository: ReleaseRepository,
-) : ViewModel() {
+) : BaseViewModel<HomeState, HomeIntent, HomeEffect>(initialState = HomeState()) {
     private val watchingPaginator = releaseRepository.watchingPaginator()
     private val recommendationsPaginator = releaseRepository.recommendationsPaginator()
 
-    val watchingState: StateFlow<PagingState<Release>> = watchingPaginator.state
-    val recommendationsState: StateFlow<PagingState<Release>> = recommendationsPaginator.state
-
     init {
-        viewModelScope.launch { watchingPaginator.loadNext() }
-        viewModelScope.launch { recommendationsPaginator.loadNext() }
+        combine(watchingPaginator.state, recommendationsPaginator.state, ::HomeState)
+            .onEach { merged -> updateState { merged } }
+            .launchIn(viewModelScope)
+
+        dispatch(HomeIntent.LoadMoreWatching)
+        dispatch(HomeIntent.LoadMoreRecommendations)
     }
 
-    fun retryWatching() {
-        viewModelScope.launch { watchingPaginator.loadNext() }
+    override suspend fun handleIntent(intent: HomeIntent) {
+        when (intent) {
+            HomeIntent.RetryWatching, HomeIntent.LoadMoreWatching ->
+                loadNextAndReportIfMoreFailed(watchingPaginator)
+
+            HomeIntent.RetryRecommendations, HomeIntent.LoadMoreRecommendations ->
+                loadNextAndReportIfMoreFailed(recommendationsPaginator)
+        }
     }
 
-    fun retryRecommendations() {
-        viewModelScope.launch { recommendationsPaginator.loadNext() }
-    }
-
-    fun loadMoreWatching() {
-        viewModelScope.launch { watchingPaginator.loadNext() }
-    }
-
-    fun loadMoreRecommendations() {
-        viewModelScope.launch { recommendationsPaginator.loadNext() }
+    /**
+     * `Paginator.loadNext()` при ошибке кладёт её в свой `PagingState.error`, ничего не удаляя
+     * из уже загруженных [com.aniko.data.paging.PagingState.items]. Если список к этому моменту
+     * был пуст — ошибка и так видна через `HomeState.watching.error`/`.recommendations.error`
+     * (см. `ReleaseSection` в `HomeScreen`, ветка `AnixErrorBox`). Если список уже непустой —
+     * `ReleaseSection` рисует `LazyRow` и это поле ошибки не показывает никак, поэтому здесь
+     * дополнительно шлём [HomeEffect.ShowError] для одноразового уведомления (снекбар).
+     */
+    private suspend fun loadNextAndReportIfMoreFailed(paginator: Paginator<Release>) {
+        paginator.loadNext()
+        val state = paginator.state.value
+        val error = state.error
+        if (error != null && state.items.isNotEmpty()) {
+            emitEffect(HomeEffect.ShowError(error))
+        }
     }
 }
