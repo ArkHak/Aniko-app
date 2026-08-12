@@ -9,15 +9,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
 import coil3.compose.AsyncImage
 import com.aniko.ui.theme.AnixThemeTokens
 
-/** Постер релиза со скруглением и фиксированным соотношением сторон. */
+/**
+ * Постер релиза со скруглением и фиксированным соотношением сторон.
+ *
+ * @param width Фиксированная ширина постера. `null` означает, что ширину диктует
+ * родительский `Modifier` (нужно для ячеек grid-раскладок вроде `EpisodeGrid`/
+ * `HorizontalPosterRail`, Фаза 6) — в этом случае `.width(...)` не применяется вовсе.
+ * @param aspectRatio Соотношение сторон постера, по умолчанию — токен
+ * [com.aniko.ui.theme.AnixDimens.posterAspectRatio].
+ */
 @Composable
 fun AnixPoster(
     url: String?,
     contentDescription: String?,
     modifier: Modifier = Modifier,
+    width: Dp? = AnixThemeTokens.dimens.posterWidth,
+    aspectRatio: Float = AnixThemeTokens.dimens.posterAspectRatio,
 ) {
     val dimens = AnixThemeTokens.dimens
     val shape = RoundedCornerShape(dimens.cornerM)
@@ -28,8 +39,8 @@ fun AnixPoster(
         contentScale = ContentScale.Crop,
         modifier =
             modifier
-                .width(dimens.posterWidth)
-                .aspectRatio(dimens.posterAspectRatio)
+                .let { base -> if (width != null) base.width(width) else base }
+                .aspectRatio(aspectRatio)
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant, shape),
     )

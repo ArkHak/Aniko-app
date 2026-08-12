@@ -1,15 +1,11 @@
 package com.aniko.ui.component
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -21,6 +17,10 @@ import com.aniko.ui.theme.AnixThemeTokens
  * вовсе. Изначально жил приватно в `ReleaseDetailsScreen.kt` (Фаза 6, статус списка/тип
  * озвучки/источник), вынесен в `shared/ui`, чтобы Фаза 7 (privacy-настройки профиля) переиспользовала
  * тот же компонент вместо повторного изобретения.
+ *
+ * Внутренняя реализация (Фаза 6, P6.T4) опирается на M3 [FilterChip] вместо самописных
+ * `Text`+`background`+`clickable` — даёт верную `selected`/`Role.Checkbox`-семантику и тач-таргет
+ * из коробки. Публичная сигнатура не изменилась.
  */
 @Composable
 fun <T> ChipRow(
@@ -36,28 +36,10 @@ fun <T> ChipRow(
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
     ) {
         items.forEach { item ->
-            val selected = isSelected(item)
-            Text(
-                text = label(item),
-                style = MaterialTheme.typography.bodyMedium,
-                color =
-                    if (selected) {
-                        MaterialTheme.colorScheme.onPrimary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                modifier =
-                    Modifier
-                        .background(
-                            color =
-                                if (selected) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                },
-                            shape = RoundedCornerShape(dimens.cornerL),
-                        ).clickable { onClick(item) }
-                        .padding(horizontal = dimens.spaceM, vertical = dimens.spaceS),
+            FilterChip(
+                selected = isSelected(item),
+                onClick = { onClick(item) },
+                label = { Text(label(item)) },
             )
         }
     }

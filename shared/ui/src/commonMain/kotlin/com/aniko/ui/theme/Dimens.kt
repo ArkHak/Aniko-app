@@ -39,6 +39,24 @@ data class AnixDimens(
     val posterWidth: Dp = 120.dp,
     /** Anixart-постеры близки к 2:3. */
     val posterAspectRatio: Float = 2f / 3f,
+    /** Компактный постер — используется в [com.aniko.ui.component] `ProgressRow` (Фаза 6, P6.T2). */
+    val posterWidthS: Dp = 88.dp,
+    /** Увеличенный постер рельсы на Medium/Expanded window size class (Фаза 6, P6.T1). */
+    val posterWidthL: Dp = 160.dp,
+    /** Диаметр кружка-бейджа статуса/рейтинга поверх постера (Фаза 6, P6.T3). */
+    val badgeSize: Dp = 20.dp,
+    /** Размер иконки внутри [badgeSize]-бейджа. */
+    val badgeIconSize: Dp = 12.dp,
+    /** Высота линейного индикатора прогресса просмотра (Фаза 6, P6.T2). */
+    val progressBarHeight: Dp = 4.dp,
+    /** Минимальный размер ячейки в сетке номеров серий (Фаза 6, P6.T4). */
+    val episodeCellMinSize: Dp = 56.dp,
+    /** Минимальный размер интерактивной области — ориентир доступности (WCAG/Material). */
+    val minTouchTarget: Dp = 48.dp,
+    /** Толщина кольца донат-диаграммы статистики профиля (Фаза 6, P6.T10/T11). */
+    val donutStrokeWidth: Dp = 16.dp,
+    /** Высота области под столбчатые/линейные графики статистики (Фаза 6, P6.T10/T11). */
+    val chartHeight: Dp = 140.dp,
 )
 
 val LocalAnixDimens = staticCompositionLocalOf { AnixDimens() }

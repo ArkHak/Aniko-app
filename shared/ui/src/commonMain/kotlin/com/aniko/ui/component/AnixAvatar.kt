@@ -13,7 +13,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 
 /**
@@ -69,6 +68,19 @@ private fun AvatarFallback(
     login: String,
     size: Dp,
 ) {
+    // P6.T12 (аудит масштаба шрифта): раньше здесь был fontSize = (size.value * 0.4f).sp —
+    // при системном масштабе шрифта 200% буква вырастала пропорционально ЭТОМУ множителю
+    // (Sp реагирует на fontScale, как и положено), но сам круг — фиксированный .size(size) —
+    // не рос вместе с ней, и буква вылезала за границы заглушки. Берём стиль из
+    // MaterialTheme.typography по порогу размера — без ручной sp-математики, тот же паттерн,
+    // что и остальной UI (см. чек-лист P6.T12 в журнале Фазы 6).
+    val labelStyle =
+        if (size >= LARGE_AVATAR_THRESHOLD) {
+            MaterialTheme.typography.headlineSmall
+        } else {
+            MaterialTheme.typography.titleMedium
+        }
+
     Box(
         modifier =
             Modifier
@@ -78,11 +90,9 @@ private fun AvatarFallback(
     ) {
         Text(
             text = login.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-            style =
-                MaterialTheme.typography.titleMedium.copy(
-                    fontSize = (size.value * 0.4f).sp,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                ),
+            style = labelStyle.copy(color = MaterialTheme.colorScheme.onPrimaryContainer),
         )
     }
 }
+
+private val LARGE_AVATAR_THRESHOLD = 56.dp

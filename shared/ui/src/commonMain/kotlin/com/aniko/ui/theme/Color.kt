@@ -24,6 +24,11 @@ internal object AnixPalette {
     val Error = Color(0xFFE5484D)
     val Success = Color(0xFF3FB27F)
 
+    // Semantic — добавлено Фазой 6 (P6.T3/T9): янтарный, согласован на глаз с уже
+    // существующими Primary (#8B6FF0, холодный фиолет) и Secondary (#C0483F, тёплый crimson) —
+    // тёплый жёлто-оранжевый достаточно далёк по тону от обоих, чтобы не путаться с ними в бейджах.
+    val Warning = Color(0xFFE0A030)
+
     // Dark theme surfaces
     val BackgroundDark = Color(0xFF0A0C12)
     val SurfaceDark = Color(0xFF13151D)
@@ -76,6 +81,17 @@ internal val AnixLightColors =
  *   поэтому решение зафиксировано здесь: `live = secondary` (`#C0483F`) — тот же crimson-акцент,
  *   что и вторичный цвет бренда. Если дизайн впоследствии выделит для live отдельный оттенок,
  *   меняем только это поле, использования в фичах не тронутся.
+ * - [warning] — предупреждающие статусы (Фаза 6, P6.T3/T9), точного дизайн-референса тоже нет:
+ *   решение зафиксировано аналогично [live] — сознательно выбранный янтарный оттенок
+ *   (см. `AnixPalette.Warning`), не изобретённый заново, если позже появится макет.
+ * - [newEpisode] — бейдж «новая серия» на постере (P6.T3): по той же логике, что и [live],
+ *   переиспользуем уже существующий `secondary`, а не заводим третий похожий crimson-оттенок.
+ * - [posterScrim] — затемняющий градиент/подложка текста поверх постера, до Фазы 6 был
+ *   захардкожен в `ReleaseCard.kt` (`Color.Black.copy(alpha = 0.55f)`); значение перенесено сюда
+ *   без изменений, использование в `ReleaseCard.kt` предстоит переключить в рамках Трека A.
+ * - [chartTrack]/[chartSeries] — подложка и палитра серий для графиков статистики (P6.T10/T11),
+ *   выбраны на глаз из уже существующих брендовых/семантических цветов, чтобы не плодить новые
+ *   hex без дизайн-референса (та же логика, что у [live]/[warning]).
  */
 @Immutable
 data class AnixColors(
@@ -83,6 +99,21 @@ data class AnixColors(
     val onSuccess: Color = Color.White,
     val live: Color = AnixPalette.Secondary,
     val onLive: Color = Color.White,
+    val warning: Color = AnixPalette.Warning,
+    val onWarning: Color = Color.Black,
+    val newEpisode: Color = AnixPalette.Secondary,
+    val onNewEpisode: Color = Color.White,
+    val posterScrim: Color = Color.Black.copy(alpha = 0.55f),
+    val chartTrack: Color = Color.Gray.copy(alpha = 0.2f),
+    val chartSeries: List<Color> =
+        listOf(
+            AnixPalette.Primary,
+            AnixPalette.Secondary,
+            AnixPalette.Success,
+            AnixPalette.Warning,
+            AnixPalette.PrimaryDark,
+            Color.Gray,
+        ),
 )
 
 internal val AnixDarkExtraColors = AnixColors()

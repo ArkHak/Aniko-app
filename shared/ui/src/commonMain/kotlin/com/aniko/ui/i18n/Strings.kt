@@ -125,6 +125,9 @@ data class Strings(
     val galleryThemeLight: String,
     val galleryThemeDark: String,
     val galleryLanguageSystem: String,
+    // P6.T12: витрина компонентов Фазы 6 + переключатель масштаба шрифта.
+    val galleryComponentsSection: String,
+    val galleryFontScaleLabel: String,
     // --- Фаза 5 — адаптивный каркас ---
     // Заголовок экрана расписания (AnixDestination.Schedule).
     val scheduleTitle: String,
@@ -141,6 +144,22 @@ data class Strings(
     val menuLanguage: String,
     val menuGo: String,
     val menuBack: String,
+    // --- Фаза 6 — библиотека компонентов ---
+    val badgeNewEpisode: String,
+    val badgeComingSoon: String,
+    val badgeRatingContentDescription: (grade: String) -> String,
+    val badgeNewEpisodeContentDescription: String,
+    val episodeWatchedContentDescription: String,
+    val episodeUnwatchedContentDescription: String,
+    val railShowAll: String,
+    val filterChipAll: String,
+    val filterChipReset: String,
+    val chartNoData: String,
+    val chartLegendOther: String,
+    val ratingHistogramTitle: String,
+    val ratingYourScore: String,
+    val ratingStarsContentDescription: (stars: Int) -> String,
+    val progressEpisodesOf: (watched: Int, total: Int) -> String,
 )
 
 /** Дефолт — [EnStrings]: тот же выбор, что `defaultLanguageTag = "en"` в `ProvideAppStrings`. */

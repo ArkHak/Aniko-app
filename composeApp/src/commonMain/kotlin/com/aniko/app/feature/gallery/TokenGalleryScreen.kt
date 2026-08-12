@@ -26,14 +26,18 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.ui.component.ChipRow
@@ -69,6 +73,12 @@ fun TokenGalleryScreen(
     // тему снаружи, только начальное значение переключателя, дальше это обычный локальный стейт.
     val systemIsDark = isSystemInDarkTheme()
     var isDark by remember { mutableStateOf(systemIsDark) }
+    // Индекс в FONT_SCALES — инструмент аудита P6.T12 (масштаб шрифта/переполнение RU-текста):
+    // экран уже даёт RU/EN одновременно (TypographySection) и переключатель языка приложения,
+    // не хватало только рычага для fontScale — теперь оба измерения (язык × масштаб) проверяются
+    // в одном месте, без внешней screenshot-инфраструктуры (см. журнал Фазы 6 — в кодовой базе
+    // нет ни одного `@Preview`, заводить такую инфраструктуру ради одного пункта дороже).
+    var fontScaleIndex by remember { mutableIntStateOf(0) }
 
     Scaffold(
         modifier = modifier,
@@ -87,30 +97,50 @@ fun TokenGalleryScreen(
         },
     ) { innerPadding ->
         AppTheme(darkTheme = isDark) {
-            Surface(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                val dimens = AnixThemeTokens.dimens
-                Column(
-                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(dimens.spaceM),
-                    verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
-                ) {
-                    GalleryControls(
-                        languageTag = languageTag,
-                        onLanguageTagChange = viewModel::setLanguageTag,
-                        isDark = isDark,
-                        onDarkChange = { isDark = it },
-                    )
-                    GallerySection(strings.galleryColorsSection) { ColorsSection() }
-                    GallerySection(strings.galleryTypographySection) { TypographySection() }
-                    GallerySection(strings.gallerySpacingSection) { SpacingSection() }
-                    GallerySection(strings.galleryRadiusSection) { RadiusSection() }
+            val baseDensity = LocalDensity.current
+            val scaledDensity =
+                remember(baseDensity, fontScaleIndex) {
+                    Density(density = baseDensity.density, fontScale = FONT_SCALES[fontScaleIndex])
+                }
+            CompositionLocalProvider(LocalDensity provides scaledDensity) {
+                Surface(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                    val dimens = AnixThemeTokens.dimens
+                    Column(
+                        modifier =
+                            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(dimens.spaceM),
+                        verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
+                    ) {
+                        GalleryControls(
+                            fontScaleIndex = fontScaleIndex,
+                            onFontScaleIndexChange = { fontScaleIndex = it },
+                            languageTag = languageTag,
+                            onLanguageTagChange = viewModel::setLanguageTag,
+                            isDark = isDark,
+                            onDarkChange = { isDark = it },
+                        )
+                        GallerySection(strings.galleryColorsSection) { ColorsSection() }
+                        GallerySection(strings.galleryTypographySection) { TypographySection() }
+                        GallerySection(strings.gallerySpacingSection) { SpacingSection() }
+                        GallerySection(strings.galleryRadiusSection) { RadiusSection() }
+                        GallerySection(strings.galleryComponentsSection) { ComponentsSection() }
+                    }
                 }
             }
         }
     }
 }
 
+// Демонстрационные шаги масштаба шрифта для аудита P6.T12 (100/130/200%) — не продуктовые
+// константы, поэтому не вынесены в Dimens.
+@Suppress("MagicNumber")
+private val FONT_SCALES = listOf(1.0f, 1.3f, 2.0f)
+
+@Suppress("LongParameterList") // Debug-экран галереи, все параметры — независимые переключатели
+// одного и того же контрольного блока (P6.T12 добавил fontScale к уже бывшим языку/теме).
 @Composable
 private fun GalleryControls(
+    fontScaleIndex: Int,
+    onFontScaleIndexChange: (Int) -> Unit,
     languageTag: String?,
     onLanguageTagChange: (String?) -> Unit,
     isDark: Boolean,
@@ -120,6 +150,14 @@ private fun GalleryControls(
     val dimens = AnixThemeTokens.dimens
 
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
+        Text(text = strings.galleryFontScaleLabel, style = MaterialTheme.typography.labelLarge)
+        ChipRow(
+            items = FONT_SCALES.indices.toList(),
+            isSelected = { it == fontScaleIndex },
+            label = { "${FONT_SCALES[it]}x" },
+            onClick = onFontScaleIndexChange,
+        )
+
         Text(text = strings.galleryLanguageLabel, style = MaterialTheme.typography.labelLarge)
         ChipRow(
             items = listOf(null, "en", "ru"),
