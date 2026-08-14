@@ -4,6 +4,7 @@ import com.aniko.data.dto.InterestingDto
 import com.aniko.data.dto.PageableResponseDto
 import com.aniko.data.dto.ReleaseDto
 import com.aniko.data.dto.ReleaseResponseDto
+import com.aniko.data.dto.SimpleResponseDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -69,6 +70,41 @@ class ReleaseApi(
             client
                 .post("discover/interesting")
                 .body<PageableResponseDto<InterestingDto>>()
+                .requireOk()
+        }
+
+    /**
+     * `POST discover/discussing` — «обсуждаемое», замена вырезанного из v1 «Top This Week»
+     * (см. P0.T3 в плане, секция Home). **Без номера страницы в пути** — живая проверка
+     * (2026-08-12) показала, что `discover/discussing/1` возвращает `404`, а сам эндпоинт без
+     * страницы отдаёт фиксированный набор ~5 элементов (не пагинируется).
+     */
+    suspend fun discoverDiscussing(): PageableResponseDto<ReleaseDto> =
+        apiCall {
+            client
+                .post("discover/discussing")
+                .body<PageableResponseDto<ReleaseDto>>()
+                .requireOk()
+        }
+
+    /** `GET release/vote/add/{r_id}/{vote}?token=` — поставить/изменить свою оценку релизу (1..5). */
+    suspend fun voteAdd(
+        releaseId: Int,
+        vote: Int,
+    ): SimpleResponseDto =
+        apiCall {
+            client
+                .get("release/vote/add/$releaseId/$vote")
+                .body<SimpleResponseDto>()
+                .requireOk()
+        }
+
+    /** `GET release/vote/delete/{r_id}?token=` — убрать свою оценку релизу. */
+    suspend fun voteDelete(releaseId: Int): SimpleResponseDto =
+        apiCall {
+            client
+                .get("release/vote/delete/$releaseId")
+                .body<SimpleResponseDto>()
                 .requireOk()
         }
 }

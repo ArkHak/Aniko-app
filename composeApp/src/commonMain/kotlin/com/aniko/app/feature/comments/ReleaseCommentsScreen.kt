@@ -8,30 +8,33 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.aniko.model.ReleaseComment
-import com.aniko.ui.component.AnixAvatar
-import com.aniko.ui.component.AnixErrorBox
-import com.aniko.ui.component.AnixLoadingBox
+import com.aniko.app.mvi.CollectEffects
+import com.aniko.app.ui.toContentState
+import com.aniko.model.AnixError
+import com.aniko.ui.component.AnixContentSlot
+import com.aniko.ui.component.ChipRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Экран комментариев к релизу — минимальная версия для Фазы 5 (P5.T2): первая страница
- * (`ReleaseCommentApi.comments(releaseId, page = 0, sort = 0)`), без пагинации/сортировки/
- * спойлер-блюра. Полноценный экран с этими блоками — Фаза 7 (P7.T12); здесь задача только встроить
- * маршрут в pane-систему P5.T3 (`ListDetailHost`) и в `NavHost` на compact-экранах.
+ * Экран комментариев к релизу (P7.T12) — полная версия взамен заглушки Фазы 5 (P5.T2): пагинация
+ * через `CommentRepository.commentsPaginator`, переключатель сортировки новые/старые, пустое
+ * состояние/ошибка через `AnixContentSlot` (Фаза 6), спойлеры без blur (D10, см. KDoc `CommentRow`).
+ *
+ * Маршрутизация не меняется — тот же публичный сигнатурный контракт (`releaseId`/`modifier`/
+ * `viewModel` с дефолтом на `koinViewModel()`), которым уже пользуются `App.kt` (compact-навигация)
+ * и `ListDetailHost` (detail-pane, P5.T3) — оба вне территории этого трека, трогать не нужно.
  */
 @Composable
 fun ReleaseCommentsScreen(
@@ -39,71 +42,81 @@ fun ReleaseCommentsScreen(
     modifier: Modifier = Modifier,
     viewModel: CommentsViewModel = koinViewModel(),
 ) {
-    LaunchedEffect(releaseId) { viewModel.load(releaseId) }
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(releaseId) { viewModel.dispatch(CommentsIntent.Load(releaseId)) }
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val strings = LocalStrings.current
     val dimens = AnixThemeTokens.dimens
 
-    Surface(modifier = modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Text(
-                text = strings.commentsTitle,
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(dimens.spaceM),
-            )
+    // См. `HomeScreen` (P5.T8) — тот же нерешённый пока случай: `SnackbarHostState` сейчас приватен
+    // `AnixSessionGate` (App.kt) и не прокинут в feature-пакеты; вне территории этого трека давать
+    // ему выход наружу — эффект пока молча игнорируется, как и в `HomeScreen`.
+    CollectEffects(viewModel.effects) { effect ->
+        when (effect) {
+            is CommentsEffect.ShowError -> Unit
+        }
+    }
 
-            when {
-                state.isLoading && state.comments.isEmpty() -> AnixLoadingBox(modifier = Modifier.fillMaxSize())
+    val contentState = state.paging.toContentState { error -> error.toDisplayMessage(strings) }
 
-                state.errorMessage != null && state.comments.isEmpty() ->
-                    AnixErrorBox(
-                        message = state.errorMessage.toCommentsMessage(strings),
-                        onRetry = viewModel::retry,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+    Column(modifier = modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(dimens.spaceM),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = strings.commentsTitle, style = MaterialTheme.typography.titleLarge)
+        }
 
-                // Пустой список без ошибки (у релиза правда нет комментариев) — намеренно без
-                // отдельного текста-заглушки: нет подходящего i18n-ключа под "нет комментариев" в
-                // `Strings` (shared/ui для этой задачи трогать нельзя), заводить новый ради Фазы 5
-                // избыточно — полноценные пустые состояния экрана комментариев доделает Фаза 7.
-                else ->
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(dimens.spaceM),
-                        verticalArrangement = Arrangement.spacedBy(dimens.spaceM),
-                    ) {
-                        items(state.comments, key = { it.id }) { comment ->
-                            CommentRow(comment)
-                        }
+        ChipRow(
+            items = listOf(CommentsSort.NEWEST, CommentsSort.OLDEST),
+            isSelected = { it == state.sort },
+            label = { sort -> sort.label(strings) },
+            onClick = { sort -> viewModel.dispatch(CommentsIntent.ChangeSort(sort)) },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = dimens.spaceM),
+        )
+
+        AnixContentSlot(
+            state = contentState,
+            modifier = Modifier.fillMaxSize().padding(top = dimens.spaceM),
+            emptyMessage = strings.commentsEmpty,
+            onRetry = { viewModel.dispatch(CommentsIntent.Retry) },
+        ) { comments ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = dimens.spaceM, vertical = dimens.spaceS),
+                verticalArrangement = Arrangement.spacedBy(dimens.spaceM),
+            ) {
+                itemsIndexed(comments, key = { _, comment -> comment.id }) { index, comment ->
+                    if (index >= comments.size - COMMENTS_PREFETCH_THRESHOLD) {
+                        viewModel.dispatch(CommentsIntent.LoadMore)
                     }
+                    CommentRow(
+                        comment = comment,
+                        effectiveVote = state.voteOverrides[comment.id] ?: comment.vote,
+                        onVoteClick = { commentId, vote ->
+                            viewModel.dispatch(CommentsIntent.Vote(commentId, vote))
+                        },
+                    )
+                }
             }
         }
     }
 }
 
-@Composable
-private fun CommentRow(comment: ReleaseComment) {
-    val dimens = AnixThemeTokens.dimens
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-    ) {
-        AnixAvatar(avatarUrl = comment.author.avatarUrl, login = comment.author.login, size = AVATAR_SIZE)
-        Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
-            Text(text = comment.author.login, style = MaterialTheme.typography.labelLarge)
-            Text(text = comment.message, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-/** `homeSectionLoadError` ("Couldn't load" / "Не удалось загрузить") — самый нейтральный из уже
- * существующих ключей, подходит как generic-фолбэк без заведения нового (см. KDoc выше про
- * shared/ui). */
-private fun LoadError?.toCommentsMessage(strings: Strings): String =
+private fun CommentsSort.label(strings: Strings): String =
     when (this) {
-        LoadError.NO_CONNECTION -> strings.commonErrorNoConnection
-        LoadError.UNAUTHORIZED -> strings.commonErrorUnauthorized
-        LoadError.GENERIC, null -> strings.homeSectionLoadError
+        CommentsSort.NEWEST -> strings.commentsSortNewest
+        CommentsSort.OLDEST -> strings.commentsSortOldest
     }
 
-private val AVATAR_SIZE = 40.dp
+/** `P2.T10`: `AnixError.message` — технический текст для логов, не для UI (см. KDoc `AnixError`).
+ *  `homeSectionLoadError` ("Couldn't load" / "Не удалось загрузить") — тот же нейтральный generic-
+ *  фолбэк, что уже используют `HomeScreen`/`LibraryScreen` для непредвиденных ошибок. */
+private fun AnixError.toDisplayMessage(strings: Strings): String =
+    when (this) {
+        is AnixError.Network -> strings.commonErrorNoConnection
+        is AnixError.Unauthorized -> strings.commonErrorUnauthorized
+        else -> strings.homeSectionLoadError
+    }
+
+private const val COMMENTS_PREFETCH_THRESHOLD = 6

@@ -7,58 +7,43 @@ import com.aniko.data.repository.LibraryRepository
 import com.aniko.data.repository.ReleaseRepository
 import com.aniko.model.AnixError
 import com.aniko.model.Episode
-import com.aniko.model.EpisodeSource
 import com.aniko.model.ListStatus
 import com.aniko.model.Release
-import com.aniko.model.VoiceType
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-data class ReleaseDetailsUiState(
-    val isLoading: Boolean = false,
-    val release: Release? = null,
-    val errorMessage: LoadError? = null,
-    // Флоу выбора серии: типы озвучки → источники → серии (см. `docs/api/ENDPOINTS.md`).
-    val voiceTypes: List<VoiceType> = emptyList(),
-    val selectedTypeId: Int? = null,
-    val sources: List<EpisodeSource> = emptyList(),
-    val selectedSourceId: Int? = null,
-    val episodes: List<Episode> = emptyList(),
-    val isEpisodesStepLoading: Boolean = false,
-    val episodesStepError: LoadError? = null,
-)
-
 /**
- * Причина ошибки загрузки релиза/серий, без готового текста — текст живёт в `Strings`
- * (Фаза 2 плана, P2.T9: ViewModel не знает про `LocalStrings`/Compose). Одно и то же значение
- * [GENERIC] размечает и «не удалось загрузить релиз», и «не удалось загрузить серии» — какой
- * именно текст показать, решает [ReleaseDetailsScreen] по тому, в какое поле стейта попала
- * ошибка ([ReleaseDetailsUiState.errorMessage] vs [ReleaseDetailsUiState.episodesStepError]).
- */
-enum class LoadError {
-    NO_CONNECTION,
-    UNAUTHORIZED,
-    GENERIC,
-}
-
-/**
- * ViewModel карточки релиза.
+ * ViewModel карточки релиза (Title Detail, P7.T7-T13, Трек C).
  *
  * `releaseId` не передаётся в конструктор через Koin (`parametersOf` только усложнило бы DI
  * ради параметра, который и так приходит из type-safe навигации) — вместо этого экран сам
  * вызывает [load] из `LaunchedEffect(releaseId)`. [load] идемпотентен для одного и того же id,
  * пока не было ошибки — повторная композиция/пересоздание того же route не долбит сеть.
  *
+ * Три независимых шага загрузки после успешного [load]:
+ * 1. [loadVoiceTypes] — типы озвучки, первый шаг цепочки резолвинга плеера.
+ * 2. [loadDetails] — расширенная карточка `ReleaseDetails` (метаданные/скриншоты/похожее),
+ *    сетевая one-shot модель, падает независимо от базового релиза (D1: см. KDoc
+ *    [ReleaseDetailsUiState] и [com.aniko.model.ReleaseDetails]).
+ *
  * Флоу выбора серии (типы → источники → серии) — простой линейный стейт-машина без пагинации:
- * выбор типа сбрасывает источники и серии, выбор источника сбрасывает серии. Ошибки на этом
- * флоу не путаются с ошибкой загрузки самого релиза — у них отдельное поле
- * [ReleaseDetailsUiState.episodesStepError], чтобы неудачный запрос источников не перекрывал
- * уже отрисованную карточку релиза.
+ * выбор типа сбрасывает источники и серии, выбор источника сбрасывает серии и переподписывается
+ * на локальный оверрайд просмотренного (см. [observeWatchedForSource]). Ошибки на этом флоу не
+ * путаются с ошибкой загрузки самого релиза — у них отдельное поле
+ * [ReleaseDetailsUiState.episodesStepError], чтобы неудачный запрос источников не перекрывал уже
+ * отрисованную карточку релиза.
+ *
+ * `TooManyFunctions`: один экран — один ViewModel, каждая функция отвечает ровно за один
+ * пользовательский интент (load/retry/select.../toggle...) — дробить дальше означало бы либо
+ * мигрировать на MVI-контракт (вне объёма трека C), либо резать по произвольной границе ради
+ * самого счётчика.
  */
+@Suppress("TooManyFunctions")
 class ReleaseDetailsViewModel(
     private val releaseRepository: ReleaseRepository,
     private val episodeRepository: EpisodeRepository,
@@ -68,21 +53,28 @@ class ReleaseDetailsViewModel(
     val uiState: StateFlow<ReleaseDetailsUiState> = _uiState.asStateFlow()
 
     private var loadedReleaseId: Int? = null
+    private var watchedJob: Job? = null
 
     /**
      * Реактивная загрузка через `ReleaseRepository.observeRelease` (P4.T7, S3) — БД остаётся SSOT,
      * поэтому оптимистичные локальные записи `changeListStatus`/`toggleFavorite` доходят до UI без
-     * ручного патчинга стейта.
+     * ручного патчинга стейта. Деградация при отсутствии сети реализована самим
+     * `cacheFirstFlow`/`observeRelease` (см. их KDoc): если в кэше уже есть строка, сетевая ошибка
+     * фонового обновления не роняет поток — сюда просто продолжает приходить кэшированное
+     * значение. Полный `errorMessage` (блокирующий экран) — только если кэша не было вовсе.
      *
      * `cacheFirstFlow` (см. `CacheFirst.kt`, не трогать) — не вечная подписка, а один
      * (max два: кэш + сеть) эмит на вызов, после чего сам поток завершается — поэтому именно
-     * здесь, после успешного `collect`, как и раньше, запускается [loadVoiceTypes]: точка «релиз
-     * успешно получен» не изменилась, изменился только источник (кэш вместо прямого сетевого вызова).
+     * здесь, после успешного `collect`, как и раньше, запускаются [loadVoiceTypes]/[loadDetails]:
+     * точка «релиз успешно получен» не изменилась, изменился только источник (кэш вместо прямого
+     * сетевого вызова). Оба шага независимы и запускаются параллельно (каждый — свой
+     * `viewModelScope.launch`), ошибка одного не блокирует другой.
      */
     fun load(releaseId: Int) {
         val state = _uiState.value
         if (loadedReleaseId == releaseId && state.release != null && state.errorMessage == null) return
         loadedReleaseId = releaseId
+        watchedJob?.cancel()
 
         _uiState.value = ReleaseDetailsUiState(isLoading = true)
         viewModelScope.launch {
@@ -97,11 +89,31 @@ class ReleaseDetailsViewModel(
                 return@launch
             }
             loadVoiceTypes(releaseId)
+            loadDetails(releaseId)
         }
     }
 
     fun retry() {
         loadedReleaseId?.let { load(it) }
+    }
+
+    /** Повторная попытка только расширенной карточки — не трогает уже отрисованный базовый релиз. */
+    fun retryDetails() {
+        loadedReleaseId?.let { loadDetails(it) }
+    }
+
+    private fun loadDetails(releaseId: Int) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isDetailsLoading = true, detailsError = null) }
+            try {
+                val details = releaseRepository.releaseDetails(releaseId)
+                _uiState.update { it.copy(details = details, isDetailsLoading = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isDetailsLoading = false, detailsError = e.toLoadError()) }
+            }
+        }
     }
 
     private fun loadVoiceTypes(releaseId: Int) {
@@ -123,6 +135,7 @@ class ReleaseDetailsViewModel(
     fun selectVoiceType(typeId: Int) {
         val releaseId = loadedReleaseId ?: return
         if (_uiState.value.selectedTypeId == typeId) return
+        watchedJob?.cancel()
         _uiState.update {
             it.copy(
                 selectedTypeId = typeId,
@@ -131,6 +144,8 @@ class ReleaseDetailsViewModel(
                 episodes = emptyList(),
                 isEpisodesStepLoading = true,
                 episodesStepError = null,
+                watchedOverrides = emptySet(),
+                localToggleOverrides = emptyMap(),
             )
         }
         viewModelScope.launch {
@@ -151,18 +166,22 @@ class ReleaseDetailsViewModel(
         val releaseId = loadedReleaseId ?: return
         val typeId = _uiState.value.selectedTypeId ?: return
         if (_uiState.value.selectedSourceId == sourceId) return
+        watchedJob?.cancel()
         _uiState.update {
             it.copy(
                 selectedSourceId = sourceId,
                 episodes = emptyList(),
                 isEpisodesStepLoading = true,
                 episodesStepError = null,
+                watchedOverrides = emptySet(),
+                localToggleOverrides = emptyMap(),
             )
         }
         viewModelScope.launch {
             try {
                 val episodes = episodeRepository.episodes(releaseId, typeId, sourceId)
                 _uiState.update { it.copy(episodes = episodes, isEpisodesStepLoading = false) }
+                observeWatchedForSource(releaseId, sourceId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -171,6 +190,110 @@ class ReleaseDetailsViewModel(
                 }
             }
         }
+    }
+
+    /** Подписка на локальный оверрайд просмотренного текущего источника — см. D4 в KDoc класса. */
+    private fun observeWatchedForSource(
+        releaseId: Int,
+        sourceId: Int,
+    ) {
+        watchedJob =
+            viewModelScope.launch {
+                episodeRepository.observeWatchedPositions(releaseId, sourceId).collect { positions ->
+                    _uiState.update { it.copy(watchedOverrides = positions) }
+                }
+            }
+    }
+
+    /**
+     * Долгий тап по ячейке `EpisodeGrid` (D4) — переключает watched/unwatched. [episode] уже
+     * пришёл смерженным (см. [displayEpisodes]), поэтому `!episode.isWatched` — корректная целевая
+     * сторона тоггла без отдельного поиска текущего состояния.
+     *
+     * Пишет в [ReleaseDetailsUiState.localToggleOverrides] СИНХРОННО, до ухода в
+     * `EpisodeRepository` — грид обновляется немедленно, не дожидаясь оптимистичной записи в БД
+     * (которая тоже придёт следом через [observeWatchedForSource], но позже одного тика).
+     */
+    fun toggleWatched(episode: Episode) {
+        val releaseId = loadedReleaseId ?: return
+        val sourceId = _uiState.value.selectedSourceId ?: return
+        val target = !episode.isWatched
+        _uiState.update {
+            it.copy(localToggleOverrides = it.localToggleOverrides + (episode.position to target))
+        }
+        viewModelScope.launch {
+            if (target) {
+                episodeRepository.markWatched(releaseId, sourceId, episode.position)
+            } else {
+                episodeRepository.markUnwatched(releaseId, sourceId, episode.position)
+            }
+        }
+    }
+
+    /**
+     * Кнопка "Смотреть" (P7.T7) — сама проходит цепочку типы → источники → серии (первый тип,
+     * первый источник — у `VoiceType`/`EpisodeSource` в этом проекте нет поля `pinned`, см.
+     * `docs/REELWAVE_PLAN.md`, "Сейчас" по Player+озвучке — выбор первого варианта, не рискованное
+     * упрощение, а буквально то, что доступно), резолвит стартовую позицию — продолжение с
+     * `release.lastViewEpisode`, если такая серия есть в списке, иначе первая серия. По пути
+     * заполняет тот же стейт выбора серии, что и ручной флоу чипов (voiceTypes/sources/episodes),
+     * чтобы после возврата из плеера пользователь видел уже сделанный выбор, а не пустые чипы.
+     *
+     * Возвращает `null`, если резолвить нечего (нет типов/источников/серий) или шаг упал —
+     * `ReleaseDetailsScreen` в этом случае просто не переходит в плеер, ошибка попадает в то же
+     * поле [ReleaseDetailsUiState.episodesStepError], что и у ручного флоу.
+     */
+    suspend fun resolvePlayTarget(): PlayTarget? {
+        val releaseId = loadedReleaseId
+        val release = _uiState.value.release
+        if (releaseId == null || release == null) return null
+
+        _uiState.update { it.copy(isResolvingPlay = true) }
+        return try {
+            resolvePlayTargetChain(releaseId, release)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _uiState.update { it.copy(episodesStepError = e.toLoadError()) }
+            null
+        } finally {
+            _uiState.update { it.copy(isResolvingPlay = false) }
+        }
+    }
+
+    /**
+     * Цепочка `types -> sources -> episodes` вынесена из [resolvePlayTarget] отдельной функцией
+     * (detekt `ReturnCount`) — сама цепочка остаётся серией guard clauses (идиоматичнее вложенных
+     * `let`/`when` для линейного разрешения "первый доступный на каждом шаге").
+     */
+    @Suppress("ReturnCount")
+    private suspend fun resolvePlayTargetChain(
+        releaseId: Int,
+        release: Release,
+    ): PlayTarget? {
+        val types = _uiState.value.voiceTypes.ifEmpty { episodeRepository.voiceTypes(releaseId) }
+        val type = types.firstOrNull() ?: return null
+        val sources = episodeRepository.sources(releaseId, type.id)
+        val source = sources.firstOrNull() ?: return null
+        val episodes = episodeRepository.episodes(releaseId, type.id, source.id)
+        if (episodes.isEmpty()) return null
+        val resumePosition = release.lastViewEpisode?.let { last -> episodes.firstOrNull { it.position == last } }
+        val position = (resumePosition ?: episodes.first()).position
+
+        watchedJob?.cancel()
+        _uiState.update {
+            it.copy(
+                voiceTypes = types,
+                selectedTypeId = type.id,
+                sources = sources,
+                selectedSourceId = source.id,
+                episodes = episodes,
+                watchedOverrides = emptySet(),
+                localToggleOverrides = emptyMap(),
+            )
+        }
+        observeWatchedForSource(releaseId, source.id)
+        return PlayTarget(sourceId = source.id, position = position, host = source.host)
     }
 
     /**

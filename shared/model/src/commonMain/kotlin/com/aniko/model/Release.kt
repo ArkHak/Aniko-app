@@ -24,6 +24,17 @@ data class Release(
     /** Статус в списке текущего пользователя, `null` — не в списке. */
     val myListStatus: ListStatus? = null,
     val isFavorite: Boolean = false,
+    /**
+     * Прогресс просмотра и признак «новых серий» — [lastViewEpisode]/[lastViewTimestamp]/
+     * [episodeLastUpdate]/[isViewed]. Эти четыре поля НЕ персистятся в `releaseEntity`
+     * (SQLDelight-схема Фазы 4 намеренно не тронута этим фундаментом Фазы 7) — после гидрации
+     * карточки из локального кэша (`ReleaseCacheStore`) они всегда будут `null`/`false`,
+     * реальные значения доступны только сразу после сетевого ответа.
+     */
+    val lastViewEpisode: Int? = null,
+    val lastViewTimestamp: Long? = null,
+    val episodeLastUpdate: Long? = null,
+    val isViewed: Boolean = false,
 )
 
 /** Статус выхода релиза. */

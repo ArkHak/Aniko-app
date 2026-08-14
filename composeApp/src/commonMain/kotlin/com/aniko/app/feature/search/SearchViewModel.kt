@@ -1,71 +1,139 @@
 package com.aniko.app.feature.search
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aniko.app.mvi.BaseViewModel
 import com.aniko.data.paging.Paginator
-import com.aniko.data.paging.PagingState
 import com.aniko.data.repository.ReleaseRepository
+import com.aniko.model.CatalogFilter
 import com.aniko.model.Release
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel экрана поиска.
+ * ViewModel экрана Catalog/Search (P7.T3-T6, MVI-контракт — см. `SearchContract.kt`,
+ * миграция по критерию P5.T7: экран и так переписывается под мокап Фазы 7, эталон — `HomeViewModel`).
  *
- * Каждый новый (debounced) запрос — новый [Paginator] (`ReleaseRepository.searchPaginator`),
- * т.к. пагинатор захватывает конкретный `query` в замыкании фетчера и не умеет менять его на
- * лету. `flatMapLatest` по debounced query — стандартный способ гарантированно отменить
- * предыдущий пагинатор/подписку при вводе нового символа, без ручного управления Job'ами.
+ * ## Два независимых режима выдачи
+ * Один пагинатор в моменте — [activePaginator] — либо из `ReleaseRepository.searchPaginator`
+ * (текст поиска непустой после `trim`), либо из `ReleaseRepository.filterPaginator` (текст пуст —
+ * "Все"/"Новинки" + статус/жанр-чипы). Решение — в [requestKeys.flatMapLatest][flatMapLatest]
+ * ниже, по тому же принципу, что был в исходном `SearchViewModel` (P7 до миграции): новый режим —
+ * новый [Paginator], `flatMapLatest` отменяет подписку на предыдущий.
+ *
+ * Приоритет у текста поиска: пока он непустой, `statusId`/`genres` из [filterState] НЕ уходят на
+ * сервер — `POST search/releases/{page}` (см. `SearchApi`) не принимает фильтр вообще, только
+ * `query`. Чипы при этом остаются на экране в прежнем выбранном состоянии (не сбрасываются), но
+ * не влияют на результат, пока не очищено поле поиска — это то самое "где осмысленно" из брифа
+ * P7, задокументированное здесь как принятое решение, а не забытый край.
+ *
+ * `tab` тоже применяется только в режиме фильтра (маппится в `CatalogFilter.sort` — см.
+ * [CatalogTab.sort]) — у поиска по строке нет параметра сортировки на сервере.
+ *
+ * ## Debounce
+ * Дебаунсится ТОЛЬКО текст поиска, и не фиксированным окном, а через
+ * `debounce { timeoutMillis }`: пустая строка (стартовое состояние экрана и очистка поля крестиком)
+ * получает `0`, непустая — стандартные 400мс. Без этого разветвления запрос браузинга каталога
+ * по умолчанию (пустой запрос, вкладка "Все") ждал бы полные 400мс на старте экрана просто потому,
+ * что `debounce` с фиксированным окном не различает "первое значение потока" и "пользователь
+ * печатает" — оператор всегда ждёт `timeoutMillis` тишины после любого значения, включая самое
+ * первое. Смена вкладки/чипов НЕ дебаунсится вовсе (не текстовый ввод, а дискретный тап).
  */
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class SearchViewModel(
     private val releaseRepository: ReleaseRepository,
-) : ViewModel() {
-    private val _query = MutableStateFlow("")
-    val query: StateFlow<String> = _query.asStateFlow()
+) : BaseViewModel<SearchState, SearchIntent, SearchEffect>(initialState = SearchState()) {
+    private val queryState = MutableStateFlow("")
+    private val tabState = MutableStateFlow(CatalogTab.All)
+    private val filterState = MutableStateFlow(CatalogFilter())
 
-    /** Пагинатор активного запроса — нужен, чтобы [loadMore] знал, у кого просить следующую страницу. */
+    /** Пагинатор активного режима — нужен, чтобы [handleIntent] знал, у кого просить страницу. */
     private var activePaginator: Paginator<Release>? = null
 
-    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-    val pagingState: StateFlow<PagingState<Release>> =
-        _query
-            .debounce(SEARCH_DEBOUNCE_MILLIS)
-            .distinctUntilChanged()
-            .flatMapLatest { q ->
-                val trimmed = q.trim()
-                if (trimmed.isEmpty()) {
-                    activePaginator = null
-                    flowOf(PagingState())
-                } else {
-                    val paginator = releaseRepository.searchPaginator(trimmed)
-                    activePaginator = paginator
-                    viewModelScope.launch { paginator.loadNext() }
-                    paginator.state
+    init {
+        val debouncedQuery =
+            queryState
+                .debounce { raw -> if (raw.isBlank()) NO_DEBOUNCE_MILLIS else SEARCH_DEBOUNCE_MILLIS }
+                .distinctUntilChanged()
+
+        combine(debouncedQuery, tabState, filterState) { query, tab, filter ->
+            RequestKey(query = query.trim(), effectiveFilter = filter.copy(sort = tab.sort))
+        }.distinctUntilChanged()
+            .flatMapLatest { key ->
+                val paginator =
+                    if (key.query.isNotEmpty()) {
+                        releaseRepository.searchPaginator(key.query)
+                    } else {
+                        releaseRepository.filterPaginator(key.effectiveFilter)
+                    }
+                activePaginator = paginator
+                viewModelScope.launch { paginator.loadNext() }
+                paginator.state
+            }.onEach { paging -> updateState { copy(pagingState = paging) } }
+            .launchIn(viewModelScope)
+    }
+
+    override suspend fun handleIntent(intent: SearchIntent) {
+        when (intent) {
+            is SearchIntent.QueryChanged -> {
+                updateState { copy(query = intent.query) }
+                queryState.value = intent.query
+            }
+
+            is SearchIntent.TabSelected -> {
+                updateState { copy(tab = intent.tab) }
+                tabState.value = intent.tab
+            }
+
+            is SearchIntent.StatusToggled ->
+                updateFilter {
+                    copy(statusId = if (statusId == intent.statusId) null else intent.statusId)
                 }
-            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), PagingState())
 
-    fun onQueryChange(newQuery: String) {
-        _query.value = newQuery
+            is SearchIntent.GenreToggled ->
+                updateFilter {
+                    copy(genres = if (intent.genre in genres) genres - intent.genre else genres + intent.genre)
+                }
+
+            SearchIntent.FiltersReset -> updateFilter { CatalogFilter() }
+
+            is SearchIntent.ViewModeChanged -> updateState { copy(viewMode = intent.viewMode) }
+
+            is SearchIntent.FilterSheetVisibilityChanged -> updateState { copy(isFilterSheetOpen = intent.isOpen) }
+
+            SearchIntent.LoadMore, SearchIntent.Retry -> loadNextAndReportIfMoreFailed()
+        }
     }
 
-    fun loadMore() {
-        viewModelScope.launch { activePaginator?.loadNext() }
+    private fun updateFilter(reducer: CatalogFilter.() -> CatalogFilter) {
+        val updated = state.value.filter.reducer()
+        updateState { copy(filter = updated) }
+        filterState.value = updated
     }
 
-    fun retry() {
-        viewModelScope.launch { activePaginator?.loadNext() }
+    /** См. KDoc `HomeViewModel.loadNextAndReportIfMoreFailed` — тот же приём для одного пагинатора. */
+    private suspend fun loadNextAndReportIfMoreFailed() {
+        val paginator = activePaginator ?: return
+        paginator.loadNext()
+        val pagingState = paginator.state.value
+        val error = pagingState.error
+        if (error != null && pagingState.items.isNotEmpty()) {
+            emitEffect(SearchEffect.ShowError(error))
+        }
     }
 }
 
+private data class RequestKey(
+    val query: String,
+    val effectiveFilter: CatalogFilter,
+)
+
 private const val SEARCH_DEBOUNCE_MILLIS = 400L
-private const val STOP_TIMEOUT_MILLIS = 5_000L
+private const val NO_DEBOUNCE_MILLIS = 0L

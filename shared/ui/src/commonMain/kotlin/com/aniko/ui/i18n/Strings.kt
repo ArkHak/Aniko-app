@@ -160,6 +160,61 @@ data class Strings(
     val ratingYourScore: String,
     val ratingStarsContentDescription: (stars: Int) -> String,
     val progressEpisodesOf: (watched: Int, total: Int) -> String,
+    // --- Фаза 7 — общий фундамент экранов Home/Catalog/Title Detail/Rating/Comments ---
+    // Заведено разом для всех 5 параллельных треков (P7.T1-T13), чтобы не было конфликтов
+    // ключей при одновременной работе. Часть строк из мокапа сознательно переиспользует уже
+    // существующие ключи выше (не дублируется здесь): "Продолжить смотреть" — [homeContinueWatching],
+    // "Рекомендации"/раздел рекомендаций главного экрана — [homeRecommendations], статус-чипы
+    // каталога (анонс/онгоинг/завершён) — [releaseStatusAnnounce]/[releaseStatusOngoing]/
+    // [releaseStatusFinished], "Ваша оценка" — [ratingYourScore], 5 подписей списков сообщества
+    // на экране Rating ("Смотрят"/"В планах"/"Просмотрено"/"Отложено"/"Брошено") —
+    // [listStatusWatching]/[listStatusPlanned]/[listStatusCompleted]/[listStatusOnHold]/
+    // [listStatusDropped] (см. `ListStatusStrings.kt` — 4 из 5 совпадают дословно, у Watching
+    // русский текст в форме 1-го лица "Смотрю"; так как английский текст "Watching" совпадает
+    // 1:1 в обоих контекстах, реюз принят без нового ключа).
+    // Home (P7.T1-T2)
+    val homeBannerTitle: String,
+    val homeQuickActionCatalog: String,
+    val homeQuickActionSchedule: String,
+    val homeQuickActionLibrary: String,
+    val homeQuickActionRandom: String,
+    val homeSectionDiscussing: String,
+    val homeSectionNewEpisodes: String,
+    // Catalog (P7.T3-T6)
+    val catalogTabAll: String,
+    val catalogTabNew: String,
+    val catalogFiltersTitle: String,
+    val catalogFiltersReset: String,
+    val catalogFiltersApply: String,
+    val catalogViewGrid: String,
+    val catalogViewList: String,
+    val catalogEmptyResults: String,
+    // Title Detail (P7.T7-T13)
+    val titleDetailWatch: String,
+    val titleDetailScreenshots: String,
+    val titleDetailSimilar: String,
+    val titleDetailRecommended: String,
+    val releaseCommentsTitle: (count: Int) -> String,
+    val titleDetailStudio: String,
+    val titleDetailCountry: String,
+    val titleDetailDirector: String,
+    val titleDetailAuthor: String,
+    val titleDetailSeason: String,
+    val titleDetailReleaseDate: String,
+    val titleDetailAgeRating: String,
+    val titleDetailEpisodeDuration: String,
+    val titleDetailCategory: String,
+    val titleDetailSource: String,
+    val titleDetailTranslators: String,
+    // Rating
+    val ratingVoteCount: (count: Int) -> String,
+    val ratingRemoveVote: String,
+    // Comments
+    val commentsSpoilerLabel: String,
+    val commentsEmpty: String,
+    val commentsSortNewest: String,
+    val commentsSortOldest: String,
+    val commentReplyCount: (count: Int) -> String,
 )
 
 /** Дефолт — [EnStrings]: тот же выбор, что `defaultLanguageTag = "en"` в `ProvideAppStrings`. */

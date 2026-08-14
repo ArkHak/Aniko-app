@@ -1,6 +1,5 @@
 package com.aniko.app.feature.release
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,45 +8,42 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aniko.app.feature.release.rating.ReleaseRatingSection
+import com.aniko.app.navigation.LocalTitleNavigator
 import com.aniko.model.Episode
-import com.aniko.model.EpisodeSource
 import com.aniko.model.ListStatus
-import com.aniko.model.Release
-import com.aniko.model.ReleaseStatus
 import com.aniko.model.VideoHost
-import com.aniko.model.VoiceType
-import com.aniko.ui.component.AnixErrorBox
-import com.aniko.ui.component.AnixLoadingBox
-import com.aniko.ui.component.AnixPoster
-import com.aniko.ui.component.ChipRow
+import com.aniko.ui.component.AnixErrorState
+import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.i18n.LocalStrings
-import com.aniko.ui.i18n.Strings
-import com.aniko.ui.i18n.displayName
 import com.aniko.ui.theme.AnixThemeTokens
+import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Карточка релиза: постер, названия, описание, год/статус/жанры/оценка/счётчик серий, блок
- * «в список»/«избранное» (см. [FavoriteAndStatusRow]), плюс простой флоу выбора серии (тип
- * озвучки → источник → серия) для перехода в плеер.
+ * Title Detail (P7.T7-T13, Трек C плана): постер, метаданные/жанры/скриншоты, кнопка "Смотреть",
+ * статус в списке/избранное, синопсис ([ReleaseHeaderSection]), сетка серий watched/unwatched
+ * ([ReleaseEpisodesSection]), похожие/рекомендуемые тайтлы ([ReleaseRelatedSection]), ссылка на
+ * комментарии.
+ *
+ * Вертикальный скролл — один корневой `Column(verticalScroll)`, БЕЗ вложенных `LazyColumn`/
+ * `LazyVerticalGrid` того же направления (см. D6 задания трека C и KDoc `EpisodeGrid` про тот же
+ * класс проблемы: вложенный ленивый список с неограниченной высотой роняет measure). Именно
+ * поэтому комментарии здесь — простая кликабельная строка-ссылка на отдельный экран
+ * ([LocalTitleNavigator.openComments]), а не встроенный список.
  */
 @Composable
 fun ReleaseDetailsScreen(
@@ -59,13 +55,14 @@ fun ReleaseDetailsScreen(
     LaunchedEffect(releaseId) { viewModel.load(releaseId) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = LocalStrings.current
+    val titleNavigator = LocalTitleNavigator.current
 
     Surface(modifier = modifier.fillMaxSize()) {
         when {
-            state.isLoading && state.release == null -> AnixLoadingBox(modifier = Modifier.fillMaxSize())
+            state.isLoading && state.release == null -> AnixLoadingState(modifier = Modifier.fillMaxSize())
 
             state.errorMessage != null && state.release == null ->
-                AnixErrorBox(
+                AnixErrorState(
                     message = state.errorMessage.toReleaseMessage(strings),
                     onRetry = viewModel::retry,
                     modifier = Modifier.fillMaxSize(),
@@ -73,32 +70,47 @@ fun ReleaseDetailsScreen(
 
             state.release != null ->
                 ReleaseDetailsContent(
-                    release = state.release!!,
                     state = state,
+                    onWatchTargetResolved = { target ->
+                        onEpisodeClick(releaseId, target.sourceId, target.position, target.host)
+                    },
+                    resolvePlayTarget = viewModel::resolvePlayTarget,
                     onSelectVoiceType = viewModel::selectVoiceType,
                     onSelectSource = viewModel::selectSource,
                     onEpisodeClick = { sourceId, position, host ->
                         onEpisodeClick(releaseId, sourceId, position, host)
                     },
+                    onEpisodeLongClick = viewModel::toggleWatched,
                     onChangeListStatus = viewModel::changeListStatus,
                     onToggleFavorite = viewModel::toggleFavorite,
+                    onRetryDetails = viewModel::retryDetails,
+                    onOpenTitle = titleNavigator::openTitle,
+                    onOpenComments = titleNavigator::openComments,
                 )
         }
     }
 }
 
+@Suppress("LongParameterList") // Экран-оркестратор — каждый параметр это отдельный обязательный
+// колбэк одной из независимых секций (шапка/серии/похожее/комментарии), см. KDoc файла.
 @Composable
 private fun ReleaseDetailsContent(
-    release: Release,
     state: ReleaseDetailsUiState,
+    onWatchTargetResolved: (PlayTarget) -> Unit,
+    resolvePlayTarget: suspend () -> PlayTarget?,
     onSelectVoiceType: (Int) -> Unit,
     onSelectSource: (Int) -> Unit,
     onEpisodeClick: (sourceId: Int, position: Int, host: VideoHost) -> Unit,
+    onEpisodeLongClick: (Episode) -> Unit,
     onChangeListStatus: (ListStatus?) -> Unit,
     onToggleFavorite: () -> Unit,
+    onRetryDetails: () -> Unit,
+    onOpenTitle: (Int) -> Unit,
+    onOpenComments: (Int) -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
-    val strings = LocalStrings.current
+    val release = state.release ?: return
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier =
@@ -106,256 +118,64 @@ private fun ReleaseDetailsContent(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(dimens.spaceM),
-        verticalArrangement = Arrangement.spacedBy(dimens.spaceM),
+        verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceM)) {
-            AnixPoster(url = release.posterUrl, contentDescription = release.title)
-
-            Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
-                Text(
-                    text = release.title,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-                val originalTitle = release.originalTitle
-                if (!originalTitle.isNullOrBlank() && originalTitle != release.title) {
-                    Text(
-                        text = originalTitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    )
-                }
-
-                InfoRow(label = strings.releaseInfoYear, value = release.year?.toString())
-                InfoRow(label = strings.releaseInfoStatus, value = release.status.toDisplayName(strings))
-                InfoRow(label = strings.releaseInfoEpisodesLabel, value = release.episodesLabel())
-                InfoRow(label = strings.releaseInfoRating, value = release.grade?.let { formatGrade(it) })
-            }
-        }
-
-        FavoriteAndStatusRow(
+        ReleaseHeaderSection(
             release = release,
+            details = state.details,
+            detailsError = state.detailsError,
+            isResolvingPlay = state.isResolvingPlay,
+            onWatchClick = {
+                scope.launch {
+                    val target = resolvePlayTarget()
+                    if (target != null) onWatchTargetResolved(target)
+                }
+            },
             onChangeListStatus = onChangeListStatus,
             onToggleFavorite = onToggleFavorite,
+            onRetryDetails = onRetryDetails,
         )
 
-        if (release.genres.isNotEmpty()) {
-            Text(
-                text = release.genres.joinToString(", "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            )
-        }
+        ReleaseRatingSection(releaseId = release.id)
 
-        val description = release.description
-        if (!description.isNullOrBlank()) {
-            Text(text = description, style = MaterialTheme.typography.bodyMedium)
-        }
-
-        EpisodeSelectionSection(
+        ReleaseEpisodesSection(
             state = state,
             onSelectVoiceType = onSelectVoiceType,
             onSelectSource = onSelectSource,
             onEpisodeClick = onEpisodeClick,
+            onEpisodeLongClick = onEpisodeLongClick,
+        )
+
+        ReleaseRelatedSection(
+            related = state.details?.relatedReleases.orEmpty(),
+            recommended = state.details?.recommendedReleases.orEmpty(),
+            onOpenTitle = onOpenTitle,
+        )
+
+        CommentsLinkRow(
+            commentCount = state.details?.commentCount ?: 0,
+            onClick = { onOpenComments(release.id) },
         )
     }
 }
 
 /**
- * Блок «в список»/«избранное» под шапкой релиза: тоггл избранного (сердце) + [ChipRow] с
- * пятью статусами [ListStatus]. Повторный тап по уже выбранному статусу снимает его
- * ([ListStatus.myListStatus] становится `null`) — `ChipRow` для этого не нужно менять,
- * достаточно решить в обработчике клика конкретного чипа, какой статус передать дальше.
+ * Строка-ссылка на комментарии (P7.T12 вход, D6) — НЕ встроенный список, см. KDoc файла.
+ * `Strings.releaseCommentsTitle(count)` уже несёт число, поэтому текст самодостаточен без
+ * дополнительной подписи.
  */
 @Composable
-private fun FavoriteAndStatusRow(
-    release: Release,
-    onChangeListStatus: (ListStatus?) -> Unit,
-    onToggleFavorite: () -> Unit,
-) {
-    val dimens = AnixThemeTokens.dimens
-    val strings = LocalStrings.current
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-    ) {
-        IconButton(onClick = onToggleFavorite) {
-            Icon(
-                imageVector = if (release.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                contentDescription =
-                    if (release.isFavorite) strings.commonRemoveFromFavorites else strings.commonAddToFavorites,
-                tint = if (release.isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        ChipRow(
-            items = ListStatus.entries,
-            isSelected = { it == release.myListStatus },
-            label = { it.displayName(strings) },
-            onClick = { status -> onChangeListStatus(if (status == release.myListStatus) null else status) },
-        )
-    }
-}
-
-/** Флоу выбора серии: тип озвучки → источник → серия. Плоские списки/чипы — намеренно без вычурного UI. */
-@Composable
-private fun EpisodeSelectionSection(
-    state: ReleaseDetailsUiState,
-    onSelectVoiceType: (Int) -> Unit,
-    onSelectSource: (Int) -> Unit,
-    onEpisodeClick: (sourceId: Int, position: Int, host: VideoHost) -> Unit,
-) {
-    val dimens = AnixThemeTokens.dimens
-    val strings = LocalStrings.current
-
-    Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceM)) {
-        Text(
-            text = strings.releaseInfoEpisodesLabel,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
-
-        if (state.voiceTypes.isNotEmpty()) {
-            SectionLabel(strings.releaseSectionVoiceType)
-            ChipRow(
-                items = state.voiceTypes,
-                isSelected = { it.id == state.selectedTypeId },
-                label = VoiceType::name,
-                onClick = { onSelectVoiceType(it.id) },
-            )
-        }
-
-        if (state.sources.isNotEmpty()) {
-            SectionLabel(strings.releaseSectionSource)
-            ChipRow(
-                items = state.sources,
-                isSelected = { it.id == state.selectedSourceId },
-                label = EpisodeSource::name,
-                onClick = { onSelectSource(it.id) },
-            )
-        }
-
-        when {
-            // Не `AnixLoadingBox` (он `fillMaxSize()`) — эта секция живёт внутри уже
-            // прокручиваемой колонки с неограниченной высотой, `fillMaxSize()` там уронит layout.
-            state.isEpisodesStepLoading -> CircularProgressIndicator(modifier = Modifier.padding(dimens.spaceM))
-
-            state.episodesStepError != null ->
-                Text(
-                    text = state.episodesStepError.toEpisodesMessage(strings),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
-
-            state.episodes.isNotEmpty() -> {
-                SectionLabel(strings.releaseSectionEpisodesList)
-                Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
-                    val sourceId = state.selectedSourceId
-                    // Хост берём из уже отображённого списка источников текущего выбора — без
-                    // отдельного кэша/повторного запроса, гонка состояния тут невозможна.
-                    val host = state.sources.firstOrNull { it.id == sourceId }?.host ?: VideoHost.UNKNOWN
-                    state.episodes.forEach { episode ->
-                        EpisodeRow(
-                            episode = episode,
-                            onClick = { if (sourceId != null) onEpisodeClick(sourceId, episode.position, host) },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-    )
-}
-
-@Composable
-private fun EpisodeRow(
-    episode: Episode,
+private fun CommentsLinkRow(
+    commentCount: Int,
     onClick: () -> Unit,
 ) {
-    val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
+
     Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(dimens.cornerS))
-                .padding(dimens.spaceM),
-        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = episode.name ?: strings.releaseEpisodeFallbackName(episode.position),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
-        if (episode.isWatched) {
-            Text(
-                text = "✓",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
+        Text(text = strings.releaseCommentsTitle(commentCount), style = MaterialTheme.typography.titleMedium)
+        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
     }
-}
-
-@Composable
-private fun InfoRow(
-    label: String,
-    value: String?,
-) {
-    if (value.isNullOrBlank()) return
-    val dimens = AnixThemeTokens.dimens
-    Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
-        Text(
-            text = "$label:",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-        )
-        Text(text = value, style = MaterialTheme.typography.bodySmall)
-    }
-}
-
-private fun Release.episodesLabel(): String? {
-    val total = episodesTotal
-    val released = episodesReleased
-    return when {
-        total == null && released == null -> null
-        total == null -> released.toString()
-        else -> "$released/$total"
-    }
-}
-
-private fun ReleaseStatus.toDisplayName(strings: Strings): String? =
-    when (this) {
-        ReleaseStatus.ANNOUNCE -> strings.releaseStatusAnnounce
-        ReleaseStatus.ONGOING -> strings.releaseStatusOngoing
-        ReleaseStatus.FINISHED -> strings.releaseStatusFinished
-        ReleaseStatus.UNKNOWN -> null
-    }
-
-private fun LoadError?.toReleaseMessage(strings: Strings): String =
-    when (this) {
-        LoadError.NO_CONNECTION -> strings.commonErrorNoConnection
-        LoadError.UNAUTHORIZED -> strings.commonErrorUnauthorized
-        LoadError.GENERIC, null -> strings.releaseLoadError
-    }
-
-private fun LoadError?.toEpisodesMessage(strings: Strings): String =
-    when (this) {
-        LoadError.NO_CONNECTION -> strings.commonErrorNoConnection
-        LoadError.UNAUTHORIZED -> strings.commonErrorUnauthorized
-        LoadError.GENERIC, null -> strings.releaseEpisodesLoadError
-    }
-
-private fun formatGrade(grade: Double): String {
-    val rounded = (grade * 100).toInt() / 100.0
-    return rounded.toString()
 }

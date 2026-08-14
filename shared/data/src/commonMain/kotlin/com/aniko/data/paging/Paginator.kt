@@ -64,7 +64,12 @@ class Paginator<T>(
         mutex.withLock {
             result
                 .onSuccess { paged ->
-                    nextPage = paged.currentPage + 1
+                    // Следующая страница считается от ЗАПРОШЕННОЙ страницы (`page`, аргумент этого
+                    // вызова), а не от `paged.currentPage` — сервер эхом отдаёт `current_page: 0`
+                    // у листингов релизов независимо от того, какая страница была реально
+                    // запрошена (см. KDoc `Paged.hasNextPage`), из-за чего пагинатор раньше
+                    // зацикливался на второй странице (`0 + 1 = 1`) вместо продвижения дальше.
+                    nextPage = page + 1
                     val merged = if (append) _state.value.items + paged.items else paged.items
                     _state.value =
                         PagingState(

@@ -29,6 +29,18 @@ import kotlinx.serialization.Serializable
  *
  * `ignoreUnknownKeys = true` (см. `AnixJson`) по-прежнему гарантирует, что появление новых
  * полей в API не уронит парсинг.
+ *
+ * Фаза 7 (P7.T7-T13): добавлены поля расширенной карточки (`extended_mode=true`), сверены
+ * с `docs/api/samples/release_186_extended.json`. Два расхождения с типом в
+ * `ReleaseDetails` (`shared/model`), задокументированные здесь намеренно:
+ * - `age_rating` в JSON — `Int` (живьём `5`), а не строка; таблица расшифровки значений нигде
+ *   не задокументирована (ни статически, ни вживую) — маппер (`ReleaseMapper.toReleaseDetails`)
+ *   конвертирует в `String` через `toString()`. `[TODO: verify live]` — расшифровать реальные
+ *   значения enum'а, если он вообще есть.
+ * - `season` в JSON — `Int` (живьём `4`, порядковый номер сезона), маппер конвертирует в
+ *   `String` через `toString()`, т.к. `ReleaseDetails.season` типизирован строкой по заданию.
+ * - Также присутствует легаси-дубль `comments_count` рядом с `comment_count` (оба `0` в сэмпле,
+ *   назначение различия не подтверждено) — используется только `comment_count`, как в задании.
  */
 @Serializable
 data class ReleaseDto(
@@ -46,6 +58,43 @@ data class ReleaseDto(
     /** Статус в списке текущего пользователя: 1..5, см. `ListStatus`. */
     @SerialName("profile_list_status") val profileListStatus: Int? = null,
     @SerialName("is_favorite") val isFavorite: Boolean = false,
+    // --- Расширенные поля (Фаза 7, P7.T7-T13) — сверены с `docs/api/samples/release_186_extended.json` ---
+    val poster: String? = null,
+    val source: String? = null,
+    val country: String? = null,
+    val director: String? = null,
+    val author: String? = null,
+    val translators: String? = null,
+    val studio: String? = null,
+    val category: NamedRefDto? = null,
+    val duration: Int? = null,
+    val season: Int? = null,
+    @SerialName("release_date") val releaseDate: String? = null,
+    @SerialName("age_rating") val ageRating: Int? = null,
+    @SerialName("title_alt") val titleAlt: String? = null,
+    @SerialName("screenshot_images") val screenshotImages: List<String> = emptyList(),
+    @SerialName("vote_1_count") val vote1Count: Int = 0,
+    @SerialName("vote_2_count") val vote2Count: Int = 0,
+    @SerialName("vote_3_count") val vote3Count: Int = 0,
+    @SerialName("vote_4_count") val vote4Count: Int = 0,
+    @SerialName("vote_5_count") val vote5Count: Int = 0,
+    @SerialName("vote_count") val voteCount: Int = 0,
+    @SerialName("your_vote") val yourVote: Int? = null,
+    @SerialName("favorites_count") val favoritesCount: Int = 0,
+    @SerialName("watching_count") val watchingCount: Int = 0,
+    @SerialName("plan_count") val planCount: Int = 0,
+    @SerialName("completed_count") val completedCount: Int = 0,
+    @SerialName("hold_on_count") val holdOnCount: Int = 0,
+    @SerialName("dropped_count") val droppedCount: Int = 0,
+    @SerialName("collection_count") val collectionCount: Int = 0,
+    @SerialName("comment_count") val commentCount: Int = 0,
+    @SerialName("related_count") val relatedCount: Int = 0,
+    @SerialName("related_releases") val relatedReleases: List<ReleaseDto> = emptyList(),
+    @SerialName("recommended_releases") val recommendedReleases: List<ReleaseDto> = emptyList(),
+    @SerialName("last_view_episode") val lastViewEpisode: Int? = null,
+    @SerialName("last_view_timestamp") val lastViewTimestamp: Long? = null,
+    @SerialName("episode_last_update") val episodeLastUpdate: Long? = null,
+    @SerialName("is_viewed") val isViewed: Boolean = false,
 )
 
 /**

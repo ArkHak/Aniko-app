@@ -329,7 +329,7 @@ private fun AnixNavGraph(
         startDestination = AnixDestination.Home,
         modifier = modifier,
     ) {
-        listSectionRoutes(paneStack, titleNavigator)
+        listSectionRoutes(navController, paneStack, titleNavigator)
         titleDetailRoutes(titleNavigator)
         chromeRoutes(navController, localeStore)
     }
@@ -337,11 +337,19 @@ private fun AnixNavGraph(
 
 /** Четыре list-секции каркаса (P5.T5) — каждая оборачивается в [ListDetailHost] (P5.T3). */
 private fun NavGraphBuilder.listSectionRoutes(
+    navController: NavHostController,
     paneStack: DetailPaneStack,
     titleNavigator: TitleNavigator,
 ) {
     composable<AnixDestination.Home> {
-        ListDetailHost(paneStack) { HomeScreen(onReleaseClick = titleNavigator::openTitle) }
+        ListDetailHost(paneStack) {
+            HomeScreen(
+                onReleaseClick = titleNavigator::openTitle,
+                onCatalogClick = { navController.navigate(AnixDestination.Search) },
+                onScheduleClick = { navController.navigate(AnixDestination.Schedule) },
+                onLibraryClick = { navController.navigate(AnixDestination.Library) },
+            )
+        }
     }
     composable<AnixDestination.Search> {
         ListDetailHost(paneStack) { SearchScreen(onReleaseClick = titleNavigator::openTitle) }

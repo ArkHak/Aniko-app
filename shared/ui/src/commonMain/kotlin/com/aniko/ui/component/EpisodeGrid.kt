@@ -3,7 +3,7 @@ package com.aniko.ui.component
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.FlowRow
@@ -34,8 +34,9 @@ import com.aniko.ui.theme.AnixThemeTokens
  * `ExperimentalLayoutApi` не требуется (проверено компиляцией).
  */
 @Suppress("LongParameterList") // Публичная сигнатура зафиксирована брифом P6.T8: episodes/
-// onEpisodeClick обязательны, currentPosition/isFiller/cellMinSize — опциональные точки
-// расширения с дефолтами (текущая серия/маркер филлера/размер ячейки).
+// onEpisodeClick обязательны, currentPosition/isFiller/cellMinSize/onEpisodeLongClick —
+// опциональные точки расширения с дефолтами (текущая серия/маркер филлера/размер ячейки/
+// долгое нажатие, добавлено аддитивно в Фазе 7 для контекстного меню серии).
 @Composable
 fun EpisodeGrid(
     episodes: List<Episode>,
@@ -44,6 +45,7 @@ fun EpisodeGrid(
     currentPosition: Int? = null,
     isFiller: (Episode) -> Boolean = { false },
     cellMinSize: Dp = AnixThemeTokens.dimens.episodeCellMinSize,
+    onEpisodeLongClick: ((Episode) -> Unit)? = null,
 ) {
     val dimens = AnixThemeTokens.dimens
 
@@ -59,11 +61,15 @@ fun EpisodeGrid(
                 isFiller = isFiller(episode),
                 cellMinSize = cellMinSize,
                 onClick = { onEpisodeClick(episode) },
+                onLongClick = onEpisodeLongClick?.let { callback -> { callback(episode) } },
             )
         }
     }
 }
 
+// Приватная функция, зеркалит параметры публичного EpisodeGrid (см. @Suppress выше по файлу)
+// плюс onLongClick, добавленный аддитивно в Фазе 7.
+@Suppress("LongParameterList")
 @Composable
 private fun EpisodeCell(
     episode: Episode,
@@ -71,6 +77,7 @@ private fun EpisodeCell(
     isFiller: Boolean,
     cellMinSize: Dp,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
@@ -109,7 +116,7 @@ private fun EpisodeCell(
                     },
                 ).background(containerColor.copy(alpha = alpha), shape)
                 .semantics { this.contentDescription = contentDescription }
-                .clickable(onClick = onClick),
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(

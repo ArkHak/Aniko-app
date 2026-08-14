@@ -14,6 +14,7 @@ import com.aniko.data.api.ScheduleApi
 import com.aniko.data.api.SearchApi
 import com.aniko.data.locale.LocaleStore
 import com.aniko.data.repository.AuthRepository
+import com.aniko.data.repository.CommentRepository
 import com.aniko.data.repository.EpisodeRepository
 import com.aniko.data.repository.LibraryRepository
 import com.aniko.data.repository.ProfileRepository
@@ -88,12 +89,14 @@ val dataModule =
             ReleaseRepository(
                 releaseApi = get(),
                 searchApi = get(),
+                filterApi = get(),
                 releaseCacheStore = get(),
                 releaseListStore = get(),
                 listMembershipStore = get(),
                 clock = get(),
             )
         }
+        single { CommentRepository(commentApi = get()) }
         single {
             ScheduleRepository(
                 scheduleApi = get(),

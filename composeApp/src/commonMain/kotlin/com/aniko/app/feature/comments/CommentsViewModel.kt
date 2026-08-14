@@ -1,86 +1,114 @@
 package com.aniko.app.feature.comments
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.aniko.data.api.ReleaseCommentApi
-import com.aniko.data.mapper.toDomain
+import com.aniko.app.mvi.BaseViewModel
+import com.aniko.data.paging.Paginator
+import com.aniko.data.repository.CommentRepository
 import com.aniko.model.AnixError
 import com.aniko.model.ReleaseComment
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
-
-data class CommentsUiState(
-    val isLoading: Boolean = false,
-    val comments: List<ReleaseComment> = emptyList(),
-    val errorMessage: LoadError? = null,
-)
-
-/** См. `LoadError` в `ReleaseDetailsViewModel` — тот же смысл значений, отдельная копия (не
- * шаренный тип), чтобы фича комментариев не тянула зависимость на пакет `feature.release`. */
-enum class LoadError {
-    NO_CONNECTION,
-    UNAUTHORIZED,
-    GENERIC,
-}
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
 /**
- * ViewModel экрана комментариев к релизу — минимальная версия для Фазы 5 (P5.T2): только первая
- * страница комментариев (`sort=0`), без пагинации/сортировки/спойлер-блюра. Полноценный экран —
- * Фаза 7 (P7.T12), эта версия лишь встраивает маршрут в pane-систему P5.T3.
+ * ViewModel экрана комментариев к релизу (P7.T12, MVI-контракт см. `CommentsContract.kt`) —
+ * полноценная замена заглушки Фазы 5 (P5.T2): пагинация, переключение сортировки, спойлеры
+ * (обрабатываются в UI по решению D10, см. `CommentRow`), голосование.
  *
- * `releaseId` не идёт в конструктор через Koin — тот же паттерн, что у `ReleaseDetailsViewModel`
- * (см. её KDoc): экран сам вызывает [load] из `LaunchedEffect(releaseId)`.
+ * `releaseId` не идёт в конструктор через Koin — см. KDoc [CommentsIntent.Load]. Пагинатор
+ * пересоздаётся при каждом [CommentsIntent.Load] с новым `releaseId` и при каждом
+ * [CommentsIntent.ChangeSort] (у `CommentRepository.commentsPaginator` нет метода "поменять сорт
+ * у уже созданного пагинатора" — свежий список для нового порядка сортировки и есть ожидаемое
+ * поведение, а не баг).
  */
 class CommentsViewModel(
-    private val releaseCommentApi: ReleaseCommentApi,
-) : ViewModel() {
-    private val _uiState = MutableStateFlow(CommentsUiState())
-    val uiState: StateFlow<CommentsUiState> = _uiState.asStateFlow()
+    private val commentRepository: CommentRepository,
+) : BaseViewModel<CommentsState, CommentsIntent, CommentsEffect>(initialState = CommentsState()) {
+    private var releaseId: Int? = null
+    private var paginator: Paginator<ReleaseComment>? = null
+    private var pagingCollectJob: Job? = null
 
-    private var loadedReleaseId: Int? = null
-
-    // TooGenericExceptionCaught: намеренно — та же схема, что в `ReleaseDetailsViewModel.load`
-    // (грандфазерено в её baseline.xml, здесь новый код, поэтому явный @Suppress): любая ошибка
-    // сети/API маппится в типизированный `LoadError` для UI, `CancellationException` пробрасывается
-    // отдельным catch выше, чтобы не глушить отмену корутины.
-    @Suppress("TooGenericExceptionCaught")
-    fun load(releaseId: Int) {
-        val state = _uiState.value
-        if (loadedReleaseId == releaseId && state.errorMessage == null && !state.isLoading) return
-        loadedReleaseId = releaseId
-
-        _uiState.value = CommentsUiState(isLoading = true)
-        viewModelScope.launch {
-            try {
-                val page =
-                    releaseCommentApi.comments(releaseId = releaseId.toLong(), page = FIRST_PAGE, sort = DEFAULT_SORT)
-                _uiState.value = CommentsUiState(comments = page.content.map { it.toDomain() })
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _uiState.value = CommentsUiState(errorMessage = e.toLoadError())
-            }
+    override suspend fun handleIntent(intent: CommentsIntent) {
+        when (intent) {
+            is CommentsIntent.Load -> load(intent.releaseId)
+            CommentsIntent.LoadMore -> loadNextAndReportIfMoreFailed()
+            CommentsIntent.Retry -> paginator?.refresh()
+            is CommentsIntent.ChangeSort -> changeSort(intent.sort)
+            is CommentsIntent.Vote -> vote(intent.commentId, intent.vote)
         }
     }
 
-    fun retry() {
-        loadedReleaseId?.let { load(it) }
+    private suspend fun load(releaseId: Int) {
+        if (this.releaseId == releaseId && paginator != null) return
+        this.releaseId = releaseId
+        startPaginator(releaseId, state.value.sort)
     }
 
-    private companion object {
-        const val FIRST_PAGE = 0
-        const val DEFAULT_SORT = 0
+    private suspend fun changeSort(sort: CommentsSort) {
+        val currentReleaseId = releaseId ?: return
+        if (state.value.sort == sort) return
+        updateState { copy(sort = sort) }
+        startPaginator(currentReleaseId, sort)
     }
-}
 
-private fun Exception.toLoadError(): LoadError {
-    val error = this as? AnixError ?: return LoadError.GENERIC
-    return when (error) {
-        is AnixError.Network -> LoadError.NO_CONNECTION
-        is AnixError.Unauthorized -> LoadError.UNAUTHORIZED
-        else -> LoadError.GENERIC
+    private suspend fun startPaginator(
+        releaseId: Int,
+        sort: CommentsSort,
+    ) {
+        pagingCollectJob?.cancel()
+        val newPaginator = commentRepository.commentsPaginator(releaseId = releaseId, sort = sort.apiValue)
+        paginator = newPaginator
+        pagingCollectJob =
+            newPaginator.state
+                .onEach { paging -> updateState { copy(paging = paging) } }
+                .launchIn(viewModelScope)
+        newPaginator.loadNext()
+    }
+
+    /** См. KDoc `HomeViewModel.loadNextAndReportIfMoreFailed` — тот же смысл: подгрузка следующей
+     *  страницы уже непустого списка отдельно сигналит об ошибке эффектом, т.к. `AnixContentSlot`
+     *  в этом случае рисует контент, а не `AnixErrorState`, и `state.paging.error` иначе не увидят. */
+    private suspend fun loadNextAndReportIfMoreFailed() {
+        val currentPaginator = paginator ?: return
+        currentPaginator.loadNext()
+        val pagingState = currentPaginator.state.value
+        val error = pagingState.error
+        if (error != null && pagingState.items.isNotEmpty()) {
+            emitEffect(CommentsEffect.ShowError(error))
+        }
+    }
+
+    /**
+     * Оптимистичный оверрайд подсветки голоса (см. KDoc `CommentsState.voteOverrides`), откатывается
+     * при ошибке запроса. `TooGenericExceptionCaught`: `CommentRepository.vote` может бросить
+     * произвольный `AnixError`-наследник (сетевая/HTTP/API-ошибка) — здесь важен сам факт неудачи
+     * (откатить оверрайд + уведомить), не конкретный тип, `CancellationException` пробрасывается
+     * отдельно, чтобы не глушить отмену корутины.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun vote(
+        commentId: Long,
+        vote: Int,
+    ) {
+        val previousOverride = state.value.voteOverrides[commentId]
+        updateState { copy(voteOverrides = voteOverrides + (commentId to vote)) }
+        try {
+            commentRepository.vote(commentId, vote)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            updateState {
+                copy(
+                    voteOverrides =
+                        if (previousOverride == null) {
+                            voteOverrides - commentId
+                        } else {
+                            voteOverrides + (commentId to previousOverride)
+                        },
+                )
+            }
+            emitEffect(CommentsEffect.ShowError(e as? AnixError ?: AnixError.Unknown(e)))
+        }
     }
 }

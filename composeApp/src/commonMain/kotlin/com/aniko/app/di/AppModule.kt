@@ -8,6 +8,7 @@ import com.aniko.app.feature.library.LibraryViewModel
 import com.aniko.app.feature.player.PlayerViewModel
 import com.aniko.app.feature.profile.ProfileViewModel
 import com.aniko.app.feature.release.ReleaseDetailsViewModel
+import com.aniko.app.feature.release.rating.ReleaseRatingViewModel
 import com.aniko.app.feature.schedule.ScheduleViewModel
 import com.aniko.app.feature.search.SearchViewModel
 import com.aniko.app.feature.settings.SettingsViewModel
@@ -28,6 +29,7 @@ val appModule =
         viewModelOf(::SettingsViewModel)
         viewModelOf(::SearchViewModel)
         viewModelOf(::ReleaseDetailsViewModel)
+        viewModelOf(::ReleaseRatingViewModel)
         viewModelOf(::PlayerViewModel)
         viewModelOf(::LibraryViewModel)
         viewModelOf(::ProfileViewModel)

@@ -57,6 +57,14 @@ data class AnixDimens(
     val donutStrokeWidth: Dp = 16.dp,
     /** Высота области под столбчатые/линейные графики статистики (Фаза 6, P6.T10/T11). */
     val chartHeight: Dp = 140.dp,
+    /** Максимальная ширина контентной колонки на desktop/tablet-раскладках (Фаза 7). */
+    val contentMaxWidth: Dp = 1200.dp,
+    /** Высота баннера-карусели на главном экране (Фаза 7, P7.T1). */
+    val bannerHeight: Dp = 220.dp,
+    /** Ширина боковой панели фильтров каталога на wide-экранах (Фаза 7, P7.T5). */
+    val filterSidebarWidth: Dp = 280.dp,
+    /** Высота плитки быстрого действия на главном экране (Фаза 7, P7.T1). */
+    val quickActionTileHeight: Dp = 88.dp,
 )
 
 val LocalAnixDimens = staticCompositionLocalOf { AnixDimens() }

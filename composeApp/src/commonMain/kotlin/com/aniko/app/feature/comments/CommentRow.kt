@@ -1,0 +1,163 @@
+package com.aniko.app.feature.comments
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import com.aniko.model.ReleaseComment
+import com.aniko.ui.component.AnixAvatar
+import com.aniko.ui.i18n.LocalStrings
+import com.aniko.ui.theme.AnixThemeTokens
+
+/**
+ * Строка одного комментария (P7.T12).
+ *
+ * Спойлер (D10, обязательное архитектурное решение — см. таск P7.T12 в плане): БЕЗ
+ * `Modifier.blur` — на Android <12 `RenderEffect`/`blur` no-op (требует API 31), поведение на
+ * iOS/Skia не гарантировано, а полная сборка iOS-приложения даже не входит в CI (см. журнал
+ * Фазы 6 плана про `-lsqlite3`/`ios.yml`), риск незамеченной регрессии слишком велик. Вместо
+ * этого при `comment.isSpoiler` текст ВООБЩЕ не композится до тапа — замещается плашкой
+ * [SpoilerPlaceholder] на фоне `surfaceVariant`. Раскрытое состояние живёт в `rememberSaveable`
+ * с ключом по `comment.id` — переживает поворот экрана/рекомпозицию, не обязано переживать
+ * перезапуск процесса (см. задание). Корректно и для скринридера: до раскрытия он видит только
+ * метку "Спойлер — нажмите, чтобы показать", не текст спойлера.
+ *
+ * [effectiveVote] — голос текущего пользователя с учётом локального оптимистичного оверрайда
+ * (см. `CommentsState.voteOverrides`), по умолчанию — сырое значение из модели (для превью/
+ * вызова без ViewModel). [onVoteClick] получает уже посчитанный НОВЫЙ голос (toggle: `1` если
+ * ещё не лайкнут, `0` если уже лайкнут) — caller просто прокидывает его в `CommentRepository.vote`.
+ */
+@Composable
+fun CommentRow(
+    comment: ReleaseComment,
+    modifier: Modifier = Modifier,
+    effectiveVote: Int = comment.vote,
+    onVoteClick: (commentId: Long, vote: Int) -> Unit = { _, _ -> },
+) {
+    val strings = LocalStrings.current
+    val dimens = AnixThemeTokens.dimens
+    var isSpoilerRevealed by rememberSaveable(comment.id) { mutableStateOf(false) }
+
+    // Простой отступ вместо полного дерева ответов (допустимо по заданию P7.T12) — реплаи
+    // визуально вложены под родительский комментарий, без соединительных линий/сворачивания веток.
+    val indent = if (comment.isReply) dimens.spaceL else 0.dp
+
+    Row(
+        modifier = modifier.fillMaxWidth().padding(start = indent),
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+    ) {
+        AnixAvatar(avatarUrl = comment.author.avatarUrl, login = comment.author.login, size = AVATAR_SIZE)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(dimens.spaceXs),
+        ) {
+            Text(text = comment.author.login, style = MaterialTheme.typography.labelLarge)
+
+            if (comment.isSpoiler && !isSpoilerRevealed) {
+                SpoilerPlaceholder(
+                    label = strings.commentsSpoilerLabel,
+                    onReveal = { isSpoilerRevealed = true },
+                )
+            } else {
+                Text(text = comment.message, style = MaterialTheme.typography.bodyMedium)
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(dimens.spaceM),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                VoteIndicator(
+                    likesCount = comment.likesCount,
+                    isVoted = effectiveVote == LIKE_VOTE,
+                    onClick = {
+                        onVoteClick(comment.id, if (effectiveVote == LIKE_VOTE) NO_VOTE else LIKE_VOTE)
+                    },
+                )
+                if (comment.replyCount > 0) {
+                    Text(
+                        text = strings.commentReplyCount(comment.replyCount.toInt()),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Плашка вместо текста спойлера — см. D10 в KDoc [CommentRow]. Высота — `defaultMinSize`, а не
+ *  жёсткий `.height()`: должна расти вместе с текстом при масштабе шрифта (тот же баг класс,
+ *  что нашёл аудит P6.T12 у `ListStatusChip`, см. журнал Фазы 6 плана). */
+@Composable
+private fun SpoilerPlaceholder(
+    label: String,
+    onReveal: () -> Unit,
+) {
+    val dimens = AnixThemeTokens.dimens
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = SPOILER_PLACEHOLDER_MIN_HEIGHT)
+                .clip(RoundedCornerShape(dimens.cornerS))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable(onClickLabel = label, role = Role.Button, onClick = onReveal)
+                .padding(dimens.spaceM),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Лайк комментария — только отображение/toggle подсветки, без иконок material-icons-extended
+ *  (не подключена в `composeApp`, см. `build.gradle.kts`) — заменена текстовым индикатором. */
+@Composable
+private fun VoteIndicator(
+    likesCount: Int,
+    isVoted: Boolean,
+    onClick: () -> Unit,
+) {
+    val color = if (isVoted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Text(
+        text = "$LIKE_MARK $likesCount",
+        style = MaterialTheme.typography.labelMedium,
+        color = color,
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(AnixThemeTokens.dimens.cornerPill))
+                .clickable(role = Role.Button, onClick = onClick)
+                .semantics { contentDescription = likesCount.toString() }
+                .padding(vertical = VOTE_INDICATOR_VERTICAL_PADDING),
+    )
+}
+
+private const val LIKE_VOTE = 1
+private const val NO_VOTE = 0
+private const val LIKE_MARK = "▲"
+private val AVATAR_SIZE = 40.dp
+private val SPOILER_PLACEHOLDER_MIN_HEIGHT = 48.dp
+private val VOTE_INDICATOR_VERTICAL_PADDING = 2.dp
