@@ -17,5 +17,12 @@ kotlin {
             implementation(compose.ui)
             implementation(libs.kotlinx.coroutines.core)
         }
+
+        androidMain.dependencies {
+            // P8: только ради `WebViewCompat.addDocumentStartJavaScript` /
+            // `addWebMessageListener` — единственного способа достучаться до `<video>`
+            // в cross-origin подфрейме embed-страницы (см. `EmbedVideoBridge.kt`).
+            implementation(libs.androidx.webkit)
+        }
     }
 }

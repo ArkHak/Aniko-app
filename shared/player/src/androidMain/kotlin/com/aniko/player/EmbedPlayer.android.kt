@@ -29,12 +29,17 @@ import androidx.compose.ui.viewinterop.AndroidView
  * партнёрский домен) — WebView использует его как `Referer` при запросе iframe, и Kodik сам
  * генерирует по нему корректные `d_sign`/`pd_sign`/`ref_sign` (без него — `500 "Error code: ds"`,
  * тоже проверено вживую).
+ *
+ * [controller] (см. [rememberEmbedVideoController]) — опциональный JS-мост к `<video>` внутри
+ * страницы. Ставится в `factory` до первой загрузки: `addDocumentStartJavaScript` действует
+ * только на навигации, начатые после его регистрации.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 actual fun EmbedPlayerView(
     url: String,
     referer: String?,
+    controller: EmbedVideoController?,
     modifier: Modifier,
 ) {
     val headers = referer?.let { mapOf("Referer" to it) } ?: emptyMap()
@@ -65,6 +70,7 @@ actual fun EmbedPlayerView(
                             request: android.webkit.WebResourceRequest,
                         ): Boolean = !isSafeEmbedUrl(request.url.toString())
                     }
+                controller?.attach(this)
                 loadEmbed(url, referer, headers)
             }
         },
@@ -73,6 +79,7 @@ actual fun EmbedPlayerView(
                 webView.loadEmbed(url, referer, headers)
             }
         },
+        onRelease = { controller?.detach() },
         modifier = modifier.fillMaxSize(),
     )
 }

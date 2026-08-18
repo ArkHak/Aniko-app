@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 expect fun EmbedPlayerView(
     url: String,
     referer: String? = null,
+    controller: EmbedVideoController? = null,
     modifier: Modifier = Modifier,
 )
 
@@ -55,9 +56,15 @@ fun isSafeEmbedUrl(url: String): Boolean = url.startsWith("http://", ignoreCase 
  * оборачивают такой URL в HTML с `<iframe>` вместо прямой навигации. Другим embed-хостам
  * (Sibnet и т.п.) обёртка не нужна.
  */
-fun isKodikEmbedUrl(url: String): Boolean =
+fun isKodikEmbedUrl(url: String): Boolean = KODIK_EMBED_HOSTS.any { host -> url.contains(host, ignoreCase = true) }
+
+/**
+ * Семейство доменов Kodik: страницу плеера отдаёт `kodikplayer.com`, но сам `<video>` внутри
+ * может оказаться на соседнем домене группы — поэтому [EmbedOriginFilter] принимает их все,
+ * а не только тот, что стоит в ссылке из API.
+ */
+internal val KODIK_EMBED_HOSTS =
     listOf("kodik.cc", "kodik.info", "kodik-hd.com", "kodik.biz", "aniqit.com", "kodikplayer.com", "anixmirai.com")
-        .any { host -> url.contains(host, ignoreCase = true) }
 
 /**
  * HTML-страница с [url] в `<iframe>` на весь экран — общая для платформенных реализаций

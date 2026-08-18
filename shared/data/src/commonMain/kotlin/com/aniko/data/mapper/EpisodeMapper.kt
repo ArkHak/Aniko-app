@@ -16,6 +16,9 @@ fun EpisodeTypeDto.toDomain(): VoiceType =
         name = name.orEmpty(),
         episodesCount = episodesCount,
         workers = workers,
+        isSub = isSub,
+        viewCount = viewCount,
+        pinned = pinned,
     )
 
 fun EpisodeSourceDto.toDomain(): EpisodeSource =
@@ -27,10 +30,15 @@ fun EpisodeSourceDto.toDomain(): EpisodeSource =
     )
 
 /**
- * Живая верификация (R3, `episode/186/{typeId}`) подтвердила: [EpisodeSourceDto.name] — чистый
- * машинный ключ («Kodik», «Sibnet»), не локализованное человекочитаемое название. Прямой
- * [VideoHost.fromKey] по этому полю — рабочее решение, а не хрупкий fallback (спекулятивное
- * поле `source_key`, которое в реальном ответе не встречается, убрано из DTO).
+ * [EpisodeSourceDto] несёт только имя источника — ссылки на этом шаге цепочки ещё нет
+ * (она приходит позже, из `episode/target`), поэтому здесь доступен только матчинг по имени.
+ *
+ * Раньше в KDoc стояло, что `name` — «чистый машинный ключ (Kodik/Sibnet)». Живая выборка
+ * Фазы 8 это опровергла: там же встречаются `VK Видео`, `Libria`, `Liberty`, `TSM`,
+ * `Sovet (не работает)` — человекочитаемые имена. Матчинг починен внутри [VideoHost.fromKey]
+ * (список алиасов вместо проверки «ключ enum'а — подстрока имени»), а окончательный хост
+ * всё равно уточняется по домену в `EpisodeRepository.resolvePlaybackSource`
+ * ([VideoHost.resolve]).
  */
 private fun EpisodeSourceDto.resolveHost(): VideoHost = VideoHost.fromKey(name)
 

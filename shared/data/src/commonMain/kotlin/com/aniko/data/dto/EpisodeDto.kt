@@ -22,6 +22,24 @@ data class EpisodeTypeDto(
      * известного поля.
      */
     val workers: String? = null,
+    /**
+     * Живая верификация (P8.T6, `GET episode/1`): поле реально присутствует в сыром ответе —
+     * `true` для типа «Субтитры», `false` для дубляжей (пример: `AniDUB` → `false`,
+     * `Субтитры` → `true`). Используется для бейджа SUB и фильтра All/Dubs/Subs.
+     */
+    @SerialName("is_sub") val isSub: Boolean = false,
+    /**
+     * Живая верификация (P8.T6, `GET episode/1`): счётчик просмотров конкретной озвучки,
+     * реально присутствует в ответе (пример: `AniDUB` → `51287`). Ранее задокументирован в
+     * `docs/REELWAVE_PLAN.md` как незамапленный — домаплен для бейджа счётчика просмотров.
+     */
+    @SerialName("view_count") val viewCount: Int? = null,
+    /**
+     * Живая верификация (P8.T6, `GET episode/1`): булево поле есть в ответе (везде `false` на
+     * проверенном релизе), семантика по имени — «закреплённая» озвучка. Используется, чтобы
+     * поднять закреплённые типы озвучки в начало списка.
+     */
+    val pinned: Boolean = false,
 )
 
 /** `SourcesResponse` — `GET episode/{releaseId}/{typeId}`. */

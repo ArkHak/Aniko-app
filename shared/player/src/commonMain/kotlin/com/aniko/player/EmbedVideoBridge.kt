@@ -1,0 +1,259 @@
+package com.aniko.player
+
+/*
+ * Протокол моста «Kotlin ↔ <video> внутри чужой embed-страницы».
+ *
+ * Топология, подтверждённая живым спайком на Android (P8, эмулятор, Sibnet + Kodik):
+ * `EmbedPlayerView` грузит embed-страницу так, что реальный `<video>` всегда оказывается
+ * в CROSS-ORIGIN подфрейме относительно главного документа (у Kodik — из-за нашей же
+ * HTML-обёртки с `<iframe>`, у остальных хостов — из-за их собственной вёрстки).
+ * Следствие: обычный `WebView.evaluateJavascript` / `WKWebView.evaluateJavaScript` до видео
+ * НЕ достаёт — они исполняются только в главном фрейме. Работает единственная связка:
+ *
+ * - Android — `WebViewCompat.addDocumentStartJavaScript` (инжект в КАЖДЫЙ фрейм до его
+ *   собственных скриптов) + `WebViewCompat.addWebMessageListener` (двусторонний канал);
+ * - iOS — `WKUserScript(injectionTime = AtDocumentStart, forMainFrameOnly = false)` +
+ *   `WKScriptMessageHandler` (JS → Kotlin) + `evaluateJavaScript(inFrame = ...)` (Kotlin → JS).
+ *
+ * Обе платформы гоняют один и тот же JS ([embedBridgeScript]) и один и тот же текстовый
+ * протокол, поэтому и скрипт, и парсер живут здесь, в commonMain.
+ */
+
+/** Имя канала: и `jsObjectName` на Android, и имя `messageHandlers.<name>` на iOS. */
+internal const val EMBED_BRIDGE_CHANNEL = "AnikoEmbedBridge"
+
+/** Версия протокола — первое поле каждого сообщения JS → Kotlin. */
+internal const val EMBED_BRIDGE_PROTOCOL = "v1"
+
+/** Глобальная JS-функция, через которую iOS доставляет команды в нужный фрейм. */
+internal const val EMBED_BRIDGE_EXEC_FN = "__anikoEmbedExec"
+
+/** Команды Kotlin → JS. Плоские строки: JSON тут не нужен, а зависимость на сериализацию — тем более. */
+internal object EmbedVideoCommand {
+    const val PLAY = "play"
+    const val PAUSE = "pause"
+
+    fun seek(positionMs: Long): String = "seek:$positionMs"
+
+    fun seekBy(deltaMs: Long): String = "seekBy:$deltaMs"
+
+    fun rate(rate: Float): String = "rate:$rate"
+}
+
+/**
+ * Разбирает сообщение JS → Kotlin вида
+ * `v1|<найдено 0/1>|<играет 0/1>|<позиция мс>|<длительность мс или `-`>|<скорость>`.
+ *
+ * `-` в поле длительности — это `duration = NaN` до события `loadedmetadata`
+ * (подтверждено спайком: сразу после загрузки страницы `duration=NaN`, `readyState=0`).
+ * Именно поэтому [EmbedVideoState.durationMs] нулябельный, а не `0L`: прогресс-бар нельзя
+ * включать, пока длительность неизвестна.
+ *
+ * @return `null`, если сообщение не наше/битое — тогда состояние не трогаем.
+ */
+internal fun parseEmbedVideoState(raw: String): EmbedVideoState? {
+    val parts = raw.split('|')
+    if (parts.size < EMBED_BRIDGE_FIELDS || parts[0] != EMBED_BRIDGE_PROTOCOL) return null
+    return EmbedVideoState(
+        isVideoFound = parts[1] == "1",
+        isPlaying = parts[2] == "1",
+        currentTimeMs = parts[3].toLongOrNull()?.coerceAtLeast(0L) ?: 0L,
+        durationMs = parts[4].toLongOrNull()?.takeIf { it > 0L },
+        playbackRate = parts[5].toFloatOrNull()?.takeIf { it > 0f } ?: 1f,
+    )
+}
+
+private const val EMBED_BRIDGE_FIELDS = 6
+
+/**
+ * Фильтр «сообщение действительно из фрейма видеохоста, а не из рекламного/аналитического».
+ *
+ * Мост по построению получают ВСЕ фреймы страницы — спайк вживую поймал, как команду перехватил
+ * фрейм `mc.yandex.ru`. Поэтому и Android (`sourceOrigin` из `WebMessageListener`), и iOS
+ * (`WKScriptMessage.frameInfo.securityOrigin`) обязаны прогонять origin через этот фильтр,
+ * прежде чем принять состояние или запомнить фрейм как адресата команд.
+ *
+ * Сравнение идёт по registrable domain, а не по полному хосту: страница плеера легко живёт на
+ * `video.sibnet.ru`, а видео — на `st.sibnet.ru`, и это по-прежнему тот же хост.
+ */
+internal class EmbedOriginFilter(
+    embedUrl: String,
+) {
+    private val expected: Set<String> =
+        buildSet {
+            registrableDomainOf(embedUrl)?.let(::add)
+            // Kodik размазан по семейству доменов (kodikplayer.com отдаёт страницу, а плеер
+            // внутри может сидеть на aniqit.com) — принимаем всю группу целиком.
+            if (isKodikEmbedUrl(embedUrl)) {
+                KODIK_EMBED_HOSTS.forEach { host -> registrableDomainOf(host)?.let(::add) }
+            }
+        }
+
+    fun accepts(origin: String?): Boolean {
+        if (origin.isNullOrBlank() || expected.isEmpty()) return false
+        // Opaque origin (`null`, `about:blank`, data:) — не наш фрейм, отбрасываем.
+        val isOpaque = origin == "null" || origin.startsWith("about:") || origin.startsWith("data:")
+        val domain = if (isOpaque) null else registrableDomainOf(origin)
+        return domain != null && domain in expected
+    }
+}
+
+/**
+ * `https://video.sibnet.ru/shell.php?v=1` → `sibnet.ru`, `anixart.libria.fun` → `libria.fun`.
+ *
+ * Полноценный Public Suffix List сюда не тянем: среди хостов Anixart двухуровневых суффиксов
+ * нет, а [TWO_LEVEL_SUFFIXES] закрывает те, что теоретически могут появиться, — без него
+ * `foo.co.uk` схлопнулось бы в `co.uk` и совпало бы с любым британским доменом.
+ *
+ * Похожая функция `hostOf` есть в `:shared:model` (`VideoHost.fromUrl`, `Episode.kt`) — модули не
+ * связаны зависимостью, и назначение разное: здесь результат — граница доверия для фильтрации
+ * сообщений JS-моста от посторонних фреймов (обязана схлопывать поддомены), там — сырой хост под
+ * сравнение с фиксированным списком известных доменов без PSL-редукции. Не сливать без переноса в
+ * общий модуль.
+ */
+internal fun registrableDomainOf(urlOrOrigin: String): String? {
+    val withoutScheme = urlOrOrigin.substringAfter("//", urlOrOrigin)
+    val authority = withoutScheme.substringBefore('/').substringBefore('?').substringBefore('#')
+    val host = authority.substringAfterLast('@').substringBefore(':').lowercase()
+    val labels = host.split('.').filter { it.isNotEmpty() }
+    if (labels.size < DOMAIN_LABEL_COUNT) return null
+    val lastTwo = labels.takeLast(DOMAIN_LABEL_COUNT).joinToString(".")
+    return if (labels.size > DOMAIN_LABEL_COUNT && lastTwo in TWO_LEVEL_SUFFIXES) {
+        labels.takeLast(TWO_LEVEL_SUFFIX_LABEL_COUNT).joinToString(".")
+    } else {
+        lastTwo
+    }
+}
+
+/** Минимум меток для двухуровневого домена (`sibnet.ru` → `["sibnet", "ru"]`). */
+private const val DOMAIN_LABEL_COUNT = 2
+
+/** Меток для трёхуровневого домена при совпадении с [TWO_LEVEL_SUFFIXES] (`foo.co.uk`). */
+private const val TWO_LEVEL_SUFFIX_LABEL_COUNT = 3
+
+private val TWO_LEVEL_SUFFIXES =
+    setOf("co.uk", "org.uk", "com.ua", "co.jp", "co.kr", "com.br", "com.tr", "org.ru", "net.ru", "com.ru")
+
+/**
+ * JS-мост, инжектируемый в каждый фрейм на document-start.
+ *
+ * Осознанные решения, каждое — следствие конкретной находки спайка:
+ * - слушаем нативные DOM-события элемента, а НЕ резолв промиса `play()`: `play()` штатно
+ *   отклоняется с `AbortError: The play() request was interrupted by a call to pause()`
+ *   даже когда воспроизведение реально стартовало (собственный JS хоста перехватывает первый
+ *   вызов), поэтому промис — негодный источник истины про «играет/на паузе»;
+ * - `loadedmetadata`/`durationchange` — единственный момент, когда `duration` перестаёт быть
+ *   `NaN`; до него отдаём `-`;
+ * - периодический `scan()` вместо однократного поиска: `<video>` у большинства хостов
+ *   создаётся уже после document-start, а у некоторых пересоздаётся при смене качества;
+ * - дедупликация по [lastPayload] — `timeupdate` летит ~4 раза в секунду, гонять одинаковые
+ *   сообщения через мост незачем.
+ *
+ * `@Suppress("LongMethod")` — это один большой JS-литерал, не Kotlin-логика: разбивать его на
+ * функции значило бы резать цельный скрипт на куски ради метрики, не ради читаемости.
+ */
+@Suppress("LongMethod")
+internal fun embedBridgeScript(): String =
+    """
+    (function () {
+      if (window.__anikoBridgeInstalled) { return; }
+      window.__anikoBridgeInstalled = true;
+
+      var CH = '$EMBED_BRIDGE_CHANNEL';
+      var V = '$EMBED_BRIDGE_PROTOCOL';
+      var video = null;
+      var lastPayload = '';
+
+      function post(text) {
+        try {
+          var obj = window[CH];
+          if (obj && typeof obj.postMessage === 'function') { obj.postMessage(text); return; }
+          if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[CH]) {
+            window.webkit.messageHandlers[CH].postMessage(text);
+          }
+        } catch (e) {}
+      }
+
+      function send(force) {
+        var payload;
+        if (!video) {
+          payload = V + '|0|0|0|-|1';
+        } else {
+          var d = video.duration;
+          var dur = (typeof d === 'number' && isFinite(d) && d > 0) ? Math.round(d * 1000) : '-';
+          var playing = (!video.paused && !video.ended) ? '1' : '0';
+          var t = Math.round((video.currentTime || 0) * 1000);
+          var r = video.playbackRate || 1;
+          payload = V + '|1|' + playing + '|' + t + '|' + dur + '|' + r;
+        }
+        if (!force && payload === lastPayload) { return; }
+        lastPayload = payload;
+        post(payload);
+      }
+
+      var EVENTS = ['play', 'playing', 'pause', 'ended', 'timeupdate', 'loadedmetadata',
+                    'durationchange', 'ratechange', 'seeked', 'emptied'];
+
+      function attach(v) {
+        if (!v || v === video) { return; }
+        video = v;
+        for (var i = 0; i < EVENTS.length; i++) {
+          v.addEventListener(EVENTS[i], function () { send(false); }, true);
+        }
+        send(true);
+      }
+
+      function scan() {
+        if (video && !document.contains(video)) { video = null; }
+        if (video) { return; }
+        var v = document.querySelector('video');
+        if (v) { attach(v); }
+      }
+
+      function exec(cmd) {
+        if (typeof cmd !== 'string') { return; }
+        scan();
+        if (!video) { return; }
+        try {
+          if (cmd === 'play') {
+            var p = video.play();
+            // play() promise rejects (AbortError) even though playback actually started —
+            // swallow it to avoid an unhandled rejection; state still arrives via events.
+            if (p && typeof p['catch'] === 'function') { p['catch'](function () {}); }
+          } else if (cmd === 'pause') {
+            video.pause();
+          } else if (cmd.indexOf('seek:') === 0) {
+            video.currentTime = Math.max(0, parseFloat(cmd.slice(5)) / 1000);
+          } else if (cmd.indexOf('seekBy:') === 0) {
+            video.currentTime = Math.max(0, (video.currentTime || 0) + parseFloat(cmd.slice(7)) / 1000);
+          } else if (cmd.indexOf('rate:') === 0) {
+            var rate = parseFloat(cmd.slice(5));
+            if (isFinite(rate) && rate > 0) { video.playbackRate = rate; }
+          }
+        } catch (e) {}
+        send(true);
+      }
+
+      // iOS: commands arrive via evaluateJavaScript(inFrame:) straight into this function.
+      window.$EMBED_BRIDGE_EXEC_FN = exec;
+
+      // Android: reverse channel via WebMessageListener. Injection order of our script vs.
+      // the channel object isn't guaranteed, so we re-wire on a timer too.
+      function wire() {
+        try {
+          var obj = window[CH];
+          if (obj && !obj.__anikoWired) {
+            obj.__anikoWired = true;
+            obj.onmessage = function (event) { exec(event && event.data); };
+          }
+        } catch (e) {}
+      }
+
+      wire();
+      scan();
+      setInterval(function () { wire(); scan(); send(false); }, 500);
+      if (document.addEventListener) {
+        document.addEventListener('DOMContentLoaded', function () { wire(); scan(); }, false);
+      }
+    })();
+    """.trimIndent()

@@ -330,7 +330,7 @@ private fun AnixNavGraph(
         modifier = modifier,
     ) {
         listSectionRoutes(navController, paneStack, titleNavigator)
-        titleDetailRoutes(titleNavigator)
+        titleDetailRoutes(navController, titleNavigator)
         chromeRoutes(navController, localeStore)
     }
 }
@@ -367,7 +367,10 @@ private fun NavGraphBuilder.listSectionRoutes(
  * тот же контент рисуется внутри [ListDetailHost] (см. `DetailPaneContent` в `ListDetailHost.kt`),
  * сюда попадают только когда [TitleNavigator] решил, что панели нет места (см. `AdaptiveTitleNavigator`).
  */
-private fun NavGraphBuilder.titleDetailRoutes(titleNavigator: TitleNavigator) {
+private fun NavGraphBuilder.titleDetailRoutes(
+    navController: NavHostController,
+    titleNavigator: TitleNavigator,
+) {
     composable<AnixDestination.ReleaseDetails> { entry ->
         val route: AnixDestination.ReleaseDetails = entry.toRoute()
         ReleaseDetailsScreen(releaseId = route.releaseId, onEpisodeClick = titleNavigator::openPlayer)
@@ -383,6 +386,10 @@ private fun NavGraphBuilder.titleDetailRoutes(titleNavigator: TitleNavigator) {
             sourceId = route.sourceId,
             position = route.position,
             hostKey = route.hostKey,
+            // Не `titleNavigator.back()`: на wide-экранах он сначала разбирает стек detail-панелей,
+            // а плеер лежит полноэкранным маршрутом ПОВЕРХ них — «назад» из плеера обязан снимать
+            // именно маршрут (см. KDoc `PlayerScreen.onBack`).
+            onBack = { navController.popBackStack() },
         )
     }
 }

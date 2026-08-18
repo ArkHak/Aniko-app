@@ -92,6 +92,33 @@ fun NewEpisodeBadge(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Текстовый пилл «SUB» — тип озвучки является дорожкой субтитров, а не дубляжом (P8.T6,
+ * `docs/REELWAVE_PLAN.md`). Живая верификация подтвердила реальное поле `is_sub` в ответе
+ * `GET episode/{releaseId}` (см. `EpisodeMapper`/`VoiceType.isSub`) — бейдж не выдуман под мокап.
+ */
+@Composable
+fun SubBadge(modifier: Modifier = Modifier) {
+    val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
+
+    Box(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(dimens.cornerPill))
+                .background(MaterialTheme.colorScheme.secondaryContainer)
+                .clearAndSetSemantics {
+                    contentDescription = strings.badgeSubContentDescription
+                }.padding(horizontal = dimens.spaceS, vertical = dimens.spaceXs / DIVISOR_HALF),
+    ) {
+        Text(
+            text = strings.badgeSub,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+    }
+}
+
 /** Текстовый пилл «скоро» — для релизов в статусе [com.aniko.model.ReleaseStatus.ANNOUNCE]. */
 @Composable
 fun ComingSoonBadge(modifier: Modifier = Modifier) {

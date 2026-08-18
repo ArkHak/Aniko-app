@@ -39,6 +39,10 @@ lyricist = "1.7.0"
 # --- Android-only ---
 androidxActivityCompose = "1.12.4"
 androidxSecurityCrypto = "1.1.0"
+# P8: JS-мост к <video> внутри embed-страницы. Платформенный android.webkit тут бесполезен —
+# `evaluateJavascript` работает только в главном фрейме, а видео всегда в cross-origin подфрейме.
+# Нужны `addDocumentStartJavaScript` + `addWebMessageListener`, они есть только в androidx.webkit.
+androidxWebkit = "1.14.0"
 
 # --- Code quality (P1.T11) ---
 ktlintGradle = "14.2.0"
@@ -114,6 +118,7 @@ lyricist = { module = "cafe.adriel.lyricist:lyricist", version.ref = "lyricist" 
 # Android-only
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "androidxSecurityCrypto" }
+androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "androidxWebkit" }
 
 # SQLDelight (P4.S0)
 sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }

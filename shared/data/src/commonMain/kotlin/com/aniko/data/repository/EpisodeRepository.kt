@@ -68,6 +68,10 @@ class EpisodeRepository(
         val url =
             target?.url?.takeIf { it.isNotBlank() }
                 ?: throw AnixError.PlaybackResolve(host)
+        // Хост из навигации опознан только по имени источника (`VideoHost.fromKey`) — теперь, когда
+        // на руках реальный URL, уточняем его по домену: имя на стороне Anixart меняется
+        // («Libria» → «Liberty»), домен — нет. Если домен не опознан, остаётся хост из навигации.
+        val resolvedHost = VideoHost.fromUrl(url).takeIf { it != VideoHost.UNKNOWN } ?: host
         return if (isKodikEmbedUrl(url)) {
             // Query-параметры `?d=/&s=/&ip=` из ответа API рассчитаны на referer из исходного
             // запроса и с нашим WebView не совпадают — Kodik отдаёт `500 "Error code: ds"`
@@ -76,11 +80,46 @@ class EpisodeRepository(
             // (d_sign/pd_sign/ref_sign) на основе заголовка и отдаёт настоящую страницу плеера —
             // 200, а не 500 (проверено вживую через curl). anixmirai.com — авторизованный домен
             // партнёра на стороне Kodik (тот же, что видно в оригинальном приложении).
-            PlaybackSource.Embed(url = url.substringBefore('?'), host = host, referer = "https://anixmirai.com/")
+            PlaybackSource.Embed(
+                url = url.substringBefore('?'),
+                host = resolvedHost,
+                referer = "https://anixmirai.com/",
+            )
         } else {
-            PlaybackSource.Embed(url = url, host = host, referer = url)
+            PlaybackSource.Embed(url = url, host = resolvedHost, referer = url)
         }
     }
+
+    /**
+     * Существует ли серия с такой позицией в этом источнике — вопрос «есть ли следующая серия»
+     * для баннера P8.T4 и кнопки «Следующая серия» на Desktop.
+     *
+     * Почему через `episode/target`, а не через [episodes]: маршрут плеера
+     * (`AnixDestination.Player`) несёт `sourceId`, но НЕ `typeId`, а `episode/{releaseId}/{typeId}/
+     * {sourceId}` без типа озвучки не вызвать. Тащить `typeId` через всю навигацию ради одного
+     * булева ответа дороже, чем один запрос, который к тому же отвечает на вопрос точно.
+     *
+     * Живая проверка (2026-08-17, `releaseId=1`, `sourceId=8`, всего 104 серии):
+     * `episode/target/1/8/104` → `code: 0` + непустой `episode.url`, `episode/target/1/8/105`
+     * и `.../999` → `{"code":1,"episode":null}`. То есть API честно различает существующую и
+     * несуществующую позицию, «последняя серия вместо запрошенной» не отдаётся — ложного
+     * «следующая серия есть» на последней серии не будет.
+     *
+     * Сетевую ошибку намеренно проглатываем в `false`: не знать про следующую серию — это просто
+     * отсутствие баннера, ронять из-за этого экран плеера незачем.
+     */
+    suspend fun hasEpisode(
+        releaseId: Int,
+        sourceId: Int,
+        position: Int,
+    ): Boolean =
+        runCatching {
+            episodeApi
+                .target(releaseId, sourceId, position)
+                .episode
+                ?.url
+                ?.isNotBlank() == true
+        }.getOrDefault(false)
 
     /** Отмечена ли конкретная серия просмотренной — прямой passthrough локальной истины, TTL не нужен. */
     fun observeWatched(

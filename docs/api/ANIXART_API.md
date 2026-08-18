@@ -158,12 +158,20 @@ Kotlin-клиент (`shared/network`, `shared/data/.../api/*.kt`). Значен
 Цепочка: `types` → выбрать `typeId` → `sources(typeId)` → выбрать `sourceId` → `episodes(releaseId, typeId, sourceId)` → список серий → `episodeTarget(releaseId, sourceId, position)` → финальный playable-объект.
 
 **Формат `Episode` из `episode/target` (подтверждено живыми сэмплами, снимает старый `[TODO: verify live]`):**
-- `url: String` — прямая ссылка на видео/embed
-- `iframe: Boolean` — надо ли грузить `url` как iframe
+- `url: String` — ссылка на страницу плеера (см. ниже: прямого потока не отдаёт ни один хост)
+- `iframe: Boolean` — поле есть в ответе, назначение неясно; **для ветвления не годится**
 
-Примеры: `kodik` → `iframe: true`, ссылка на `kodikplayer.com`. `sibnet` → `iframe: false`, ссылка на `video.sibnet.ru/shell.php`, которую всё равно нужно доп. парсить (это не прямой mp4).
+**Живая проверка Фазы 8 (P8.T2) — что закрыто окончательно:**
+
+1. **Прямого m3u8/mp4 из API не отдаёт ни один хост.** `episode/target` всегда возвращает HTML-страницу embed-плеера. Соответственно `PlaybackSource.Direct` в `:shared:player` не используется вообще, всё идёт через `PlaybackSource.Embed`.
+2. **`iframe` не коррелирует с «прямой поток vs embed»** — вопреки старой формулировке в этом файле. `Sibnet`, `Libria`/`Liberty`, `RuTube` и `VK Видео` приходят с `iframe: false`, и все четыре — HTML-страницы плеера. Отдельно `kodik` → `iframe: true`, ссылка на `kodikplayer.com`; страницу нужно грузить в `<iframe>` c `Referer: https://anixmirai.com/` (иначе `500 "Error code: ds"`).
+3. **`Libria`/`Liberty` — уточнение старой пометки «предположительно прямой поток».** Это неверно: API отдаёт embed-страницу `anixart.libria.fun/public/iframe.php`. Но сама эта страница содержит готовые `.m3u8` (480/720/1080) прямо в HTML — их можно достать простым regex, без JS-движка. То есть прямой поток там теоретически достижим, но **не из ответа API**, а только доп. запросом к embed-странице; в приложении это не используется.
 
 Источники, встречающиеся в парсерах (`utils/parser/*`): `kodik`, `sibnet`, `rutube`, `vkvideo`, `okru`, `mailru`, `myvi`, `allvideo`, `anilibria`, `sovetromantica`, `studiomir`, `torlook`.
+
+**Имена источников в живом ответе ≠ этим ключам.** Живая выборка ~470 пар (релиз, тип озвучки) даёт человекочитаемые имена: `Kodik`, `Sibnet`, `RuTube`, `VK Видео`, `Libria`/`Liberty` (= `anilibria`), `TSM` (= `studiomir`), `Sovet (не работает)` (= `sovetromantica`). Хосты `okru`/`mailru`/`myvi`/`allvideo`/`torlook` в этой выборке не встретились ни разу — вероятно мёртвые записи из старого декомпила, но из `VideoHost` не удалены. Опознание в проекте идёт по домену URL (`VideoHost.fromUrl`), имя — только fallback (`VideoHost.fromKey`).
+
+Домены, по которым хост опознаётся: `kodikplayer.com`/`aniqit.com`/`kodik.*` → KODIK, `sibnet.ru` → SIBNET, `libria.fun` → ANILIBRIA, `vk.com`/`vkvideo.ru` → VK_VIDEO, `rutube.ru` → RUTUBE, `sovetromantica.com` → SOVET_ROMANTICA, `studiomir.club` → STUDIO_MIR.
 
 **`ReleaseVideoApi`** — отдельная фича «видео о релизе» (трейлеры/AMV), не путать с эпизодами:
 - `GET /video/release/{releaseId}` → `ReleaseVideosResponse`

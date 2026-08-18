@@ -69,6 +69,59 @@ class EpisodeMapperTest {
     }
 
     /**
+     * Живая верификация (P8.T6, `GET https://api-s.anixsekai.com/episode/1`, без токена):
+     * `is_sub`/`view_count`/`pinned` реально присутствуют в сыром ответе — не выдумка под мокап.
+     * Сэмпл — сокращённый реальный ответ (три типа: дубляж, субтитры, ещё один дубляж).
+     */
+    @Test
+    fun typesResponse_decodesIsSubViewCountAndPinned() {
+        val json =
+            """
+            {
+                "code": 0,
+                "types": [
+                    {
+                        "id": 1,
+                        "name": "AniDUB",
+                        "workers": "Ancord",
+                        "is_sub": false,
+                        "episodes_count": 104,
+                        "view_count": 51287,
+                        "pinned": false
+                    },
+                    {
+                        "id": 24,
+                        "name": "Субтитры",
+                        "workers": null,
+                        "is_sub": true,
+                        "episodes_count": 104,
+                        "view_count": 5971,
+                        "pinned": false
+                    }
+                ]
+            }
+            """.trimIndent()
+
+        val domain = AnixJson.decodeFromString(TypesResponseDto.serializer(), json).types.map { it.toDomain() }
+
+        assertFalse(domain[0].isSub)
+        assertEquals(51287, domain[0].viewCount)
+        assertFalse(domain[0].pinned)
+        assertTrue(domain[1].isSub)
+        assertEquals(5971, domain[1].viewCount)
+    }
+
+    /** Поля `is_sub`/`view_count`/`pinned` не всегда есть в ответе — дефолты не должны падать. */
+    @Test
+    fun episodeTypeDto_defaultsMissingIsSubViewCountPinned() {
+        val domain = EpisodeTypeDto(id = 1, name = "AniDUB").toDomain()
+
+        assertFalse(domain.isSub)
+        assertEquals(null, domain.viewCount)
+        assertFalse(domain.pinned)
+    }
+
+    /**
      * Живая верификация (R3, `episode/186/{typeId}`): `sources[].name` — чистый машинный ключ
      * («Kodik», «Sibnet»), не локализованное название. `source_key` в реальном ответе не
      * встречается — `resolveHost()` работает прямо по `name`.

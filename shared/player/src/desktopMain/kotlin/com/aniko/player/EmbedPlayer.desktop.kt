@@ -37,6 +37,9 @@ import java.net.URI
 actual fun EmbedPlayerView(
     url: String,
     referer: String?,
+    // Не используется намеренно: на Desktop нет видео-поверхности под контролем приложения,
+    // JS-мост здесь физически некуда ставить — см. KDoc `EmbedVideoController` (desktopMain).
+    @Suppress("UNUSED_PARAMETER") controller: EmbedVideoController?,
     modifier: Modifier,
 ) {
     var reopenSignal by remember(url) { mutableIntStateOf(0) }

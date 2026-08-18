@@ -109,6 +109,23 @@ data class Strings(
     // --- Плеер ---
     val playerLoadError: String,
     val playerSourceError: (hostKey: String) -> String,
+    // Оверлей плеера (P8.T3/T4/T5/T8). Кнопка «назад» переиспользует [backContentDescription].
+    // Аудиодорожки/субтитров/качества здесь нет намеренно и не появится: это внутренний UI
+    // чужого embed-плеера (CUT в таблице аудита `docs/REELWAVE_PLAN.md`), и заводить под них
+    // ключи значило бы пообещать в UI то, чего в приложении нет.
+    val playerPlay: String,
+    val playerPause: String,
+    val playerSeekBackward: String,
+    val playerSeekForward: String,
+    val playerPictureInPicture: String,
+    val playerSpeedLabel: String,
+    val playerSpeedValue: (rate: String) -> String,
+    val playerNextEpisodeIn: (seconds: Int) -> String,
+    val playerNextEpisodeNow: String,
+    val playerNextEpisode: String,
+    val playerCancel: String,
+    val playerMarkWatched: String,
+    val playerMarkUnwatched: String,
     // --- Настройки ---
     val settingsMyProfile: String,
     val settingsSignOut: String,
@@ -215,6 +232,15 @@ data class Strings(
     val commentsSortNewest: String,
     val commentsSortOldest: String,
     val commentReplyCount: (count: Int) -> String,
+    // --- Player + выбор озвучки (P8.T6) ---
+    // "All" переиспользует уже существующий [filterChipAll] (тот же смысл — сбросить фильтр).
+    val releaseVoiceFilterDub: String,
+    val releaseVoiceFilterSub: String,
+    val releaseEpisodesCount: (count: Int) -> String,
+    val releaseVoiceTypeSameCast: (name: String) -> String,
+    val releaseVoiceTypeViewsContentDescription: (count: Int) -> String,
+    val badgeSub: String,
+    val badgeSubContentDescription: String,
 )
 
 /** Дефолт — [EnStrings]: тот же выбор, что `defaultLanguageTag = "en"` в `ProvideAppStrings`. */

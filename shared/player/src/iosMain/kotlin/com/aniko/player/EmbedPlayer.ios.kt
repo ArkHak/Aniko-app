@@ -23,11 +23,17 @@ import platform.WebKit.WKWebViewConfiguration
  * JS в современном `WKWebView` включён по умолчанию, но выставляем явно через
  * `defaultWebpagePreferences.allowsContentJavaScript` — не полагаемся молча на дефолт, раз
  * большинству embed-плееров (Kodik/Sibnet/...) JS обязателен.
+ *
+ * [controller] (см. [rememberEmbedVideoController]) — опциональный JS-мост к `<video>` внутри
+ * страницы. Его `WKUserScript`/`WKScriptMessageHandler` прописываются в `WKWebViewConfiguration`
+ * ДО конструктора `WKWebView`: после создания web view конфигурация уже скопирована и правки
+ * в неё ни на что не влияют.
  */
 @Composable
 actual fun EmbedPlayerView(
     url: String,
     referer: String?,
+    controller: EmbedVideoController?,
     modifier: Modifier,
 ) {
     UIKitView(
@@ -36,7 +42,9 @@ actual fun EmbedPlayerView(
                 WKWebViewConfiguration().apply {
                     defaultWebpagePreferences.allowsContentJavaScript = true
                 }
+            controller?.install(configuration)
             AnixEmbedWebView(frame = CGRectMake(0.0, 0.0, 0.0, 0.0), configuration = configuration).apply {
+                controller?.attach(this)
                 loadEmbed(url, referer)
             }
         },
