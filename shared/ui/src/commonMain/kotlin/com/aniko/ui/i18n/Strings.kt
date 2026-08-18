@@ -69,6 +69,11 @@ data class Strings(
     val libraryRemoveFromList: String,
     val libraryRemoveFromHistory: String,
     val libraryMoveToStatus: (status: String) -> String,
+    // P9.T1: заголовок вкладки со счётчиком ("Смотрю (12)"). P9.T2: content description для
+    // тулбара shuffle/реверс над сеткой.
+    val libraryTabCountFormat: (title: String, count: Int) -> String,
+    val libraryShuffle: String,
+    val libraryReverseSort: String,
     // --- Карточка релиза ---
     val releaseInfoYear: String,
     val releaseInfoStatus: String,
@@ -97,6 +102,21 @@ data class Strings(
     val profilePrivacyTitle: String,
     val profileFriendsLabel: String,
     val profileCommentsLabel: String,
+    // Фаза 9 (P9.T7-T13). «Смотрю/В планах/Просмотрено/Отложено/Брошено» для легенды donut'а и
+    // «Избранное» для плитки переиспользуют [listStatusWatching]/.../[libraryTabFavorites] —
+    // новых ключей под них здесь сознательно нет.
+    val profileWatchedHoursLabel: String,
+    val profileWatchedHoursValue: (hours: Int) -> String,
+    val profileWatchedEpisodesLabel: String,
+    val profileListsChartTitle: String,
+    val profileListsChartTotalLabel: String,
+    val profileActivityTitle: String,
+    val profileFavoriteGenresTitle: String,
+    val profileGenrePercent: (name: String, percentage: Int) -> String,
+    val profileRecentlyWatchedTitle: String,
+    val profileRecentlyWatchedEmpty: String,
+    val profileGuestTitle: String,
+    val profileGuestMessage: String,
     val privacyWhoSeesStats: String,
     val privacyWhoSeesLists: String,
     val privacyWhoSeesSocial: String,
@@ -148,6 +168,16 @@ data class Strings(
     // --- Фаза 5 — адаптивный каркас ---
     // Заголовок экрана расписания (AnixDestination.Schedule).
     val scheduleTitle: String,
+    // --- Фаза 9 (P9.T4-T5) — доработка экрана расписания: локализованные дни недели
+    // (раньше был сырой `WeekDay.name`) + пустое состояние дня без релизов ---
+    val scheduleDayMonday: String,
+    val scheduleDayTuesday: String,
+    val scheduleDayWednesday: String,
+    val scheduleDayThursday: String,
+    val scheduleDayFriday: String,
+    val scheduleDaySaturday: String,
+    val scheduleDaySunday: String,
+    val scheduleEmptyDayMessage: String,
     // Заголовок экрана комментариев к релизу (AnixDestination.ReleaseComments).
     val commentsTitle: String,
     // Плейсхолдер detail-панели на wide-экранах (ListDetailPaneScaffold, P5.T3), когда список

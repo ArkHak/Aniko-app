@@ -4,14 +4,24 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -21,10 +31,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.model.ListStatus
+import com.aniko.model.ProfileDetails
 import com.aniko.model.Release
+import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.component.AnixEmptyBox
 import com.aniko.ui.component.AnixErrorBox
 import com.aniko.ui.component.AnixLoadingBox
@@ -43,6 +56,22 @@ import org.koin.compose.viewmodel.koinViewModel
  * [ReleaseCard.onLongClick]) и контекстное меню — сознательно не свайп, так решено в плане:
  * свайп на сетке (в отличие от списка) неоднозначен и конфликтует с горизонтальным скроллом
  * `ScrollableTabRow` выше.
+ *
+ * P9.T1: заголовки вкладок статусов/избранного дополнены счётчиком из `ProfileDetails`
+ * (см. [LibraryTab.title]) — у истории отдельного счётчика в `ProfileDetails` нет, вкладка
+ * остаётся без числа.
+ *
+ * P9.T2: тулбар над сеткой ([LibraryToolbar]) — shuffle (клиентская перетасовка уже
+ * загруженных элементов) и реверс (серверный `sort=`, недоступен для истории). Оба переключателя
+ * подробно задокументированы в [LibraryViewModel.toggleShuffle]/[LibraryViewModel.toggleReverse].
+ *
+ * P9.T3: контент ограничен [com.aniko.ui.theme.AnixDimens.contentMaxWidth] и центрирован на
+ * wide-экранах — тот же паттерн, что `HomeScreen`/P7.T2. На
+ * [com.aniko.ui.adaptive.AnixWindowSize.isTwoPane] сетка дополнительно переходит на увеличенный
+ * постер ([com.aniko.ui.theme.AnixDimens.posterWidthL]),
+ * как рельсы Фазы 6 (`HorizontalPosterRail`) — постоянный боковой каркас (`AnixSidebar`) уже
+ * есть на уровне навигации приложения (`App.kt`/`shared/ui/.../adaptive/`), самому экрану
+ * заводить его ещё раз не нужно.
  */
 @Composable
 fun LibraryScreen(
@@ -53,6 +82,7 @@ fun LibraryScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
+    val windowSize = LocalAnixWindowSize.current
     val selectedTab = uiState.selectedTab
 
     // Id релиза, для которого сейчас открыто контекстное меню — не Release целиком, чтобы меню
@@ -66,83 +96,145 @@ fun LibraryScreen(
                     Tab(
                         selected = tab == selectedTab,
                         onClick = { viewModel.selectTab(tab) },
-                        text = { Text(tab.title(strings)) },
+                        text = { Text(tab.title(strings, uiState.profile)) },
                     )
                 }
             }
 
-            val pagingState = uiState.pagingState
-            when {
-                pagingState.error != null && pagingState.items.isEmpty() ->
-                    AnixErrorBox(
-                        // P2.T10: не показываем `error.message` напрямую — это текст исключения
-                        // AnixError (технический, на английском, только для логов/debug), не
-                        // локализованный UI-текст. Всегда локализованный fallback.
-                        message = strings.libraryLoadError,
-                        onRetry = { viewModel.retry(selectedTab) },
-                        modifier = Modifier.fillMaxSize(),
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                Column(modifier = Modifier.fillMaxSize().widthIn(max = dimens.contentMaxWidth)) {
+                    val pagingState = uiState.pagingState
+
+                    LibraryToolbar(
+                        tab = selectedTab,
+                        itemCount = pagingState.items.size,
+                        isShuffled = uiState.isShuffled,
+                        isReversed = uiState.isReversed,
+                        onShuffleClick = { viewModel.toggleShuffle(selectedTab) },
+                        onReverseClick = { viewModel.toggleReverse(selectedTab) },
                     )
 
-                pagingState.items.isEmpty() && (pagingState.isLoading || pagingState.isRefreshing) ->
-                    AnixLoadingBox(
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    when {
+                        pagingState.error != null && pagingState.items.isEmpty() ->
+                            AnixErrorBox(
+                                // P2.T10: не показываем `error.message` напрямую — это текст исключения
+                                // AnixError (технический, на английском, только для логов/debug), не
+                                // локализованный UI-текст. Всегда локализованный fallback.
+                                message = strings.libraryLoadError,
+                                onRetry = { viewModel.retry(selectedTab) },
+                                modifier = Modifier.fillMaxSize(),
+                            )
 
-                pagingState.isEmpty ->
-                    AnixEmptyBox(
-                        message = selectedTab.emptyMessage(strings),
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                        pagingState.items.isEmpty() && (pagingState.isLoading || pagingState.isRefreshing) ->
+                            AnixLoadingBox(
+                                modifier = Modifier.fillMaxSize(),
+                            )
 
-                else ->
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = dimens.posterWidth),
-                        contentPadding = PaddingValues(vertical = dimens.spaceM, horizontal = dimens.spaceS),
-                        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                        verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        itemsIndexed(pagingState.items, key = { _, release -> release.id }) { index, release ->
-                            if (index >= pagingState.items.size - LIBRARY_PREFETCH_THRESHOLD) {
-                                viewModel.loadMore(selectedTab)
-                            }
-                            Box {
-                                ReleaseCard(
-                                    release = release,
-                                    onClick = { onReleaseClick(release.id) },
-                                    onLongClick = { menuReleaseId = release.id },
-                                )
-                                LibraryContextMenu(
-                                    expanded = menuReleaseId == release.id,
-                                    release = release,
-                                    tab = selectedTab,
-                                    onDismiss = { menuReleaseId = null },
-                                    onChangeStatus = { status ->
-                                        viewModel.changeStatus(release, status)
-                                        menuReleaseId = null
-                                    },
-                                    onToggleFavorite = {
-                                        viewModel.toggleFavorite(release)
-                                        menuReleaseId = null
-                                    },
-                                    onRemoveFromList = { status ->
-                                        viewModel.removeFromList(release, status)
-                                        menuReleaseId = null
-                                    },
-                                    onRemoveFromHistory = {
-                                        viewModel.removeFromHistory(release)
-                                        menuReleaseId = null
-                                    },
-                                )
-                            }
-                        }
+                        pagingState.isEmpty ->
+                            AnixEmptyBox(
+                                message = selectedTab.emptyMessage(strings),
+                                modifier = Modifier.fillMaxSize(),
+                            )
 
-                        if (pagingState.isLoading) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                AnixLoadingBox(modifier = Modifier.fillMaxWidth())
+                        else ->
+                            LazyVerticalGrid(
+                                columns =
+                                    GridCells.Adaptive(
+                                        minSize = if (windowSize.isTwoPane) dimens.posterWidthL else dimens.posterWidth,
+                                    ),
+                                contentPadding = PaddingValues(vertical = dimens.spaceM, horizontal = dimens.spaceS),
+                                horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+                                verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                itemsIndexed(pagingState.items, key = { _, release -> release.id }) { index, release ->
+                                    if (index >= pagingState.items.size - LIBRARY_PREFETCH_THRESHOLD) {
+                                        viewModel.loadMore(selectedTab)
+                                    }
+                                    Box {
+                                        ReleaseCard(
+                                            release = release,
+                                            onClick = { onReleaseClick(release.id) },
+                                            onLongClick = { menuReleaseId = release.id },
+                                        )
+                                        LibraryContextMenu(
+                                            expanded = menuReleaseId == release.id,
+                                            release = release,
+                                            tab = selectedTab,
+                                            onDismiss = { menuReleaseId = null },
+                                            onChangeStatus = { status ->
+                                                viewModel.changeStatus(release, status)
+                                                menuReleaseId = null
+                                            },
+                                            onToggleFavorite = {
+                                                viewModel.toggleFavorite(release)
+                                                menuReleaseId = null
+                                            },
+                                            onRemoveFromList = { status ->
+                                                viewModel.removeFromList(release, status)
+                                                menuReleaseId = null
+                                            },
+                                            onRemoveFromHistory = {
+                                                viewModel.removeFromHistory(release)
+                                                menuReleaseId = null
+                                            },
+                                        )
+                                    }
+                                }
+
+                                if (pagingState.isLoading) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        AnixLoadingBox(modifier = Modifier.fillMaxWidth())
+                                    }
+                                }
                             }
-                        }
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * P9.T2: тулбар shuffle/реверс над сеткой вкладки. Shuffle доступен всегда (клиентская операция
+ * над уже загруженным списком, см. [LibraryViewModel.toggleShuffle]), отключён только при
+ * `itemCount <= 1`, когда перетасовывать нечего. Реверс скрыт для [LibraryTab.History] — у
+ * `HistoryApi` нет параметра `sort` (см. её KDoc), показывать для неё переключатель было бы
+ * обманчиво. Активный переключатель подсвечивается цветом `primary`.
+ */
+@Suppress("LongParameterList") // Координирующий блок: вкладка + счётчик + 2 состояния тогглов + 2 колбэка + modifier.
+@Composable
+private fun LibraryToolbar(
+    tab: LibraryTab,
+    itemCount: Int,
+    isShuffled: Boolean,
+    isReversed: Boolean,
+    onShuffleClick: () -> Unit,
+    onReverseClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val strings = LocalStrings.current
+    val dimens = AnixThemeTokens.dimens
+
+    Row(
+        modifier = modifier.fillMaxWidth().padding(horizontal = dimens.spaceS),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onShuffleClick, enabled = itemCount > 1) {
+            Icon(
+                imageVector = Icons.Filled.Shuffle,
+                contentDescription = strings.libraryShuffle,
+                tint = if (isShuffled) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+            )
+        }
+        if (tab != LibraryTab.History) {
+            IconButton(onClick = onReverseClick) {
+                Icon(
+                    imageVector = Icons.Filled.SwapVert,
+                    contentDescription = strings.libraryReverseSort,
+                    tint = if (isReversed) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                )
             }
         }
     }
@@ -198,11 +290,43 @@ private fun LibraryContextMenu(
     }
 }
 
-private fun LibraryTab.title(strings: Strings): String =
-    when (this) {
-        is LibraryTab.Status -> status.displayName(strings)
-        LibraryTab.Favorites -> strings.libraryTabFavorites
-        LibraryTab.History -> strings.libraryTabHistory
+/**
+ * P9.T1: заголовок вкладки, дополненный счётчиком из [ProfileDetails], когда он есть
+ * (см. [count]) — для истории счётчика нет, заголовок остаётся как раньше, без числа.
+ */
+private fun LibraryTab.title(
+    strings: Strings,
+    profile: ProfileDetails?,
+): String {
+    val base =
+        when (this) {
+            is LibraryTab.Status -> status.displayName(strings)
+            LibraryTab.Favorites -> strings.libraryTabFavorites
+            LibraryTab.History -> strings.libraryTabHistory
+        }
+    val count = count(profile)
+    return if (count != null) strings.libraryTabCountFormat(base, count) else base
+}
+
+/**
+ * Счётчик вкладки из [ProfileDetails] (P9.T1). У истории отдельного поля в [ProfileDetails] нет
+ * (`watchedEpisodeCount` — это счётчик просмотренных СЕРИЙ, а не размер списка истории релизов,
+ * это разные вещи) — сознательно возвращаем `null`, а не выдумываем несуществующее число.
+ */
+private fun LibraryTab.count(profile: ProfileDetails?): Int? =
+    profile?.let {
+        when (this) {
+            is LibraryTab.Status ->
+                when (status) {
+                    ListStatus.WATCHING -> it.watchingCount
+                    ListStatus.PLANNED -> it.planCount
+                    ListStatus.COMPLETED -> it.completedCount
+                    ListStatus.ON_HOLD -> it.holdOnCount
+                    ListStatus.DROPPED -> it.droppedCount
+                }
+            LibraryTab.Favorites -> it.favoriteCount
+            LibraryTab.History -> null
+        }
     }
 
 private fun LibraryTab.emptyMessage(strings: Strings): String =

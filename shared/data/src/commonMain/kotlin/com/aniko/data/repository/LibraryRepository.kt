@@ -61,10 +61,19 @@ class LibraryRepository(
     suspend fun myList(
         status: ListStatus,
         page: Int,
-    ): Paged<Release> = profileListApi.myList(status, page).toDomain { it.toDomain() }
+        sort: Int = SORT_RECENTLY_ADDED,
+    ): Paged<Release> = profileListApi.myList(status, page, sort = sort).toDomain { it.toDomain() }
 
-    /** Готовый пагинатор для экрана списка по статусу. */
-    fun listPaginator(status: ListStatus): Paginator<Release> = Paginator { page -> myList(status, page) }
+    /**
+     * Готовый пагинатор для экрана списка по статусу. [sort] — поставщик текущего значения
+     * query-параметра `sort=` (P9.T2, переключатель "обратный порядок" в `LibraryScreen`):
+     * вызывается заново при КАЖДОЙ загрузке страницы (в т.ч. [Paginator.refresh]), поэтому
+     * тоггл во ViewModel меняет порядок без пересоздания самого `Paginator`.
+     */
+    fun listPaginator(
+        status: ListStatus,
+        sort: () -> Int = defaultSort,
+    ): Paginator<Release> = Paginator { page -> myList(status, page, sort()) }
 
     /** `null` — релиз не числится ни в одном списке. Прямой passthrough локальной истины, TTL не нужен. */
     fun observeListStatus(releaseId: ReleaseId): Flow<ListStatus?> = listMembershipStore.observeStatus(releaseId)
@@ -138,10 +147,13 @@ class LibraryRepository(
 
     // ---- Избранное ----------------------------------------------------------------------
 
-    suspend fun favorites(page: Int): Paged<Release> = favoriteApi.favorites(page).toDomain { it.toDomain() }
+    suspend fun favorites(
+        page: Int,
+        sort: Int = SORT_RECENTLY_ADDED,
+    ): Paged<Release> = favoriteApi.favorites(page, sort = sort).toDomain { it.toDomain() }
 
-    /** Готовый пагинатор для экрана избранного. */
-    fun favoritesPaginator(): Paginator<Release> = Paginator { page -> favorites(page) }
+    /** Готовый пагинатор для экрана избранного. [sort] — см. KDoc [listPaginator], тот же смысл. */
+    fun favoritesPaginator(sort: () -> Int = defaultSort): Paginator<Release> = Paginator { favorites(it, sort()) }
 
     fun observeFavorite(releaseId: ReleaseId): Flow<Boolean> = listMembershipStore.observeFavorite(releaseId)
 
@@ -261,5 +273,26 @@ class LibraryRepository(
                 lastError = null,
             ),
         )
+    }
+
+    companion object {
+        /**
+         * `sort=1` — см. KDoc [ProfileListApi.myList]: эмпирически «сначала недавно добавленные»
+         * (уже пофикшенный баг сортировки), дефолт [myList]/[favorites]/[listPaginator]/
+         * [favoritesPaginator].
+         */
+        const val SORT_RECENTLY_ADDED = 1
+
+        /** `sort=0` — обратный порядок (P9.T2, переключатель «реверс» в `LibraryScreen`). */
+        const val SORT_REVERSED = 0
+
+        /**
+         * Дефолт параметра `sort` у [listPaginator]/[favoritesPaginator] — короткое имя вместо
+         * `{ SORT_RECENTLY_ADDED }` прямо в сигнатуре нужно не только для читаемости: инлайн-лямбда
+         * там раздувает сигнатуру за [io.gitlab.arturbosch.detekt] `MaxLineLength` (ktlint сворачивает
+         * короткий однопараметрический `fun ...(): X = Y { ... }` в одну строку независимо от её
+         * итоговой длины, поэтому длину нужно контролировать на входе).
+         */
+        private val defaultSort: () -> Int = { SORT_RECENTLY_ADDED }
     }
 }

@@ -409,7 +409,13 @@ private fun NavGraphBuilder.chromeRoutes(
         )
     }
     composable<AnixDestination.Profile> {
-        ProfileScreen(onBack = { navController.popBackStack() })
+        ProfileScreen(
+            onBack = { navController.popBackStack() },
+            // Не `titleNavigator::openTitle`: маршрут профиля не завёрнут в `ListDetailHost`, и на
+            // wide-экранах навигатор открыл бы тайтл в панели, которой здесь негде отрисоваться
+            // (см. KDoc `ProfileScreen.onReleaseClick`) — отсюда всегда полноэкранный маршрут.
+            onReleaseClick = { releaseId -> navController.navigate(AnixDestination.ReleaseDetails(releaseId)) },
+        )
     }
     composable<AnixDestination.TokenGallery> {
         TokenGalleryScreen(onBack = { navController.popBackStack() })

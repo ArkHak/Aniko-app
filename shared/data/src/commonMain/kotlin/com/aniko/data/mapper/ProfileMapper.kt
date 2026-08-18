@@ -3,9 +3,11 @@ package com.aniko.data.mapper
 import com.aniko.data.dto.ProfileDetailsDto
 import com.aniko.data.dto.ProfilePreferenceResponseDto
 import com.aniko.model.FriendRequestVisibility
+import com.aniko.model.PreferredGenre
 import com.aniko.model.PrivacyVisibility
 import com.aniko.model.ProfileDetails
 import com.aniko.model.ProfilePrivacy
+import com.aniko.model.WatchDynamicsPoint
 import com.aniko.network.ApiConfig
 
 /**
@@ -47,6 +49,17 @@ fun ProfileDetailsDto.toDomain(staticBaseUrl: String = ApiConfig.DEFAULT_STATIC_
         lastActivityTime = lastActivityTime,
         isOnline = isOnline,
         isVerified = isVerified,
+        // Сортировка по timestamp — здесь, а не у потребителя: порядок элементов в самом массиве
+        // ответа хронологии не отражает, см. KDoc `WatchDynamicsDto`.
+        watchDynamics =
+            watchDynamics
+                .sortedBy { it.timestamp }
+                .map { WatchDynamicsPoint(day = it.day, count = it.count, timestamp = it.timestamp) },
+        preferredGenres =
+            preferredGenres
+                .filter { it.name.isNotBlank() }
+                .map { PreferredGenre(name = it.name, percentage = it.percentage) },
+        recentlyWatched = history.map { it.toDomain(staticBaseUrl) },
     )
 
 fun ProfilePreferenceResponseDto.toDomain(): ProfilePrivacy =

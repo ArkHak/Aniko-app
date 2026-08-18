@@ -48,6 +48,48 @@ data class ProfileDetailsDto(
     @SerialName("last_activity_time") val lastActivityTime: Long = 0,
     @SerialName("is_online") val isOnline: Boolean = false,
     @SerialName("is_verified") val isVerified: Boolean = false,
+    // --- Фаза 9 (P9.T8/T9/T11) — поля, которые ответ отдавал и раньше, но они не мапились ---
+    @SerialName("watch_dynamics") val watchDynamics: List<WatchDynamicsDto> = emptyList(),
+    @SerialName("preferred_genres") val preferredGenres: List<PreferredEntryDto> = emptyList(),
+    /**
+     * «Недавно смотрели» — 5 последних релизов, приходят прямо в `profile/{id}` полным
+     * [ReleaseDto] (живая проверка 2026-08-18). Поэтому отдельный запрос `GET history/{page}`
+     * ленте профиля не нужен — он остаётся источником полноценной пагинируемой истории в
+     * `LibraryRepository`.
+     *
+     * В отличие от `watch_dynamics`, порядок здесь осмысленный: сервер отдаёт список уже
+     * отсортированным по `last_view_timestamp` по убыванию (проверено живьём), поэтому маппер
+     * ничего не переупорядочивает — первым в ленте идёт самый свежий просмотр.
+     */
+    val history: List<ReleaseDto> = emptyList(),
+)
+
+/**
+ * Точка `watch_dynamics` из `profile/{id}`.
+ *
+ * Живая проверка 2026-08-18 (`GET https://api-s.anixsekai.com/profile/1000001`, без токена):
+ * приходит ровно 31 объект вида `{"id": 83955914, "day": 31, "count": 18, "timestamp": 1769807382}`
+ * — кольцевой буфер по одному слоту на число месяца, в произвольном порядке и с «протухшими»
+ * слотами (у неактивных дней остаётся timestamp прошлого месяца). Порядок элементов в массиве
+ * бессмысленен, хронологию задаёт только `timestamp`. Поле `id` — серверный PK записи, домену
+ * не нужен и не мапится.
+ */
+@Serializable
+data class WatchDynamicsDto(
+    val day: Int = 0,
+    val count: Int = 0,
+    val timestamp: Long = 0,
+)
+
+/**
+ * Элемент `preferred_genres` (и однотипных `preferred_audiences`/`preferred_themes`, которые
+ * v1 не показывает) — `{"name": "экшен", "percentage": 10}`. Проценты считает сервер, локального
+ * агрегата по истории не требуется (вердикт P0.T4).
+ */
+@Serializable
+data class PreferredEntryDto(
+    val name: String = "",
+    val percentage: Int = 0,
 )
 
 /** `GET profile/{id}` — обёртка с `code` (см. `ProfileResponse.java`, поле `profile` без `@JsonProperty`). */

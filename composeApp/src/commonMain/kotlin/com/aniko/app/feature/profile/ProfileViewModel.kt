@@ -2,6 +2,7 @@ package com.aniko.app.feature.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aniko.data.repository.AuthRepository
 import com.aniko.data.repository.ProfileRepository
 import com.aniko.model.AnixError
 import com.aniko.model.FriendRequestVisibility
@@ -20,6 +21,11 @@ data class ProfileUiState(
     val privacy: ProfilePrivacy? = null,
     val isLoading: Boolean = true,
     val error: AnixError? = null,
+    /**
+     * Гостевой режим (P9.T12): сессии нет — показываем приглашение войти, а не сетевую ошибку.
+     * Взаимоисключающе с [error]: [AnixError.Unauthorized] всегда трактуется как «гость».
+     */
+    val isGuest: Boolean = false,
 )
 
 /**
@@ -32,9 +38,18 @@ data class ProfileUiState(
  * Privacy-мутации (`updatePrivacy*`/[toggleIncognito]) — оптимистичные, тем же паттерном, что
  * [com.aniko.app.feature.library.LibraryViewModel.toggleFavorite]: локальный `privacy` в
  * [uiState] обновляется сразу, а при ошибке сети откатывается на предыдущее значение.
+ *
+ * Фаза 9 (P9.T12) добавила гостевой режим. Штатно экран профиля недостижим без авторизации —
+ * `AnixSessionGate` в `App.kt` показывает `LoginScreen` на всём приложении, — но состояние
+ * «сессии нет» на этом экране всё равно достижимо: `ProfileRepository.myProfile()` бросает
+ * [AnixError.Unauthorized], если в `SessionStore` нет `profileId` (токен есть, id потерян), и
+ * тот же [AnixError.Unauthorized] прилетает при 401/403 от бэкенда. До Фазы 9 оба случая
+ * показывали общий «не удалось загрузить профиль» — теперь это явный гостевой экран с кнопкой
+ * входа ([signOut] сбрасывает остатки сессии, после чего гейт в `App.kt` сам уводит на логин).
  */
 class ProfileViewModel(
     private val profileRepository: ProfileRepository,
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -44,7 +59,7 @@ class ProfileViewModel(
     }
 
     fun load() {
-        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null, isGuest = false)
         viewModelScope.launch {
             runCatching {
                 coroutineScope {
@@ -59,19 +74,33 @@ class ProfileViewModel(
                         privacy = privacy,
                         isLoading = false,
                         error = null,
+                        isGuest = false,
                     )
             }.onFailure { throwable ->
+                val error = throwable as? AnixError ?: AnixError.Unknown(throwable)
                 _uiState.value =
-                    _uiState.value.copy(
-                        isLoading = false,
-                        error = throwable as? AnixError ?: AnixError.Unknown(throwable),
-                    )
+                    if (error is AnixError.Unauthorized) {
+                        // Сессии больше нет — сбрасываем состояние целиком, а не только флаг:
+                        // иначе под гостевым экраном остались бы висеть данные прошлого
+                        // пользователя, которые снова показались бы при любом обновлении стейта.
+                        ProfileUiState(isLoading = false, isGuest = true)
+                    } else {
+                        _uiState.value.copy(isLoading = false, error = error)
+                    }
             }
         }
     }
 
     fun retry() {
         load()
+    }
+
+    /**
+     * Сбрасывает локальную сессию — единственный способ из экрана профиля попасть на логин:
+     * навигация на него не маршрут, а следствие `sessionState` (см. `AnixSessionGate`).
+     */
+    fun signOut() {
+        viewModelScope.launch { authRepository.signOut() }
     }
 
     fun updatePrivacyStats(value: PrivacyVisibility) {
