@@ -43,6 +43,10 @@ androidxSecurityCrypto = "1.1.0"
 # `evaluateJavascript` работает только в главном фрейме, а видео всегда в cross-origin подфрейме.
 # Нужны `addDocumentStartJavaScript` + `addWebMessageListener`, они есть только в androidx.webkit.
 androidxWebkit = "1.14.0"
+# P10.T1: WorkManager — единственный поддерживаемый способ получить периодическую фоновую задачу,
+# переживающую закрытие приложения (JobScheduler/AlarmManager напрямую — ниже уровнем и без
+# гарантий Doze-совместимости). CoroutineWorker живёт в -ktx-артефакте.
+androidxWork = "2.10.1"
 
 # --- Code quality (P1.T11) ---
 ktlintGradle = "14.2.0"
@@ -119,6 +123,7 @@ lyricist = { module = "cafe.adriel.lyricist:lyricist", version.ref = "lyricist" 
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "androidxSecurityCrypto" }
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "androidxWebkit" }
+androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "androidxWork" }
 
 # SQLDelight (P4.S0)
 sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }

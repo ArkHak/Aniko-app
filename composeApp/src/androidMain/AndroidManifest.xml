@@ -3,6 +3,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- P10.T6: локальные уведомления о новых сериях. С API 33 это runtime-разрешение —
+         объявления здесь недостаточно, его запрашивает экран настроек
+         (`NotificationPermission.android.kt`). На API 26..32 выдаётся при установке. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".AnixApplication"
@@ -16,11 +20,26 @@
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.Aniko"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Deep links (P10.T7): custom scheme `aniko://release/...`, см. `DeepLink.kt`
+                 (composeApp/commonMain) — единый парсер URL -> AnixDestination, переиспользуемый
+                 всеми тремя платформами. `https://` App Links сюда намеренно не входят: нет домена
+                 под контролем проекта для Digital Asset Links (см. KDoc `DeepLink.kt`).
+                 `android:launchMode="singleTask"` на активити выше — без него каждый тап по deep
+                 link создавал бы НОВЫЙ инстанс Activity вместо вызова `onNewIntent` на уже
+                 запущенном (см. `MainActivity.onNewIntent`). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="aniko" android:host="release" />
             </intent-filter>
         </activity>
     </application>

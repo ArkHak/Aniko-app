@@ -32,6 +32,11 @@ kotlin {
 
         androidMain.dependencies {
             implementation(libs.androidx.security.crypto)
+            // P10.T1: периодический дренаж офлайн-очереди (AndroidBackgroundSyncScheduler +
+            // SyncQueueDrainWorker). implementation() достаточно — WorkManager нужен только внутри
+            // этого модуля, а его `androidx.startup`-провайдер попадает в манифест приложения через
+            // merge AAR-манифеста и на транзитивной зависимости.
+            implementation(libs.androidx.work.runtime)
         }
     }
 }

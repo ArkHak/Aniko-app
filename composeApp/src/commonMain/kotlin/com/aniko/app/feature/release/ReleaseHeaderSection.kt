@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -59,8 +60,8 @@ import com.aniko.ui.theme.AnixThemeTokens
  * KDoc [ReleaseDetailsUiState]) — секции, целиком зависящие от неё (расширенные метаданные,
  * скриншоты), в этом случае просто не рисуются, а не блокируют всю шапку.
  */
-@Suppress("LongParameterList") // Публичная сигнатура шапки: 7 обязательных колбэков/данных ровно
-// по числу независимых интерактивных зон (плей/статус/избранное/ретрай), группировка в
+@Suppress("LongParameterList") // Публичная сигнатура шапки: 8 обязательных колбэков/данных ровно
+// по числу независимых интерактивных зон (плей/статус/избранное/поделиться/ретрай), группировка в
 // конфиг-класс добавила бы косвенность ради обхода линта, а не ради читаемости вызывающего кода.
 @Composable
 fun ReleaseHeaderSection(
@@ -72,6 +73,7 @@ fun ReleaseHeaderSection(
     onChangeListStatus: (ListStatus?) -> Unit,
     onToggleFavorite: () -> Unit,
     onRetryDetails: () -> Unit,
+    onShareClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -86,6 +88,7 @@ fun ReleaseHeaderSection(
             onWatchClick = onWatchClick,
             onChangeListStatus = onChangeListStatus,
             onToggleFavorite = onToggleFavorite,
+            onShareClick = onShareClick,
         )
 
         if (release.genres.isNotEmpty()) {
@@ -160,7 +163,9 @@ private fun PosterAndInfoRow(
     }
 }
 
-/** Кнопка "Смотреть" + тоггл избранного/статуса списка в одном ряду верхних действий. */
+/** Кнопка "Смотреть" + тоггл избранного/статуса списка/поделиться в одном ряду верхних действий. */
+@Suppress("LongParameterList") // 6 параметров ровно по числу независимых интерактивных зон
+// (плей/статус/избранное/поделиться), та же причина, что у `ReleaseHeaderSection` выше.
 @Composable
 private fun WatchAndFavoriteRow(
     release: Release,
@@ -168,6 +173,7 @@ private fun WatchAndFavoriteRow(
     onWatchClick: () -> Unit,
     onChangeListStatus: (ListStatus?) -> Unit,
     onToggleFavorite: () -> Unit,
+    onShareClick: () -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
@@ -207,6 +213,12 @@ private fun WatchAndFavoriteRow(
                         } else {
                             MaterialTheme.colorScheme.onSurface
                         },
+                )
+            }
+            IconButton(onClick = onShareClick) {
+                Icon(
+                    imageVector = Icons.Filled.Share,
+                    contentDescription = strings.shareButtonContentDescription,
                 )
             }
             ChipRow(

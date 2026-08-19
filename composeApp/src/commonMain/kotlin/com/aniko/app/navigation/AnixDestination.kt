@@ -24,6 +24,10 @@ sealed interface AnixDestination {
     @Serializable
     data object Profile : AnixDestination
 
+    /** Тумблеры подписки на уведомления (Фаза 10, P10.T6), открывается из [Settings]. */
+    @Serializable
+    data object NotificationSettings : AnixDestination
+
     /**
      * Экран-галерея дизайн-токенов (Фаза 2 плана, P2.T12): палитра/типографика/spacing/radius
      * с переключателем языка и темы для визуальной проверки. Debug-маршрут, открывается из
@@ -32,10 +36,28 @@ sealed interface AnixDestination {
     @Serializable
     data object TokenGallery : AnixDestination
 
-    /** Карточка релиза. */
+    /**
+     * Карточка релиза.
+     *
+     * @param pendingEpisodeSourceId / [pendingEpisodePosition] — необязательная пара "хочу сразу
+     * открыть эту серию", заполняется ТОЛЬКО парсером deep link (см. `DeepLink.kt`,
+     * `parseDeepLink`) — обычная навигация из UI (`TitleNavigator.openTitle`) их не передаёт.
+     * `null`/`null` по умолчанию, чтобы не задеть все существующие вызовы `ReleaseDetails(id)`.
+     *
+     * Deep link на эпизод (`aniko://release/{id}/episode/{sourceId}/{position}`) НЕ мапится сразу
+     * в [Player]: `hostKey` ([Player.hostKey]) — клиентская классификация видеохоста
+     * (`EpisodeSource.host`), которая приходит только вместе со списком источников конкретного
+     * типа озвучки, а сам тип озвучки (`typeId`) в URL не кодируется (см. обоснование схемы в
+     * `DeepLink.kt`). Поэтому deep link ведёт на карточку тайтла с этой парой параметров —
+     * `ReleaseDetailsScreen` сам резолвит `hostKey` цепочкой типы→источники→серии
+     * (`ReleaseDetailsViewModel.resolveDeepLinkEpisode`) и доходит до [Player], когда данные
+     * загрузятся, а не сразу.
+     */
     @Serializable
     data class ReleaseDetails(
         val releaseId: Int,
+        val pendingEpisodeSourceId: Int? = null,
+        val pendingEpisodePosition: Int? = null,
     ) : AnixDestination
 
     /**

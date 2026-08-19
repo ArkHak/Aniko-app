@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Малая иконка статус-бара для локальных уведомлений (P10.T6).
+
+    Одноцветный белый вектор, а не иконка приложения: начиная с API 21 система рисует small icon
+    как силуэт по альфа-каналу, поэтому любая цветная/детализированная картинка (в том числе
+    `applicationInfo.icon`) превращается в белый прямоугольник. Форма — стандартный «колокольчик»
+    Material, чтобы уведомление читалось как уведомление без дополнительного контекста.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,22c1.1,0 2,-0.9 2,-2h-4c0,1.1 0.9,2 2,2zM18,16v-5c0,-3.07 -1.64,-5.64 -4.5,-6.32L13.5,4c0,-0.83 -0.67,-1.5 -1.5,-1.5s-1.5,0.67 -1.5,1.5v0.68C7.63,5.36 6,7.92 6,11v5l-2,2v1h16v-1l-2,-2z" />
+</vector>

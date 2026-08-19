@@ -271,6 +271,56 @@ data class Strings(
     val releaseVoiceTypeViewsContentDescription: (count: Int) -> String,
     val badgeSub: String,
     val badgeSubContentDescription: String,
+    // --- Офлайн-режим (P10.T3) ---
+    // Два ключа, а не один: баннер показывает и факт («связи нет»), и следствие («сделанное не
+    // потеряется»), иначе пользователь не понимает, можно ли продолжать пользоваться приложением.
+    val offlineBannerTitle: String,
+    val offlineBannerDescription: String,
+    // --- Share / deep link (P10.T7/P10.T9) ---
+    val shareButtonContentDescription: String,
+    /** Desktop-фоллбэк [com.aniko.ui.share.ShareResult.COPIED_TO_CLIPBOARD]: системного шер-диалога
+     * там нет, поэтому "поделиться" копирует ссылку в буфер — экран показывает этот текст снекбаром. */
+    val shareLinkCopiedMessage: String,
+    /**
+     * --- Уведомления (P10.T5/P10.T6) ---
+     * Тексты самих OS-уведомлений. Собираются вне композиции (фоновый тик синхронизации), язык
+     * резолвится через [appStringsFor], а не через LocalStrings, — см. её KDoc.
+     *
+     * Имя канала уведомлений в системных настройках Android.
+     */
+    val notificationChannelName: String,
+    val notificationNewEpisodeTitle: String,
+    /** Тайтл + серия: «Атака титанов · 5 серия». */
+    val notificationNewEpisodeBody: (title: String, episode: String) -> String,
+    /** Серия неизвестна — сервер прислал уведомление без имени эпизода. */
+    val notificationNewEpisodeBodyNoEpisode: (title: String) -> String,
+    val notificationRelatedReleaseTitle: String,
+    val notificationRelatedReleaseBody: (title: String) -> String,
+    val notificationFriendTitle: String,
+    val notificationFriendBody: (login: String) -> String,
+    val notificationCommentTitle: String,
+    val notificationCommentBody: String,
+    val notificationArticleTitle: String,
+    val notificationArticleBody: String,
+    /** Тип уведомления неизвестен этой версии клиента (`AppNotificationKind.UNKNOWN`). */
+    val notificationGenericTitle: String,
+    val notificationGenericBody: String,
+    // --- Экран настроек: секция уведомлений (P10.T6) ---
+    val settingsNotificationsSection: String,
+    /** Пояснение про polling: почему уведомление приходит не мгновенно. */
+    val settingsNotificationsPollingNote: String,
+    /** Android 13+: разрешение POST_NOTIFICATIONS ещё не выдано. */
+    val settingsNotificationsPermissionRequired: String,
+    val settingsNotificationsPermissionGrant: String,
+    val settingsNotificationsLoadError: String,
+    val settingsNotificationEpisodes: String,
+    val settingsNotificationFirstEpisode: String,
+    val settingsNotificationRelatedReleases: String,
+    val settingsNotificationArticles: String,
+    val settingsNotificationComments: String,
+    val settingsNotificationMyCollectionComments: String,
+    val settingsNotificationMyArticleComments: String,
+    val settingsNotificationReportProcess: String,
 )
 
 /** Дефолт — [EnStrings]: тот же выбор, что `defaultLanguageTag = "en"` в `ProvideAppStrings`. */

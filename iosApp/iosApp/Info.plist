@@ -42,10 +42,38 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- P10.T1: фоновый дренаж офлайн-очереди через BGAppRefreshTask. Оба ключа обязательны:
+	     без `fetch` в UIBackgroundModes система никогда не запустит задачу, без идентификатора в
+	     BGTaskSchedulerPermittedIdentifiers `submitTaskRequest` отвечает
+	     BGTaskSchedulerErrorCodeNotPermitted. Значение должно совпадать с
+	     `BackgroundSyncScheduler.SYNC_TASK_IDENTIFIER` в commonMain. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.aniko.app.sync-queue-drain</string>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<!-- Deep links (P10.T7): custom scheme `aniko://release/...`, обрабатывается в
+	     `iOSApp.swift` (`.onOpenURL`) -> `DeepLinkEntryKt.handleDeepLinkUrl` (composeApp/iosMain) ->
+	     единый парсер `DeepLink.kt` (commonMain). `https://` App Links сюда намеренно не входят —
+	     нет домена под контролем проекта для `apple-app-site-association`, см. KDoc `DeepLink.kt`. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.aniko.app.deeplink</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>aniko</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -297,6 +297,76 @@ class ReleaseDetailsViewModel(
     }
 
     /**
+     * Резолвит deep link на конкретную серию (P10.T7, `AnixDestination.ReleaseDetails.
+     * pendingEpisodeSourceId`/`pendingEpisodePosition`) в [PlayTarget] — вызывается
+     * `ReleaseDetailsScreen` один раз после успешной загрузки релиза, если маршрут пришёл с этой
+     * парой параметров.
+     *
+     * URL деплинка несёт только `sourceId`/`position` — БЕЗ `typeId` (см. обоснование схемы в
+     * `DeepLink.kt`), а `EpisodeRepository.sources`/`episodes` требуют его явно. Поэтому цепочка
+     * перебирает `voiceTypes` по очереди и на каждом ищет источник с нужным `id` — источники
+     * (`EpisodeSource.id`) в Anixart отдельные записи БД на каждую пару тип-озвучки/хост, а не общий
+     * пул id, переиспользуемый между типами, поэтому первое совпадение по `id` уже верное, не
+     * просто "первое попавшееся" — более одного успешного попадания по построению не ожидается.
+     *
+     * Возвращает `null`, если сеть недоступна, серия/источник не существуют (протухшая или битая
+     * ссылка) — экран в этом случае просто остаётся на карточке тайтла, ошибка НЕ выставляется в
+     * [ReleaseDetailsUiState.episodesStepError]: неудачный deep link не должен выглядеть как
+     * поломка обычного флоу выбора серии.
+     */
+    suspend fun resolveDeepLinkEpisode(
+        sourceId: Int,
+        position: Int,
+    ): PlayTarget? {
+        val releaseId = loadedReleaseId ?: return null
+        _uiState.update { it.copy(isResolvingPlay = true) }
+        return try {
+            resolveDeepLinkEpisodeChain(releaseId, sourceId, position)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("SwallowedException", "TooGenericExceptionCaught") e: Exception,
+        ) {
+            // Намеренно проглочено, см. KDoc функции выше: битый/протухший deep link не должен
+            // выглядеть как ошибка обычного флоу выбора серии (episodesStepError не трогаем).
+            null
+        } finally {
+            _uiState.update { it.copy(isResolvingPlay = false) }
+        }
+    }
+
+    @Suppress("ReturnCount") // серия guard clauses по цепочке типы→источники→серии, см. KDoc выше.
+    private suspend fun resolveDeepLinkEpisodeChain(
+        releaseId: Int,
+        sourceId: Int,
+        position: Int,
+    ): PlayTarget? {
+        val types = _uiState.value.voiceTypes.ifEmpty { episodeRepository.voiceTypes(releaseId) }
+        for (type in types) {
+            val sources = episodeRepository.sources(releaseId, type.id)
+            val source = sources.firstOrNull { it.id == sourceId } ?: continue
+            val episodes = episodeRepository.episodes(releaseId, type.id, sourceId)
+            val episode = episodes.firstOrNull { it.position == position } ?: return null
+
+            watchedJob?.cancel()
+            _uiState.update {
+                it.copy(
+                    voiceTypes = types,
+                    selectedTypeId = type.id,
+                    sources = sources,
+                    selectedSourceId = source.id,
+                    episodes = episodes,
+                    watchedOverrides = emptySet(),
+                    localToggleOverrides = emptyMap(),
+                )
+            }
+            observeWatchedForSource(releaseId, source.id)
+            return PlayTarget(sourceId = source.id, position = episode.position, host = source.host)
+        }
+        return null
+    }
+
+    /**
      * Меняет статус релиза в списке пользователя ([status] `null` — снять статус).
      *
      * `LibraryRepository.addToList`/`removeFromList` (P4.T7) сами пишут новый статус в БД

@@ -1,8 +1,12 @@
 package com.aniko.app
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
@@ -46,26 +50,30 @@ import com.aniko.app.feature.profile.ProfileScreen
 import com.aniko.app.feature.release.ReleaseDetailsScreen
 import com.aniko.app.feature.schedule.ScheduleScreen
 import com.aniko.app.feature.search.SearchScreen
+import com.aniko.app.feature.settings.NotificationSettingsScreen
 import com.aniko.app.feature.settings.SettingsScreen
 import com.aniko.app.navigation.AnixDestination
 import com.aniko.app.navigation.AnixSection
+import com.aniko.app.navigation.DeepLinkDispatcher
 import com.aniko.app.navigation.DetailPaneRoute
 import com.aniko.app.navigation.DetailPaneStack
 import com.aniko.app.navigation.ListDetailHost
 import com.aniko.app.navigation.LocalTitleNavigator
 import com.aniko.app.navigation.TitleNavigator
+import com.aniko.app.navigation.parseDeepLink
 import com.aniko.app.navigation.rememberDetailPaneStack
 import com.aniko.app.navigation.rememberTitleNavigator
 import com.aniko.data.locale.LocaleStore
 import com.aniko.data.repository.AuthRepository
 import com.aniko.data.session.SessionState
-import com.aniko.data.sync.SyncQueueWorker
+import com.aniko.data.sync.SyncCoordinator
 import com.aniko.ui.adaptive.AdaptiveNavItem
 import com.aniko.ui.adaptive.AdaptiveScaffold
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.adaptive.rememberAnixWindowSize
 import com.aniko.ui.component.AnixLanguagePicker
 import com.aniko.ui.component.AnixLoadingBox
+import com.aniko.ui.component.AnixOfflineBanner
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.ProvideAppStrings
 import com.aniko.ui.i18n.Strings
@@ -94,7 +102,7 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
         val httpClient = koinInject<HttpClient>()
         val authRepository = koinInject<AuthRepository>()
         val localeStore = koinInject<LocaleStore>()
-        val syncQueueWorker = koinInject<SyncQueueWorker>()
+        val syncCoordinator = koinInject<SyncCoordinator>()
         val platformContext = LocalPlatformContext.current
 
         // Coil ходит в сеть тем же Ktor-клиентом, что и API.
@@ -111,12 +119,15 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
             authRepository.bootstrap()
         }
 
-        // Разовый прогон офлайн-очереди на старте — не потерять то, что скопилось за время
-        // оффлайна между запусками (P4.T7). Полноценный фоновый воркер с реакцией на
-        // восстановление сети — Фаза 10, здесь только этот единичный дренаж.
-        LaunchedEffect(syncQueueWorker) {
-            syncQueueWorker.drain()
+        // Фаза 10 (P10.T1/T2). Заменяет разовый `syncQueueWorker.drain()` времён P4.T7: тот
+        // единичный дренаж теперь входит в [SyncCoordinator] как переход Unknown → Online, и
+        // отдельным вызовом стал бы дублем. `start()` идемпотентен, рекомпозиция его не повторит.
+        LaunchedEffect(syncCoordinator) {
+            syncCoordinator.start()
         }
+
+        // P10.T3 — единственный источник сетевого статуса для UI.
+        val connectivity by syncCoordinator.connectivity.collectAsStateWithLifecycle()
 
         // Язык — читается из LocaleStore (P2.T11) и прокидывается в ProvideAppStrings (P2.T7/T8),
         // а не наоборот: shared/ui ничего не знает про DI/Settings, только про Compose-механику
@@ -131,7 +142,38 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
         AppTheme {
             ProvideAppStrings(languageTag = languageTag) {
                 CompositionLocalProvider(LocalAnixWindowSize provides windowSize) {
-                    AnixSessionGate(authRepository, localeStore, languageTag, onBackHandlerReady)
+                    // Баннер офлайна (P10.T3) — над гейтом сессии, а не внутри него: он должен быть
+                    // виден и на экране входа (без сети войти нельзя, и это надо объяснить), и во
+                    // всём основном каркасе. Column, а не Box: баннер раздвигает контент, а не
+                    // накрывает его — см. KDoc AnixOfflineBanner.
+                    val isOffline = connectivity.isOffline
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        AnixOfflineBanner(visible = isOffline)
+                        AnixSessionGate(
+                            authRepository = authRepository,
+                            localeStore = localeStore,
+                            languageTag = languageTag,
+                            onBackHandlerReady = onBackHandlerReady,
+                            // Пока баннер виден, зону статус-бара занимает он — об этом надо
+                            // сообщить поддереву ниже, иначе `Scaffold` внутри `AdaptiveScaffold`
+                            // отступит на неё второй раз и между баннером и контентом появится
+                            // пустая полоса. Scaffold вычитает уже поглощённые предками insets
+                            // (`onConsumedWindowInsetsChanged` в его реализации), поэтому одного
+                            // [consumeWindowInsets] достаточно — трогать сам AdaptiveScaffold не
+                            // нужно. Ветка `Modifier` (no-op) обязательна: без баннера отступ
+                            // статус-бара должен остаться за Scaffold, как и был.
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .then(
+                                        if (isOffline) {
+                                            Modifier.consumeWindowInsets(WindowInsets.statusBars)
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
+                        )
+                    }
                 }
             }
         }
@@ -153,6 +195,7 @@ private fun AnixSessionGate(
     localeStore: LocaleStore,
     languageTag: String?,
     onBackHandlerReady: (() -> Boolean) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val sessionState by authRepository.sessionState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -164,7 +207,7 @@ private fun AnixSessionGate(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
         when (sessionState) {
             SessionState.Loading -> AnixLoadingBox()
             SessionState.Unauthorized -> LoginScreen()
@@ -221,6 +264,18 @@ private fun AnixAppScaffold(
     // состояния без моста между ними). Реализация — см. [migratePaneRoutes] ниже.
     LaunchedEffect(windowSize.isTwoPane) {
         migratePaneRoutes(navController, paneStack, isTwoPane = windowSize.isTwoPane)
+    }
+
+    // Deep links (P10.T7): DeepLinkDispatcher.pending — StateFlow, а не одноразовый callback,
+    // поэтому эта подписка отрабатывает и ссылку, пришедшую холодным стартом ДО того, как
+    // AnixAppScaffold собрался (см. KDoc DeepLinkDispatcher про доставку после логина).
+    LaunchedEffect(navController) {
+        DeepLinkDispatcher.pending.collect { url ->
+            if (url != null) {
+                parseDeepLink(url)?.let { destination -> navController.navigate(destination) }
+                DeepLinkDispatcher.consume()
+            }
+        }
     }
 
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -373,7 +428,12 @@ private fun NavGraphBuilder.titleDetailRoutes(
 ) {
     composable<AnixDestination.ReleaseDetails> { entry ->
         val route: AnixDestination.ReleaseDetails = entry.toRoute()
-        ReleaseDetailsScreen(releaseId = route.releaseId, onEpisodeClick = titleNavigator::openPlayer)
+        ReleaseDetailsScreen(
+            releaseId = route.releaseId,
+            pendingEpisodeSourceId = route.pendingEpisodeSourceId,
+            pendingEpisodePosition = route.pendingEpisodePosition,
+            onEpisodeClick = titleNavigator::openPlayer,
+        )
     }
     composable<AnixDestination.ReleaseComments> { entry ->
         val route: AnixDestination.ReleaseComments = entry.toRoute()
@@ -404,6 +464,7 @@ private fun NavGraphBuilder.chromeRoutes(
         SettingsScreen(
             onProfileClick = { navController.navigate(AnixDestination.Profile) },
             onDesignGalleryClick = { navController.navigate(AnixDestination.TokenGallery) },
+            onNotificationsClick = { navController.navigate(AnixDestination.NotificationSettings) },
             languageTag = languageTag,
             onLanguageTagChange = localeStore::setLanguageTag,
         )
@@ -419,5 +480,8 @@ private fun NavGraphBuilder.chromeRoutes(
     }
     composable<AnixDestination.TokenGallery> {
         TokenGalleryScreen(onBack = { navController.popBackStack() })
+    }
+    composable<AnixDestination.NotificationSettings> {
+        NotificationSettingsScreen(onBack = { navController.popBackStack() })
     }
 }

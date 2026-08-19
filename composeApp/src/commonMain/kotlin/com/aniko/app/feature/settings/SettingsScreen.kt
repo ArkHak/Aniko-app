@@ -23,14 +23,15 @@ import org.koin.compose.viewmodel.koinViewModel
  * `LocaleStore` внутри `SettingsViewModel` — экран остаётся тонким прокси без собственного стейта
  * (см. критерий миграции на MVI-контракт в журнале Фазы 5: `SettingsViewModel` НЕ мигрирует).
  */
-@Suppress("LongParameterList") // 5 опциональных колбэков/параметров одного плоского экрана без
+@Suppress("LongParameterList") // 6 опциональных колбэков/параметров одного плоского экрана без
 // собственного стейта (см. KDoc выше про критерий немиграции на MVI) — группировка в
-// data class ради обхода линта добавила бы косвенность без пользы для читаемости на 6 полях.
+// data class ради обхода линта добавила бы косвенность без пользы для читаемости на 7 полях.
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     onProfileClick: () -> Unit = {},
     onDesignGalleryClick: () -> Unit = {},
+    onNotificationsClick: () -> Unit = {},
     languageTag: String? = null,
     onLanguageTagChange: (String?) -> Unit = {},
     viewModel: SettingsViewModel = koinViewModel(),
@@ -47,6 +48,10 @@ fun SettingsScreen(
             ListItem(
                 headlineContent = { Text(text = strings.settingsDesignGallery) },
                 modifier = Modifier.clickable(onClick = onDesignGalleryClick),
+            )
+            ListItem(
+                headlineContent = { Text(text = strings.settingsNotificationsSection) },
+                modifier = Modifier.clickable(onClick = onNotificationsClick),
             )
             ListItem(
                 headlineContent = { Text(text = strings.settingsLanguage) },
