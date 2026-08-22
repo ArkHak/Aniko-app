@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
+import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -37,7 +39,7 @@ fun LoginScreen(
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
 
-    Surface(modifier = modifier.fillMaxSize()) {
+    Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.LOGIN_SCREEN_ROOT)) {
         Column(
             modifier =
                 Modifier
@@ -97,7 +99,7 @@ fun LoginScreen(
             if (error != null) {
                 Text(
                     text = error.toMessage(strings),
-                    color = MaterialTheme.colorScheme.error,
+                    color = AnixThemeTokens.colors.errorText,
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center,
                 )

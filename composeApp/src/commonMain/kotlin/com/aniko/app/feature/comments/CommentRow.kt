@@ -134,14 +134,27 @@ private fun SpoilerPlaceholder(
 }
 
 /** Лайк комментария — только отображение/toggle подсветки, без иконок material-icons-extended
- *  (не подключена в `composeApp`, см. `build.gradle.kts`) — заменена текстовым индикатором. */
+ *  (не подключена в `composeApp`, см. `build.gradle.kts`) — заменена текстовым индикатором.
+ *
+ * P11.T7/T11 (трек D): [color] при `isVoted` раньше брал `MaterialTheme.colorScheme.primary` —
+ * на элевейтед-поверхности в тёмной теме не проходит контраст 4.5:1 (находка аудита фундамента
+ * Фазы 11). Заменено на `AnixThemeTokens.colors.primaryText` — текстовый вариант акцентного
+ * цвета, специально подобранный под контраст на surface (см. `Color.kt`).
+ *
+ * P11.T7: `contentDescription` раньше был просто числом лайков (`likesCount.toString()`) —
+ * скринридер озвучивал голое число без какого-либо смысла действия/состояния. Теперь описывает
+ * и действие (поставить/убрать лайк, по [isVoted]), и счётчик.
+ */
 @Composable
 private fun VoteIndicator(
     likesCount: Int,
     isVoted: Boolean,
     onClick: () -> Unit,
 ) {
-    val color = if (isVoted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    val strings = LocalStrings.current
+    val color = if (isVoted) AnixThemeTokens.colors.primaryText else MaterialTheme.colorScheme.onSurfaceVariant
+    val voteDescription =
+        if (isVoted) strings.commentUnlikeContentDescription else strings.commentLikeContentDescription
     Text(
         text = "$LIKE_MARK $likesCount",
         style = MaterialTheme.typography.labelMedium,
@@ -150,7 +163,7 @@ private fun VoteIndicator(
             Modifier
                 .clip(RoundedCornerShape(AnixThemeTokens.dimens.cornerPill))
                 .clickable(role = Role.Button, onClick = onClick)
-                .semantics { contentDescription = likesCount.toString() }
+                .semantics { contentDescription = "$voteDescription, $likesCount" }
                 .padding(vertical = VOTE_INDICATOR_VERTICAL_PADDING),
     )
 }

@@ -5,13 +5,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import com.aniko.ui.component.AnixLanguagePicker
 import com.aniko.ui.i18n.LocalStrings
+import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -39,19 +42,32 @@ fun SettingsScreen(
     val strings = LocalStrings.current
     val dimens = AnixThemeTokens.dimens
 
-    Surface(modifier = modifier.fillMaxSize()) {
+    // Подтверждено на устройстве (Фаза 11, T9): M3 ListItem не сливает headlineContent в свой
+    // кликабельный узел (тот же паттерн, что и остальные M3-компоненты этой фазы) —
+    // clearAndSetSemantics на каждом пункте, кроме языка (у него нет своего onClick — переключение
+    // происходит через AnixLanguagePicker внутри, уже озвученный отдельно).
+    Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.SETTINGS_SCREEN_ROOT)) {
         Column {
             ListItem(
                 headlineContent = { Text(text = strings.settingsMyProfile) },
-                modifier = Modifier.clickable(onClick = onProfileClick),
+                modifier =
+                    Modifier
+                        .clickable(onClick = onProfileClick)
+                        .clearAndSetSemantics { contentDescription = strings.settingsMyProfile },
             )
             ListItem(
                 headlineContent = { Text(text = strings.settingsDesignGallery) },
-                modifier = Modifier.clickable(onClick = onDesignGalleryClick),
+                modifier =
+                    Modifier
+                        .clickable(onClick = onDesignGalleryClick)
+                        .clearAndSetSemantics { contentDescription = strings.settingsDesignGallery },
             )
             ListItem(
                 headlineContent = { Text(text = strings.settingsNotificationsSection) },
-                modifier = Modifier.clickable(onClick = onNotificationsClick),
+                modifier =
+                    Modifier
+                        .clickable(onClick = onNotificationsClick)
+                        .clearAndSetSemantics { contentDescription = strings.settingsNotificationsSection },
             )
             ListItem(
                 headlineContent = { Text(text = strings.settingsLanguage) },
@@ -67,10 +83,13 @@ fun SettingsScreen(
                 headlineContent = {
                     Text(
                         text = strings.settingsSignOut,
-                        color = MaterialTheme.colorScheme.error,
+                        color = AnixThemeTokens.colors.errorText,
                     )
                 },
-                modifier = Modifier.clickable { viewModel.signOut() },
+                modifier =
+                    Modifier
+                        .clickable { viewModel.signOut() }
+                        .clearAndSetSemantics { contentDescription = strings.settingsSignOut },
             )
         }
     }

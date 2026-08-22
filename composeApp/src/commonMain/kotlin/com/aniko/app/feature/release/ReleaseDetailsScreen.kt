@@ -27,6 +27,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.feature.release.rating.ReleaseRatingSection
 import com.aniko.app.navigation.LocalTitleNavigator
@@ -39,6 +42,7 @@ import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.share.ShareResult
 import com.aniko.ui.share.rememberShareController
+import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -85,7 +89,7 @@ fun ReleaseDetailsScreen(
         onResolved = { target -> onEpisodeClick(releaseId, target.sourceId, target.position, target.host) },
     )
 
-    Surface(modifier = modifier.fillMaxSize()) {
+    Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.RELEASE_DETAILS_SCREEN_ROOT)) {
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 state.isLoading && state.release == null -> AnixLoadingState(modifier = Modifier.fillMaxSize())
@@ -273,12 +277,19 @@ private fun CommentsLinkRow(
     onClick: () -> Unit,
 ) {
     val strings = LocalStrings.current
+    val title = strings.releaseCommentsTitle(commentCount)
 
+    // Подтверждено на устройстве (Фаза 11, T9): Text{} не сливается с кликабельным Row сам по
+    // себе — тот же паттерн, что и остальные M3/самописные clickable-строки этой фазы.
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .clearAndSetSemantics { contentDescription = title },
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(text = strings.releaseCommentsTitle(commentCount), style = MaterialTheme.typography.titleMedium)
+        Text(text = title, style = MaterialTheme.typography.titleMedium)
         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
     }
 }

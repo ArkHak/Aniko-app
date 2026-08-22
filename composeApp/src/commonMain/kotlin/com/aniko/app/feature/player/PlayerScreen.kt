@@ -8,6 +8,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.navigation.LocalTitleNavigator
 import com.aniko.model.VideoHost
@@ -18,6 +19,7 @@ import com.aniko.ui.component.AnixErrorBox
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
+import com.aniko.ui.testing.AnixTestTags
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -69,7 +71,7 @@ fun PlayerScreen(
     val strings = LocalStrings.current
     val navigator = LocalTitleNavigator.current
 
-    Surface(modifier = modifier.fillMaxSize()) {
+    Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.PLAYER_SCREEN_ROOT)) {
         when {
             state.isLoading -> AnixLoadingBox(modifier = Modifier.fillMaxSize())
 

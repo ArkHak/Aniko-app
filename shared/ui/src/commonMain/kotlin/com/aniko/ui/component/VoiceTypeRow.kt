@@ -21,7 +21,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import com.aniko.model.VoiceType
@@ -60,6 +63,14 @@ fun VoiceTypeRow(
         if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
     val contentColor =
         if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    val subtitle = voiceTypeSubtitle(voiceType, sameCastAsName, strings)
+    val rowDescription =
+        buildString {
+            append(voiceType.name)
+            if (subtitle != null) append(", ").append(subtitle)
+            voiceType.episodesCount?.let { append(", ").append(strings.releaseEpisodesCount(it)) }
+            voiceType.viewCount?.let { append(", ").append(strings.releaseVoiceTypeViewsContentDescription(it)) }
+        }
 
     Row(
         modifier =
@@ -68,7 +79,14 @@ fun VoiceTypeRow(
                 .clip(RoundedCornerShape(dimens.cornerM))
                 .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
                 .background(containerColor)
-                .padding(horizontal = dimens.spaceM, vertical = dimens.space12),
+                .padding(horizontal = dimens.spaceM, vertical = dimens.space12)
+                // Подтверждено на устройстве (Фаза 11, T9): подписи/счётчики строки не сливаются
+                // с кликабельным Row сами по себе — TalkBack фокусировал строку без имени.
+                .clearAndSetSemantics {
+                    contentDescription = rowDescription
+                    role = Role.RadioButton
+                    this.selected = selected
+                },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {

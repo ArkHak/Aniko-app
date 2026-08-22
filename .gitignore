@@ -1,6 +1,5 @@
 docs/api/jadx-out/
 docs/api/jadx-out-*/
-docs/api/samples/
 .gradle/
 build/
 .idea/

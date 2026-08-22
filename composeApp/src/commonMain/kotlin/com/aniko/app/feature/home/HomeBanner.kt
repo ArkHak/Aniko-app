@@ -24,6 +24,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -122,7 +124,18 @@ private fun BannerSlide(
     val dimens = AnixThemeTokens.dimens
     val shape = RoundedCornerShape(dimens.corner16)
 
-    Box(modifier = modifier.clip(shape).clickable(onClick = onClick)) {
+    Box(
+        modifier =
+            modifier
+                .clip(shape)
+                .clickable(onClick = onClick)
+                // Подтверждено на устройстве (Фаза 11, T9): contentDescription на вложенном
+                // AsyncImage не сливается сам по себе с кликабельным Box (обычный
+                // semantics(mergeDescendants=true) тоже не сработал, проверено на эмуляторе) —
+                // TalkBack фокусировал баннер без имени. clearAndSetSemantics задаёт имя
+                // напрямую на кликабельном узле.
+                .clearAndSetSemantics { contentDescription = banner.title },
+    ) {
         AsyncImage(
             model = banner.imageUrl,
             contentDescription = banner.title,

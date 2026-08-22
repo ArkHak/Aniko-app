@@ -1,3 +1,8 @@
+// compose.uiTest (F2, Фаза 11) — экспериментальный accessor Compose Multiplatform, нужен для
+// runComposeUiTest в composeApp/src/desktopTest/.../smoke/AnikoSmokeHarness.kt.
+@file:OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+
+import com.aniko.buildlogic.GenerateApiFixturesTask
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
@@ -9,6 +14,18 @@ plugins {
 }
 
 val desktopMainClass = "com.aniko.app.MainKt"
+
+// F1 (Фаза 11, docs/REELWAVE_PLAN.md): та же кодогенерация, что и :shared:data:generateApiFixtures
+// (см. её KDoc в GenerateApiFixturesTask) — отдельный вызов задачи со своим пакетом, потому что
+// KMP/Gradle не даёт чисто шарить commonTest/desktopTest-исходники между модулями без
+// testFixtures-инфраструктуры. Смоук-harness composeApp (F2/F3, пакет com.aniko.app.smoke)
+// читает эти фикстуры напрямую из com.aniko.app.smoke.fixtures.ApiFixtures.
+val generateSmokeApiFixtures =
+    tasks.register<GenerateApiFixturesTask>("generateSmokeApiFixtures") {
+        samplesDir.set(rootProject.layout.projectDirectory.dir("docs/api/samples"))
+        outputDir.set(layout.buildDirectory.dir("generated/apiFixtures/desktopTest/kotlin"))
+        packageName.set("com.aniko.app.smoke.fixtures")
+    }
 
 kotlin {
     // Чтобы работал и `:composeApp:run` (Compose Desktop), и `:composeApp:desktopRun` (KGP).
@@ -68,6 +85,21 @@ kotlin {
         getByName("desktopMain").dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.swing)
+        }
+
+        // F2/F3 (Фаза 11): смоук-harness — см. KDoc `composeApp/src/desktopTest/.../smoke/`.
+        // desktopTest, а НЕ commonTest: `runComposeUiTest` из commonTest компилируется и в
+        // androidUnitTest, где без Robolectric он падает — см. KDoc AnikoSmokeHarness.kt.
+        getByName("desktopTest").kotlin.srcDir(generateSmokeApiFixtures.flatMap { it.outputDir })
+        getByName("desktopTest").dependencies {
+            implementation(compose.uiTest)
+            implementation(libs.ktor.client.mock)
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.multiplatform.settings.test)
+            // In-memory SqlDriver для fakeInfraModule (F3) — тот же артефакт, что desktopMain/
+            // desktopTest :shared:database, но composeApp его сам не тянет (implementation там,
+            // не api, и это main-classpath, не test).
+            implementation(libs.sqldelight.sqlite.driver)
         }
     }
 }

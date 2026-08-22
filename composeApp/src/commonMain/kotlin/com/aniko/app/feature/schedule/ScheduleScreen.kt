@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.navigation.LocalTitleNavigator
@@ -38,6 +39,7 @@ import com.aniko.ui.component.ReleaseCard
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.i18n.displayName
+import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -83,7 +85,7 @@ fun ScheduleScreen(
     val strings = LocalStrings.current
     val windowSize = LocalAnixWindowSize.current
 
-    Surface(modifier = modifier.fillMaxSize()) {
+    Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.SCHEDULE_SCREEN_ROOT)) {
         when {
             state.isLoading && state.schedule == null -> AnixLoadingState(modifier = Modifier.fillMaxSize())
 

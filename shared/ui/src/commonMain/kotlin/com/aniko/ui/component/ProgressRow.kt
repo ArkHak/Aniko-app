@@ -16,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import com.aniko.model.Release
 import com.aniko.ui.i18n.LocalStrings
@@ -33,9 +35,12 @@ import com.aniko.ui.theme.AnixThemeTokens
  * зажимает внутренний `.width(dimens.posterWidth)` компонента до этого меньшего значения — без
  * необходимости трогать `AnixPoster.kt` (вне рамок трека B этой фазы).
  */
-@Suppress("LongParameterList") // Публичная сигнатура зафиксирована брифом P6.T6: примитивы
+@Suppress("LongParameterList", "LongMethod")
+// LongParameterList: публичная сигнатура зафиксирована брифом P6.T6: примитивы
 // posterUrl/title/watchedEpisodes/totalEpisodes/onClick обязательны (три реальных потребителя
 // считают "просмотрено" по-разному, см. KDoc класса), subtitle/trailing — опциональные слоты.
+// LongMethod: за порог (60) вывел `accessibleLabel`/`clearAndSetSemantics{}` (Фаза 11, T9 —
+// Modifier.clickable не сливает потомков сам по себе, см. KDoc ниже) — тело осталось линейным.
 @Composable
 fun ProgressRow(
     posterUrl: String?,
@@ -53,12 +58,23 @@ fun ProgressRow(
     val watched = watchedEpisodes ?: 0
     val total = totalEpisodes ?: 0
     val progress = if (total > 0) (watched.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
+    val accessibleLabel =
+        buildString {
+            append(title)
+            if (subtitle != null) append(", ").append(subtitle)
+            append(", ").append(strings.progressEpisodesOf(watched, total))
+        }
 
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
+                // Подтверждено на устройстве (Фаза 11, T9): без явного merge TalkBack фокусирует
+                // кликабельную строку без имени, заголовок/прогресс остаются отдельными
+                // недостижимыми для навигации узлами (обычный semantics(mergeDescendants=true)
+                // тоже не помог, проверено на эмуляторе — см. AnixPoster.kt/AnixNavigationBar.kt).
+                .clearAndSetSemantics { contentDescription = accessibleLabel }
                 .padding(vertical = dimens.spaceS, horizontal = dimens.spaceM),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),

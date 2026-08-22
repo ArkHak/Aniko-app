@@ -36,6 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -164,8 +166,12 @@ private fun PosterAndInfoRow(
 }
 
 /** Кнопка "Смотреть" + тоггл избранного/статуса списка/поделиться в одном ряду верхних действий. */
-@Suppress("LongParameterList") // 6 параметров ровно по числу независимых интерактивных зон
+@Suppress("LongParameterList", "LongMethod")
+// LongParameterList: 6 параметров ровно по числу независимых интерактивных зон
 // (плей/статус/избранное/поделиться), та же причина, что у `ReleaseHeaderSection` выше.
+// LongMethod: за порог (60) вывели `clearAndSetSemantics{}`-модификаторы на Watch/избранное/
+// поделиться (Фаза 11, T9 — IconButton/Button не сливают contentDescription сами по себе, см.
+// их KDoc) — тело осталось линейным, разбиение добавило бы косвенность ради счётчика строк.
 @Composable
 private fun WatchAndFavoriteRow(
     release: Release,
@@ -179,7 +185,13 @@ private fun WatchAndFavoriteRow(
     val strings = LocalStrings.current
 
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
-        Button(onClick = onWatchClick, enabled = !isResolvingPlay) {
+        // Подтверждено на устройстве (Фаза 11, T9): M3 Button не сливает свой Text{} в
+        // озвучиваемый узел (тот же паттерн, что и остальные M3-компоненты этой фазы).
+        Button(
+            onClick = onWatchClick,
+            enabled = !isResolvingPlay,
+            modifier = Modifier.clearAndSetSemantics { contentDescription = strings.titleDetailWatch },
+        ) {
             if (isResolvingPlay) {
                 CircularProgressIndicator(
                     modifier = Modifier.width(ButtonDefaults.IconSize),
@@ -198,15 +210,17 @@ private fun WatchAndFavoriteRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
         ) {
-            IconButton(onClick = onToggleFavorite) {
+            val favoriteDescription =
+                if (release.isFavorite) strings.commonRemoveFromFavorites else strings.commonAddToFavorites
+            // Подтверждено на устройстве (Фаза 11, T9): IconButton не сливает
+            // Icon.contentDescription в свой кликабельный узел.
+            IconButton(
+                onClick = onToggleFavorite,
+                modifier = Modifier.clearAndSetSemantics { contentDescription = favoriteDescription },
+            ) {
                 Icon(
                     imageVector = if (release.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription =
-                        if (release.isFavorite) {
-                            strings.commonRemoveFromFavorites
-                        } else {
-                            strings.commonAddToFavorites
-                        },
+                    contentDescription = null,
                     tint =
                         if (release.isFavorite) {
                             MaterialTheme.colorScheme.error
@@ -215,10 +229,13 @@ private fun WatchAndFavoriteRow(
                         },
                 )
             }
-            IconButton(onClick = onShareClick) {
+            IconButton(
+                onClick = onShareClick,
+                modifier = Modifier.clearAndSetSemantics { contentDescription = strings.shareButtonContentDescription },
+            ) {
                 Icon(
                     imageVector = Icons.Filled.Share,
-                    contentDescription = strings.shareButtonContentDescription,
+                    contentDescription = null,
                 )
             }
             ChipRow(

@@ -9,6 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.Dp
 import coil3.compose.AsyncImage
 import com.aniko.ui.theme.AnixThemeTokens
@@ -32,6 +34,7 @@ fun AnixPoster(
 ) {
     val dimens = AnixThemeTokens.dimens
     val shape = RoundedCornerShape(dimens.cornerM)
+    val posterDescription = contentDescription
 
     AsyncImage(
         model = url,
@@ -42,6 +45,20 @@ fun AnixPoster(
                 .let { base -> if (width != null) base.width(width) else base }
                 .aspectRatio(aspectRatio)
                 .clip(shape)
-                .background(MaterialTheme.colorScheme.surfaceVariant, shape),
+                .background(MaterialTheme.colorScheme.surfaceVariant, shape)
+                // На устройстве (Фаза 11, T9) подтверждено дампом accessibility-дерева: Coil
+                // `AsyncImage` рисует картинку внутренним дочерним узлом, чей `contentDescription`
+                // не сливается автоматически с узлом [modifier] (на котором висит
+                // `combinedClickable` вызывающей стороны — `TitleCard`/`ReleaseCard`) — TalkBack
+                // фокусировал кликабельный узел БЕЗ имени. Обычный `semantics(mergeDescendants =
+                // true)` здесь не сработал (проверено на эмуляторе), `clearAndSetSemantics`
+                // задаёт имя напрямую на узле, где реально висит клик.
+                .let { base ->
+                    if (posterDescription != null) {
+                        base.clearAndSetSemantics { this.contentDescription = posterDescription }
+                    } else {
+                        base
+                    }
+                },
     )
 }

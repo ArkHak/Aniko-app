@@ -29,6 +29,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -44,6 +47,7 @@ import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.component.ChipRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
+import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -83,15 +87,21 @@ fun ProfileScreen(
     val strings = LocalStrings.current
 
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.testTag(AnixTestTags.PROFILE_SCREEN_ROOT),
         topBar = {
             TopAppBar(
                 title = { Text(strings.profileTitle) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    // Подтверждено на устройстве (Фаза 11, T9): IconButton не сливает
+                    // Icon.contentDescription в свой кликабельный узел.
+                    IconButton(
+                        onClick = onBack,
+                        modifier =
+                            Modifier.clearAndSetSemantics { contentDescription = strings.backContentDescription },
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = strings.backContentDescription,
+                            contentDescription = null,
                         )
                     }
                 },

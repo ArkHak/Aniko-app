@@ -12,6 +12,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
@@ -50,7 +52,13 @@ fun AnixErrorState(
                 textAlign = TextAlign.Center,
             )
             if (onRetry != null) {
-                Button(onClick = onRetry) { Text(LocalStrings.current.commonRetry) }
+                // Подтверждено на устройстве (Фаза 11, T9): M3 Button не сливает свой Text{} в
+                // озвучиваемый узел — общий для всего приложения компонент, чинится один раз тут.
+                val retryLabel = LocalStrings.current.commonRetry
+                Button(
+                    onClick = onRetry,
+                    modifier = Modifier.clearAndSetSemantics { contentDescription = retryLabel },
+                ) { Text(retryLabel) }
             }
         }
     }
@@ -78,7 +86,10 @@ fun AnixEmptyState(
                 textAlign = TextAlign.Center,
             )
             if (actionLabel != null && onAction != null) {
-                Button(onClick = onAction) { Text(actionLabel) }
+                Button(
+                    onClick = onAction,
+                    modifier = Modifier.clearAndSetSemantics { contentDescription = actionLabel },
+                ) { Text(actionLabel) }
             }
         }
     }

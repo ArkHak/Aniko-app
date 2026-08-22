@@ -23,7 +23,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.i18n.LocalStrings
@@ -91,6 +94,7 @@ private fun QuickActionTileView(
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
     val shape = RoundedCornerShape(dimens.cornerM)
 
     Column(
@@ -100,7 +104,17 @@ private fun QuickActionTileView(
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant, shape)
                 .clickable(onClick = tile.onClick)
-                .padding(dimens.spaceS),
+                // Подтверждено на устройстве (Фаза 11, T9): предположение ниже про "подпись уже
+                // рядом" не выполнялось само по себе — `Modifier.clickable` не сливает потомков
+                // в один озвучиваемый узел (обычный semantics(mergeDescendants=true) тоже не
+                // помог, проверено на эмуляторе), TalkBack фокусировал плитку без имени.
+                // clearAndSetSemantics задаёт имя напрямую на кликабельном узле. Не голый
+                // tile.label: плитка "Расписание" и вкладка нижней навигации "Расписание"
+                // озвучивались бы одинаково — WCAG duplicate-descriptions (найдено тем же
+                // прогоном аудита) — глагол disambiguates обе цели друг от друга для TalkBack.
+                .clearAndSetSemantics {
+                    contentDescription = strings.homeQuickActionOpenContentDescription(tile.label)
+                }.padding(dimens.spaceS),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -116,6 +130,10 @@ private fun QuickActionTileView(
             style = MaterialTheme.typography.labelMedium,
             textAlign = TextAlign.Center,
             maxLines = 1,
+            // P11.T8/T11 (Трек C): RU-подпись плитки обычно длиннее EN — без overflow текст
+            // жёстко обрезался бы посимвольно (TextOverflow.Clip по умолчанию), эллипсис честно
+            // сигнализирует урезание.
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

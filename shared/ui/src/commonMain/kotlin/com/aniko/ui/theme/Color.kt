@@ -40,6 +40,26 @@ internal object AnixPalette {
     val SurfaceLight = Color(0xFFFFFFFF)
     val SurfaceLightElevated = Color(0xFFF1EFF8)
     val OnLight = Color(0xFF1A1730)
+
+    // Text variants — Фаза 11 (P11.T6). Аудит WCAG показал, что Primary/Secondary/Error/
+    // Success/Warning выше не проходят 4.5:1 (AA, обычный текст) как цвет ТЕКСТА на части
+    // поверхностей — притом что как заливки/иконки/акценты эти же значения остаются как есть
+    // (решение: базовую палитру не трогать). Ниже — тот же hue/saturation, что и у исходного
+    // цвета, только смещена светлота (темнее для светлой темы / светлее для тёмной), пока
+    // контраст относительно самой требовательной поверхности своей темы не станет ≥4.5:1.
+    // Для тёмной темы это [SurfaceDarkElevated] (самая светлая из трёх тёмных поверхностей —
+    // даёт наименьший контраст со светлым текстом), для светлой — [SurfaceLightElevated]
+    // (самая тёмная из трёх светлых — по той же логике). Success/Warning в тёмной теме уже
+    // проходят 4.5:1 без изменений (6.17 / 7.23 на элевейтед-поверхности) — отдельных
+    // *TextDark для них нет, используются существующие [Success]/[Warning].
+    val PrimaryTextDark = Color(0xFF8E73F0) // на SurfaceDarkElevated: 4.58 (было 4.40)
+    val PrimaryTextLight = Color(0xFF714FED) // на SurfaceLightElevated: 4.56 (было 3.28)
+    val SecondaryTextDark = Color(0xFFCC6B64) // на SurfaceDarkElevated: 4.58 (было 3.32)
+    val SecondaryTextLight = Color(0xFFBA463D) // на SurfaceLightElevated: 4.57 (было 4.35)
+    val ErrorTextDark = Color(0xFFE75559) // на SurfaceDarkElevated: 4.57 (было 4.20)
+    val ErrorTextLight = Color(0xFFD51E24) // на SurfaceLightElevated: 4.56 (было 3.44)
+    val SuccessTextLight = Color(0xFF2B7A57) // на SurfaceLightElevated: 4.58 (было 2.34)
+    val WarningTextLight = Color(0xFF916416) // на SurfaceLightElevated: 4.57 (было 2.00)
 }
 
 internal val AnixDarkColors =
@@ -92,6 +112,15 @@ internal val AnixLightColors =
  * - [chartTrack]/[chartSeries] — подложка и палитра серий для графиков статистики (P6.T10/T11),
  *   выбраны на глаз из уже существующих брендовых/семантических цветов, чтобы не плодить новые
  *   hex без дизайн-референса (та же логика, что у [live]/[warning]).
+ * - [primaryText]/[secondaryText]/[errorText]/[successText]/[warningText] — Фаза 11 (P11.T6):
+ *   версии Primary/Secondary/Error/Success/Warning, проходящие WCAG 4.5:1 именно как цвет
+ *   ТЕКСТА (не заливки/иконки/акцента) на поверхностях текущей темы — см. [AnixPalette] для
+ *   точных hex и посчитанного контраста каждого варианта. В отличие от [success]/[warning]
+ *   выше (которые про "текст/иконка ПОВЕРХ цветной заливки"), эти токены — про сам
+ *   семантический цвет, используемый как текст НА поверхности (`surface`/`surfaceVariant`/
+ *   `background`). Уже существующие места, где Primary/Secondary/Error/Success/Warning
+ *   используются как цвет текста напрямую (не через эти токены), не переключены —
+ *   это задача других треков Фазы 11 (см. отчёт P11.T6).
  */
 @Immutable
 data class AnixColors(
@@ -114,9 +143,28 @@ data class AnixColors(
             AnixPalette.PrimaryDark,
             Color.Gray,
         ),
+    val primaryText: Color = AnixPalette.PrimaryTextDark,
+    val secondaryText: Color = AnixPalette.SecondaryTextDark,
+    val errorText: Color = AnixPalette.ErrorTextDark,
+    val successText: Color = AnixPalette.Success,
+    val warningText: Color = AnixPalette.Warning,
 )
 
-internal val AnixDarkExtraColors = AnixColors()
-internal val AnixLightExtraColors = AnixColors()
+internal val AnixDarkExtraColors =
+    AnixColors(
+        primaryText = AnixPalette.PrimaryTextDark,
+        secondaryText = AnixPalette.SecondaryTextDark,
+        errorText = AnixPalette.ErrorTextDark,
+        successText = AnixPalette.Success,
+        warningText = AnixPalette.Warning,
+    )
+internal val AnixLightExtraColors =
+    AnixColors(
+        primaryText = AnixPalette.PrimaryTextLight,
+        secondaryText = AnixPalette.SecondaryTextLight,
+        errorText = AnixPalette.ErrorTextLight,
+        successText = AnixPalette.SuccessTextLight,
+        warningText = AnixPalette.WarningTextLight,
+    )
 
 val LocalAnixColors = staticCompositionLocalOf { AnixColors() }

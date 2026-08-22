@@ -13,6 +13,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import com.aniko.ui.theme.AnixThemeTokens
 
 /**
@@ -52,10 +57,12 @@ fun <T> ChipRow(
     ) {
         items.forEach { item ->
             val icon = leadingIcon?.invoke(item)
+            val selected = isSelected(item)
+            val chipLabel = label(item)
             FilterChip(
-                selected = isSelected(item),
+                selected = selected,
                 onClick = { onClick(item) },
-                label = { Text(label(item)) },
+                label = { Text(chipLabel) },
                 leadingIcon =
                     icon?.let {
                         {
@@ -65,6 +72,16 @@ fun <T> ChipRow(
                                 modifier = Modifier.size(FilterChipDefaults.IconSize),
                             )
                         }
+                    },
+                // Подтверждено на устройстве (Фаза 11, T9): M3 FilterChip не сливает подпись в
+                // свой озвучиваемый узел (тот же паттерн, что и NavigationBarItem/AnixPoster —
+                // см. их KDoc). Роль/selected переустановлены вручную — clearAndSetSemantics
+                // стирает то, что FilterChip выставляет сам по себе.
+                modifier =
+                    Modifier.clearAndSetSemantics {
+                        contentDescription = chipLabel
+                        role = Role.Checkbox
+                        this.selected = selected
                     },
             )
         }

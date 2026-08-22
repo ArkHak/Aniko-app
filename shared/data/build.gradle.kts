@@ -1,3 +1,5 @@
+import com.aniko.buildlogic.GenerateApiFixturesTask
+
 plugins {
     id("aniko.kmp.library")
     id("aniko.kmp.serialization")
@@ -8,8 +10,20 @@ android {
     namespace = "com.aniko.data"
 }
 
+// F1 (Фаза 11, docs/REELWAVE_PLAN.md): зашивает docs/api/samples/*.json в сгенерированный
+// ApiFixtures.kt для commonTest — см. подробный KDoc GenerateApiFixturesTask про то, почему не
+// файловый I/O в рантайме теста.
+val generateApiFixtures =
+    tasks.register<GenerateApiFixturesTask>("generateApiFixtures") {
+        samplesDir.set(rootProject.layout.projectDirectory.dir("docs/api/samples"))
+        outputDir.set(layout.buildDirectory.dir("generated/apiFixtures/commonTest/kotlin"))
+        packageName.set("com.aniko.data.fixtures")
+    }
+
 kotlin {
     sourceSets {
+        getByName("commonTest").kotlin.srcDir(generateApiFixtures.flatMap { it.outputDir })
+
         commonMain.dependencies {
             api(project(":shared:model"))
             api(project(":shared:network"))

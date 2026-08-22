@@ -18,6 +18,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 
@@ -102,12 +105,19 @@ fun RatingInput(
                                 onClickLabel = description,
                                 role = Role.Button,
                                 onClick = { onRate(stars) },
-                            ),
+                            )
+                            // Подтверждено на устройстве (Фаза 11, T9): contentDescription на
+                            // вложенном Icon не сливается с кликабельным Box сам по себе —
+                            // TalkBack фокусировал звезду без имени, только onClickLabel-подсказку.
+                            .clearAndSetSemantics {
+                                contentDescription = description
+                                role = Role.Button
+                            },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = if (filled) Icons.Filled.Star else Icons.Outlined.Star,
-                        contentDescription = description,
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }

@@ -94,7 +94,10 @@ fun ReleaseEpisodesSection(
                 Text(
                     text = state.episodesStepError.toEpisodesMessage(strings),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
+                    // P11.T7 (Трек C): `colorScheme.error` не проходит контраст 4.5:1 как цвет
+                    // текста на surface в обеих темах (особенно светлой) — `errorText` подобран
+                    // именно под текст (см. KDoc `AnixColors`/`AnixPalette` в shared/ui/theme).
+                    color = AnixThemeTokens.colors.errorText,
                 )
 
             state.episodes.isNotEmpty() -> {

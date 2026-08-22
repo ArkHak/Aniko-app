@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.mvi.CollectEffects
 import com.aniko.app.ui.toContentState
@@ -24,6 +25,7 @@ import com.aniko.ui.component.AnixContentSlot
 import com.aniko.ui.component.ChipRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
+import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -58,7 +60,7 @@ fun ReleaseCommentsScreen(
 
     val contentState = state.paging.toContentState { error -> error.toDisplayMessage(strings) }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize().testTag(AnixTestTags.RELEASE_COMMENTS_SCREEN_ROOT)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(dimens.spaceM),
             horizontalArrangement = Arrangement.SpaceBetween,

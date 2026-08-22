@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.mvi.CollectEffects
 import com.aniko.app.ui.toContentState
@@ -27,6 +28,7 @@ import com.aniko.ui.component.HorizontalPosterRail
 import com.aniko.ui.component.TitleCard
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
+import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -97,7 +99,7 @@ private fun HomeContent(
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
 
-    Surface(modifier = modifier.fillMaxSize()) {
+    Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.HOME_SCREEN_ROOT)) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().widthIn(max = dimens.contentMaxWidth),

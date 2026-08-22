@@ -36,12 +36,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.ui.component.ChipRow
 import com.aniko.ui.i18n.LocalStrings
+import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import com.aniko.ui.theme.AppTheme
 import com.aniko.ui.theme.LocalAnixColors
@@ -81,15 +85,21 @@ fun TokenGalleryScreen(
     var fontScaleIndex by remember { mutableIntStateOf(0) }
 
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.testTag(AnixTestTags.TOKEN_GALLERY_SCREEN_ROOT),
         topBar = {
             TopAppBar(
                 title = { Text(strings.galleryTitle) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    // Подтверждено на устройстве (Фаза 11, T9): IconButton не сливает
+                    // Icon.contentDescription в свой кликабельный узел.
+                    IconButton(
+                        onClick = onBack,
+                        modifier =
+                            Modifier.clearAndSetSemantics { contentDescription = strings.backContentDescription },
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = strings.backContentDescription,
+                            contentDescription = null,
                         )
                     }
                 },

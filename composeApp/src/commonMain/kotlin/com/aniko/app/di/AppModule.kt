@@ -11,6 +11,7 @@ import com.aniko.app.feature.release.ReleaseDetailsViewModel
 import com.aniko.app.feature.release.rating.ReleaseRatingViewModel
 import com.aniko.app.feature.schedule.ScheduleViewModel
 import com.aniko.app.feature.search.SearchViewModel
+import com.aniko.app.feature.settings.NotificationSettingsViewModel
 import com.aniko.app.feature.settings.SettingsViewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
@@ -27,6 +28,9 @@ val appModule =
         viewModelOf(::HomeViewModel)
         viewModelOf(::LoginViewModel)
         viewModelOf(::SettingsViewModel)
+        // Найдено на устройстве (Фаза 11, T9): регистрация в Koin отсутствовала — экран
+        // "Настройки → Уведомления" падал с NoDefinitionFoundException при каждом открытии.
+        viewModelOf(::NotificationSettingsViewModel)
         viewModelOf(::SearchViewModel)
         viewModelOf(::ReleaseDetailsViewModel)
         viewModelOf(::ReleaseRatingViewModel)

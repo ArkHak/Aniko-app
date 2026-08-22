@@ -33,6 +33,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.model.ListStatus
 import com.aniko.model.ProfileDetails
@@ -45,6 +51,7 @@ import com.aniko.ui.component.ReleaseCard
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.i18n.displayName
+import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -89,14 +96,25 @@ fun LibraryScreen(
     // не "залипало" на устаревших данных карточки, если пагинатор успел обновить список.
     var menuReleaseId by remember { mutableStateOf<Int?>(null) }
 
-    Surface(modifier = modifier.fillMaxSize()) {
+    Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.LIBRARY_SCREEN_ROOT)) {
         Column(modifier = Modifier.fillMaxSize()) {
             ScrollableTabRow(selectedTabIndex = LibraryTab.all.indexOf(selectedTab).coerceAtLeast(0)) {
                 LibraryTab.all.forEach { tab ->
+                    val tabTitle = tab.title(strings, uiState.profile)
+                    val tabSelected = tab == selectedTab
                     Tab(
-                        selected = tab == selectedTab,
+                        selected = tabSelected,
                         onClick = { viewModel.selectTab(tab) },
-                        text = { Text(tab.title(strings, uiState.profile)) },
+                        text = { Text(tabTitle) },
+                        // Подтверждено на устройстве (Фаза 11, T9): M3 Tab не сливает text{} в
+                        // свой озвучиваемый узел (тот же паттерн, что и FilterChip/
+                        // NavigationBarItem — см. ChipRow.kt/AnixNavigationBar.kt).
+                        modifier =
+                            Modifier.clearAndSetSemantics {
+                                contentDescription = tabTitle
+                                role = Role.Tab
+                                selected = tabSelected
+                            },
                     )
                 }
             }
@@ -221,18 +239,28 @@ private fun LibraryToolbar(
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onShuffleClick, enabled = itemCount > 1) {
+        // Подтверждено на устройстве (Фаза 11, T9): IconButton не сливает Icon.contentDescription
+        // в свой кликабельный узел (тот же паттерн, что и остальные M3-компоненты этой фазы) —
+        // явный clearAndSetSemantics на самом IconButton.
+        IconButton(
+            onClick = onShuffleClick,
+            enabled = itemCount > 1,
+            modifier = Modifier.clearAndSetSemantics { contentDescription = strings.libraryShuffle },
+        ) {
             Icon(
                 imageVector = Icons.Filled.Shuffle,
-                contentDescription = strings.libraryShuffle,
+                contentDescription = null,
                 tint = if (isShuffled) MaterialTheme.colorScheme.primary else LocalContentColor.current,
             )
         }
         if (tab != LibraryTab.History) {
-            IconButton(onClick = onReverseClick) {
+            IconButton(
+                onClick = onReverseClick,
+                modifier = Modifier.clearAndSetSemantics { contentDescription = strings.libraryReverseSort },
+            ) {
                 Icon(
                     imageVector = Icons.Filled.SwapVert,
-                    contentDescription = strings.libraryReverseSort,
+                    contentDescription = null,
                     tint = if (isReversed) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                 )
             }

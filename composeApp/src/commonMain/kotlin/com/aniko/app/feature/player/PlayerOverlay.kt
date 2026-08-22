@@ -46,6 +46,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -418,15 +420,22 @@ private fun OverlayIconButton(
     iconSize: Dp = DEFAULT_ICON_SIZE,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val buttonDescription = contentDescription
     IconButton(
         onClick = onClick,
         // Тач-таргет не меньше рекомендованного минимума даже у мелких иконок — оверлей
-        // нажимают вслепую, глядя на видео, а не на кнопку.
-        modifier = Modifier.size(maxOf(dimens.minTouchTarget, iconSize + dimens.spaceM)),
+        // нажимают вслепую, глядя на видео, а не на кнопку. `clearAndSetSemantics` вместо
+        // contentDescription на Icon (Фаза 11, T9, подтверждено на устройстве): IconButton не
+        // сливает его в свой кликабельный узел — тот же паттерн, что и остальные M3-компоненты
+        // этой фазы (см. AnixNavigationBar.kt/ChipRow.kt/LibraryScreen.kt).
+        modifier =
+            Modifier
+                .size(maxOf(dimens.minTouchTarget, iconSize + dimens.spaceM))
+                .clearAndSetSemantics { this.contentDescription = buttonDescription },
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = contentDescription,
+            contentDescription = null,
             tint = OVERLAY_CONTENT_COLOR,
             modifier = Modifier.size(iconSize),
         )

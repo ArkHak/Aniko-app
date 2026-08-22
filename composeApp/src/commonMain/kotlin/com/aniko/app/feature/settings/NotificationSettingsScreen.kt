@@ -19,6 +19,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.notification.NotificationPermissionState
 import com.aniko.app.notification.rememberNotificationPermissionState
@@ -28,6 +35,7 @@ import com.aniko.ui.component.AnixErrorBox
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
+import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -51,15 +59,21 @@ fun NotificationSettingsScreen(
     val permission = rememberNotificationPermissionState()
 
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.testTag(AnixTestTags.NOTIFICATION_SETTINGS_SCREEN_ROOT),
         topBar = {
             TopAppBar(
                 title = { Text(strings.settingsNotificationsSection) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    // Подтверждено на устройстве (Фаза 11, T9): IconButton не сливает
+                    // Icon.contentDescription в свой кликабельный узел.
+                    IconButton(
+                        onClick = onBack,
+                        modifier =
+                            Modifier.clearAndSetSemantics { contentDescription = strings.backContentDescription },
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = strings.backContentDescription,
+                            contentDescription = null,
                         )
                     }
                 },
@@ -91,7 +105,15 @@ private fun NotificationSettingsContent(
             ListItem(
                 headlineContent = { Text(strings.settingsNotificationsPermissionRequired) },
                 trailingContent = {
-                    Button(onClick = permission::request) {
+                    // Подтверждено на устройстве (Фаза 11, T9): M3 Button не сливает свой Text{}
+                    // в озвучиваемый узел (тот же паттерн, что и остальные M3-компоненты фазы).
+                    Button(
+                        onClick = permission::request,
+                        modifier =
+                            Modifier.clearAndSetSemantics {
+                                contentDescription = strings.settingsNotificationsPermissionGrant
+                            },
+                    ) {
                         Text(strings.settingsNotificationsPermissionGrant)
                     }
                 },
@@ -201,7 +223,20 @@ private fun ToggleRow(
     ListItem(
         headlineContent = { Text(label) },
         trailingContent = {
-            Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+            // Подтверждено на устройстве (Фаза 11, T9): M3 Switch не наследует имя от соседнего
+            // ListItem.headlineContent — TalkBack озвучивал переключатель без указания, что
+            // именно он включает/выключает.
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                enabled = enabled,
+                modifier =
+                    Modifier.clearAndSetSemantics {
+                        contentDescription = label
+                        role = Role.Switch
+                        toggleableState = ToggleableState(checked)
+                    },
+            )
         },
     )
 }
