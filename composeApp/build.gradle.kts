@@ -133,7 +133,19 @@ compose.desktop {
             packageName = "Aniko"
             // jpackage требует, чтобы первое число версии пакета было >= 1 — это отдельная
             // версия macOS-инсталлятора, не совпадающая с версией приложения (0.0.2).
-            packageVersion = "1.0.1"
+            packageVersion = "1.0.2"
+            // Без этого jpackage/jlink сам определяет нужные JDK-модули по jdeps-анализу
+            // байткода — и не видит java.sql: SQLDelight-драйвер (org.xerial:sqlite-jdbc)
+            // грузит java.sql.DriverManager через ServiceLoader (META-INF/services), а не
+            // прямой ссылкой в байткоде, jdeps такое не ловит. Итог — собранный .dmg падает
+            // при старте с NoClassDefFoundError: java/sql/DriverManager (не проявляется через
+            // `./gradlew :composeApp:run` — там используется полный системный JDK, обрезка
+            // модулей происходит только при упаковке через jpackage). `includeAllModules`
+            // отключает обрезку целиком — жертвуем размером инсталлятора ради надёжности:
+            // маленький alpha-проект, не оптимизируем размер, а вручную перечислять модули и
+            // рисковать повторением той же ошибки при следующей рефлективно грузимой
+            // зависимости не стоит того.
+            includeAllModules = true
         }
     }
 }
