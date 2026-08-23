@@ -4,6 +4,7 @@ import com.aniko.data.api.ProfileApi
 import com.aniko.data.api.ProfilePreferenceApi
 import com.aniko.data.mapper.toDomain
 import com.aniko.data.session.SessionStore
+import com.aniko.model.Achievement
 import com.aniko.model.AnixError
 import com.aniko.model.FriendRequestVisibility
 import com.aniko.model.PrivacyVisibility
@@ -50,5 +51,14 @@ class ProfileRepository(
     /** Переключает инкогнито. Локального состояния здесь нет — это забота ViewModel. */
     suspend fun toggleIncognito() {
         profilePreferenceApi.privacyIncognitoEdit()
+    }
+
+    /**
+     * Уже полученные пользователем значки (`profile/preference/badge/all/{page}`). Экран профиля
+     * грузит только первую страницу (0) — секция небольшая, отдельной пагинации в v1 UI нет.
+     */
+    suspend fun achievements(page: Int = 0): List<Achievement> {
+        val badges = profilePreferenceApi.badges(page)
+        return badges.content.map { it.toDomain() }
     }
 }

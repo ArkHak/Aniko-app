@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import com.aniko.ui.component.AnixLanguagePicker
+import com.aniko.ui.component.AnixThemePicker
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
@@ -20,15 +21,17 @@ import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * Экран настроек: переход в свой профиль, галерею дизайн-токенов, переключатель языка (P5.T9 —
- * канонический дом переключателя, не только debug-галерея токенов) и выход из аккаунта.
+ * канонический дом переключателя, не только debug-галерея токенов), переключатель темы и выход
+ * из аккаунта.
  *
- * Язык читается/пишется через [languageTag]/[onLanguageTagChange], а не через свой Koin-инжект
- * `LocaleStore` внутри `SettingsViewModel` — экран остаётся тонким прокси без собственного стейта
- * (см. критерий миграции на MVI-контракт в журнале Фазы 5: `SettingsViewModel` НЕ мигрирует).
+ * Язык и тема читаются/пишутся через [languageTag]/[onLanguageTagChange] и
+ * [themeMode]/[onThemeModeChange], а не через свои Koin-инжекты `LocaleStore`/`ThemeStore` внутри
+ * `SettingsViewModel` — экран остаётся тонким прокси без собственного стейта (см. критерий миграции
+ * на MVI-контракт в журнале Фазы 5: `SettingsViewModel` НЕ мигрирует).
  */
-@Suppress("LongParameterList") // 6 опциональных колбэков/параметров одного плоского экрана без
+@Suppress("LongParameterList") // 8 опциональных колбэков/параметров одного плоского экрана без
 // собственного стейта (см. KDoc выше про критерий немиграции на MVI) — группировка в
-// data class ради обхода линта добавила бы косвенность без пользы для читаемости на 7 полях.
+// data class ради обхода линта добавила бы косвенность без пользы для читаемости на 9 полях.
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
@@ -37,6 +40,8 @@ fun SettingsScreen(
     onNotificationsClick: () -> Unit = {},
     languageTag: String? = null,
     onLanguageTagChange: (String?) -> Unit = {},
+    themeMode: String? = null,
+    onThemeModeChange: (String?) -> Unit = {},
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val strings = LocalStrings.current
@@ -69,16 +74,20 @@ fun SettingsScreen(
                         .clickable(onClick = onNotificationsClick)
                         .clearAndSetSemantics { contentDescription = strings.settingsNotificationsSection },
             )
-            ListItem(
-                headlineContent = { Text(text = strings.settingsLanguage) },
-                supportingContent = {
-                    AnixLanguagePicker(
-                        currentTag = languageTag,
-                        onSelect = onLanguageTagChange,
-                        modifier = Modifier.padding(top = dimens.spaceXs),
-                    )
-                },
-            )
+            SettingsPickerListItem(headline = strings.settingsLanguage) {
+                AnixLanguagePicker(
+                    currentTag = languageTag,
+                    onSelect = onLanguageTagChange,
+                    modifier = Modifier.padding(top = dimens.spaceXs),
+                )
+            }
+            SettingsPickerListItem(headline = strings.settingsTheme) {
+                AnixThemePicker(
+                    currentMode = themeMode,
+                    onSelect = onThemeModeChange,
+                    modifier = Modifier.padding(top = dimens.spaceXs),
+                )
+            }
             ListItem(
                 headlineContent = {
                     Text(
@@ -93,4 +102,22 @@ fun SettingsScreen(
             )
         }
     }
+}
+
+/**
+ * Строка настроек «заголовок + чипы выбора» — общий каркас для языка и темы (detekt `LongMethod`
+ * на [SettingsScreen]: без вынесения этой пары `ListItem` в отдельную функцию тело экрана
+ * превышало лимит строк). У обоих пунктов нет своего `onClick` — переключение происходит внутри
+ * [content] (см. `AnixLanguagePicker`/`AnixThemePicker`), поэтому `clearAndSetSemantics` здесь не
+ * нужен (тот же случай, что и был у языка до вынесения).
+ */
+@Composable
+private fun SettingsPickerListItem(
+    headline: String,
+    content: @Composable () -> Unit,
+) {
+    ListItem(
+        headlineContent = { Text(text = headline) },
+        supportingContent = content,
+    )
 }

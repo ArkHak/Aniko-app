@@ -1,5 +1,6 @@
 package com.aniko.app
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -67,6 +68,7 @@ import com.aniko.data.locale.LocaleStore
 import com.aniko.data.repository.AuthRepository
 import com.aniko.data.session.SessionState
 import com.aniko.data.sync.SyncCoordinator
+import com.aniko.data.theme.ThemeStore
 import com.aniko.ui.adaptive.AdaptiveNavItem
 import com.aniko.ui.adaptive.AdaptiveScaffold
 import com.aniko.ui.adaptive.LocalAnixWindowSize
@@ -102,6 +104,7 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
         val httpClient = koinInject<HttpClient>()
         val authRepository = koinInject<AuthRepository>()
         val localeStore = koinInject<LocaleStore>()
+        val themeStore = koinInject<ThemeStore>()
         val syncCoordinator = koinInject<SyncCoordinator>()
         val platformContext = LocalPlatformContext.current
 
@@ -134,12 +137,24 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
         // Lyricist (см. KDoc ProvideAppStrings). null — «следовать системной локали».
         val languageTag by localeStore.languageTag.collectAsStateWithLifecycle()
 
+        // Тема — читается из ThemeStore тем же способом, что и язык выше. null — «следовать
+        // системной теме» (тогда используется isSystemInDarkTheme(), как и раньше до появления
+        // ручного переключателя).
+        val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
+
         // Единственный авторитет размера окна (P5.T4) — вычисляется один раз на корневом уровне и
         // прокидывается через CompositionLocal, чтобы AdaptiveScaffold/ListDetailHost/TitleNavigator
         // (все ниже по дереву) видели одно и то же значение без повторного вычисления.
         val windowSize = rememberAnixWindowSize()
 
-        AppTheme {
+        AppTheme(
+            darkTheme =
+                when (themeMode) {
+                    "light" -> false
+                    "dark" -> true
+                    else -> isSystemInDarkTheme()
+                },
+        ) {
             ProvideAppStrings(languageTag = languageTag) {
                 CompositionLocalProvider(LocalAnixWindowSize provides windowSize) {
                     // Баннер офлайна (P10.T3) — над гейтом сессии, а не внутри него: он должен быть
@@ -153,6 +168,7 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
                             authRepository = authRepository,
                             localeStore = localeStore,
                             languageTag = languageTag,
+                            themeStore = themeStore,
                             onBackHandlerReady = onBackHandlerReady,
                             // Пока баннер виден, зону статус-бара занимает он — об этом надо
                             // сообщить поддереву ниже, иначе `Scaffold` внутри `AdaptiveScaffold`
@@ -190,10 +206,14 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
  * одноразовый снекбар — сама навигация на логин при этом переключается через sessionState.
  */
 @Composable
+@Suppress("LongParameterList") // themeStore добавлен аддитивно к уже существовавшему набору
+// параметров (localeStore/languageTag threading, тот же паттерн, что и у SettingsScreen) —
+// группировка сторов в отдельный объект ради обхода линта добавила бы косвенность без пользы.
 private fun AnixSessionGate(
     authRepository: AuthRepository,
     localeStore: LocaleStore,
     languageTag: String?,
+    themeStore: ThemeStore,
     onBackHandlerReady: (() -> Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -211,7 +231,7 @@ private fun AnixSessionGate(
         when (sessionState) {
             SessionState.Loading -> AnixLoadingBox()
             SessionState.Unauthorized -> LoginScreen()
-            is SessionState.Authorized -> AnixAppScaffold(localeStore, languageTag, onBackHandlerReady)
+            is SessionState.Authorized -> AnixAppScaffold(localeStore, languageTag, themeStore, onBackHandlerReady)
         }
 
         SnackbarHost(
@@ -247,6 +267,7 @@ private fun AnixSection.toNavItem(strings: Strings): AdaptiveNavItem =
 private fun AnixAppScaffold(
     localeStore: LocaleStore,
     languageTag: String?,
+    themeStore: ThemeStore,
     onBackHandlerReady: (() -> Boolean) -> Unit,
 ) {
     val navController = rememberNavController()
@@ -316,6 +337,7 @@ private fun AnixAppScaffold(
                 paneStack = paneStack,
                 titleNavigator = titleNavigator,
                 localeStore = localeStore,
+                themeStore = themeStore,
                 modifier = Modifier.fillMaxSize().padding(innerPadding),
             )
         }
@@ -372,11 +394,16 @@ private fun DetailPaneRoute.toDestination(): AnixDestination =
  * ниже (detekt `LongParameterList`/`LongMethod` на них самих).
  */
 @Composable
+@Suppress("LongParameterList") // themeStore добавлен аддитивно к уже существовавшему набору
+// параметров (тот же случай, что и AnixSessionGate выше) — граф маршрутов остаётся тонким
+// прокси без собственного стейта, дробить дальше означало бы заводить объект конфигурации ради
+// самого счётчика.
 private fun AnixNavGraph(
     navController: NavHostController,
     paneStack: DetailPaneStack,
     titleNavigator: TitleNavigator,
     localeStore: LocaleStore,
+    themeStore: ThemeStore,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -386,7 +413,7 @@ private fun AnixNavGraph(
     ) {
         listSectionRoutes(navController, paneStack, titleNavigator)
         titleDetailRoutes(navController, titleNavigator)
-        chromeRoutes(navController, localeStore)
+        chromeRoutes(navController, localeStore, themeStore)
     }
 }
 
@@ -458,15 +485,19 @@ private fun NavGraphBuilder.titleDetailRoutes(
 private fun NavGraphBuilder.chromeRoutes(
     navController: NavHostController,
     localeStore: LocaleStore,
+    themeStore: ThemeStore,
 ) {
     composable<AnixDestination.Settings> {
         val languageTag by localeStore.languageTag.collectAsStateWithLifecycle()
+        val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
         SettingsScreen(
             onProfileClick = { navController.navigate(AnixDestination.Profile) },
             onDesignGalleryClick = { navController.navigate(AnixDestination.TokenGallery) },
             onNotificationsClick = { navController.navigate(AnixDestination.NotificationSettings) },
             languageTag = languageTag,
             onLanguageTagChange = localeStore::setLanguageTag,
+            themeMode = themeMode,
+            onThemeModeChange = themeStore::setThemeMode,
         )
     }
     composable<AnixDestination.Profile> {

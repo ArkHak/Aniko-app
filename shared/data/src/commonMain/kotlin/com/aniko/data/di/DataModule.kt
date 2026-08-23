@@ -29,6 +29,7 @@ import com.aniko.data.session.SessionStore
 import com.aniko.data.sync.PeriodicSyncTask
 import com.aniko.data.sync.SyncCoordinator
 import com.aniko.data.sync.SyncQueueWorker
+import com.aniko.data.theme.ThemeStore
 import com.aniko.network.ApiConfig
 import com.aniko.network.SessionInvalidator
 import com.aniko.network.TokenProvider
@@ -76,6 +77,7 @@ val dataModule =
         single<TokenProvider> { get<SessionStore>() }
         single<SessionInvalidator> { get<SessionStore>() }
         single { LocaleStore(settings = get()) }
+        single { ThemeStore(settings = get()) }
 
         single<HttpClient> {
             createAnixHttpClient(

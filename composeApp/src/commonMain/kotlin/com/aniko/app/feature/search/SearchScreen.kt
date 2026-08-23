@@ -21,6 +21,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -151,8 +152,15 @@ private fun CompactCatalogLayout(
     )
 
     if (state.isFilterSheetOpen) {
+        // P11 (визуальная проверка на устройстве): по умолчанию (без skipPartiallyExpanded) шторка
+        // открывается в PartiallyExpanded — нижний ряд жанр-чипов CatalogFilterPanel физически
+        // рендерится под системной nav bar на первом кадре, до ручного доскролла. Полностью
+        // развёрнутое состояние сразу — стандартный M3-обход для скроллируемого контента высотой
+        // больше "peek".
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = { viewModel.dispatch(SearchIntent.FilterSheetVisibilityChanged(false)) },
+            sheetState = sheetState,
         ) {
             CatalogFilterPanel(
                 filter = state.filter,

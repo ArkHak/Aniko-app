@@ -5,6 +5,7 @@
 
 package com.aniko.app.feature.profile
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,9 +13,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -23,8 +27,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import com.aniko.model.Achievement
 import com.aniko.model.ProfileDetails
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.component.StatTileData
@@ -133,6 +142,74 @@ internal fun FavoriteGenresSection(
         }
     }
 }
+
+/**
+ * «Достижения» — уже полученные пользователем значки (`profile/preference/badge/all/0`).
+ *
+ * В отличие от макета, где часть чипов нарисована тусклой как «не получено», API отдаёт только
+ * коллекцию УЖЕ полученных бейджей (см. KDoc [Achievement]) — каталога всех возможных ачивок с
+ * состоянием «заблокировано» сервер не даёт, поэтому здесь нет «тусклых» вариантов, только те,
+ * что реально заработаны. Секция грузится отдельным запросом (см. `ProfileViewModel`) и просто не
+ * показывается при пустом списке/ошибке — тем же паттерном, что [FavoriteGenresSection].
+ */
+@Composable
+internal fun AchievementsSection(
+    achievements: List<Achievement>,
+    modifier: Modifier = Modifier,
+) {
+    if (achievements.isEmpty()) return
+
+    val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
+
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
+        Text(
+            text = strings.profileAchievementsTitle,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = dimens.spaceM),
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(dimens.spaceM),
+            contentPadding = PaddingValues(horizontal = dimens.spaceM),
+        ) {
+            items(items = achievements, key = { it.id }) { achievement ->
+                AchievementBadge(achievement = achievement)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AchievementBadge(achievement: Achievement) {
+    val dimens = AnixThemeTokens.dimens
+
+    Column(
+        modifier = Modifier.width(ACHIEVEMENT_BADGE_WIDTH),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(dimens.spaceXs),
+    ) {
+        AsyncImage(
+            model = achievement.badgeUrl,
+            contentDescription = achievement.name,
+            modifier =
+                Modifier
+                    .size(ACHIEVEMENT_BADGE_SIZE)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+        )
+        Text(
+            text = achievement.name,
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private val ACHIEVEMENT_BADGE_SIZE = 56.dp
+private val ACHIEVEMENT_BADGE_WIDTH = 72.dp
 
 /**
  * Сетка статистики на переиспользуемом [StatTileRow] (`:shared:ui`, P6.T9 — переключение с

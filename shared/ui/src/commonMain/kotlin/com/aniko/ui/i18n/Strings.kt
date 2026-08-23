@@ -130,6 +130,7 @@ interface Strings {
     val profileGenrePercent: (name: String, percentage: Int) -> String
     val profileRecentlyWatchedTitle: String
     val profileRecentlyWatchedEmpty: String
+    val profileAchievementsTitle: String
     val profileGuestTitle: String
     val profileGuestMessage: String
     val privacyWhoSeesStats: String
@@ -169,6 +170,10 @@ interface Strings {
     val settingsSignOut: String
     val settingsDesignGallery: String
     val settingsLanguage: String
+    val settingsTheme: String
+    val themeLight: String
+    val themeDark: String
+    val themeSystem: String
 
     // --- Экран-галерея токенов (P2.T12) ---
     val galleryTitle: String

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aniko.data.repository.AuthRepository
 import com.aniko.data.repository.ProfileRepository
+import com.aniko.model.Achievement
 import com.aniko.model.AnixError
 import com.aniko.model.FriendRequestVisibility
 import com.aniko.model.PrivacyVisibility
@@ -26,6 +27,13 @@ data class ProfileUiState(
      * Взаимоисключающе с [error]: [AnixError.Unauthorized] всегда трактуется как «гость».
      */
     val isGuest: Boolean = false,
+    /**
+     * Уже полученные значки (`profile/preference/badge/all/0`). Грузится отдельным, не
+     * блокирующим запросом после успешной загрузки [profile]/[privacy] — при ошибке остаётся
+     * пустым списком, секция `AchievementsSection` в этом случае просто не показывается
+     * (как `FavoriteGenresSection` при пустых `preferredGenres`), а не роняет весь экран.
+     */
+    val achievements: List<Achievement> = emptyList(),
 )
 
 /**
@@ -76,6 +84,7 @@ class ProfileViewModel(
                         error = null,
                         isGuest = false,
                     )
+                loadAchievements()
             }.onFailure { throwable ->
                 val error = throwable as? AnixError ?: AnixError.Unknown(throwable)
                 _uiState.value =
@@ -93,6 +102,18 @@ class ProfileViewModel(
 
     fun retry() {
         load()
+    }
+
+    /**
+     * Отдельный, не блокирующий основной экран запрос за значками. Намеренно не участвует в
+     * `runCatching` из [load]: ошибка/пустой ответ здесь означает «не показываем секцию», а не
+     * «профиль не загрузился» — в отличие от `profile`/`privacy`, без которых экран непоказуем.
+     */
+    private fun loadAchievements() {
+        viewModelScope.launch {
+            runCatching { profileRepository.achievements() }
+                .onSuccess { achievements -> _uiState.value = _uiState.value.copy(achievements = achievements) }
+        }
     }
 
     /**

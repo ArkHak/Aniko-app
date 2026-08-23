@@ -1,7 +1,9 @@
 package com.aniko.data.mapper
 
+import com.aniko.data.dto.BadgeDto
 import com.aniko.data.dto.ProfileDetailsDto
 import com.aniko.data.dto.ProfilePreferenceResponseDto
+import com.aniko.model.Achievement
 import com.aniko.model.FriendRequestVisibility
 import com.aniko.model.PreferredGenre
 import com.aniko.model.PrivacyVisibility
@@ -60,6 +62,16 @@ fun ProfileDetailsDto.toDomain(staticBaseUrl: String = ApiConfig.DEFAULT_STATIC_
                 .filter { it.name.isNotBlank() }
                 .map { PreferredGenre(name = it.name, percentage = it.percentage) },
         recentlyWatched = history.map { it.toDomain(staticBaseUrl) },
+    )
+
+/** `Badge.TYPE_ANIMATION = 1` (decompiled) — всё, что не `1`, трактуется как статичное. */
+fun BadgeDto.toDomain(): Achievement =
+    Achievement(
+        id = id,
+        name = name,
+        badgeUrl = imageUrl,
+        isAnimated = type == 1,
+        earnedAt = timestamp,
     )
 
 fun ProfilePreferenceResponseDto.toDomain(): ProfilePrivacy =

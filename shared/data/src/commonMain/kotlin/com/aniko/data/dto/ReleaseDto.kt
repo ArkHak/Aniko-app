@@ -91,7 +91,9 @@ data class ReleaseDto(
     @SerialName("related_count") val relatedCount: Int = 0,
     @SerialName("related_releases") val relatedReleases: List<ReleaseDto> = emptyList(),
     @SerialName("recommended_releases") val recommendedReleases: List<ReleaseDto> = emptyList(),
-    @SerialName("last_view_episode") val lastViewEpisode: Int? = null,
+    @Serializable(with = LastViewEpisodeSerializer::class)
+    @SerialName("last_view_episode")
+    val lastViewEpisode: Int? = null,
     @SerialName("last_view_timestamp") val lastViewTimestamp: Long? = null,
     @SerialName("episode_last_update") val episodeLastUpdate: Long? = null,
     @SerialName("is_viewed") val isViewed: Boolean = false,

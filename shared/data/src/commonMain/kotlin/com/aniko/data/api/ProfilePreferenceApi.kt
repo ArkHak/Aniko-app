@@ -1,5 +1,7 @@
 package com.aniko.data.api
 
+import com.aniko.data.dto.BadgeDto
+import com.aniko.data.dto.PageableResponseDto
 import com.aniko.data.dto.PrivacyEditRequestDto
 import com.aniko.data.dto.ProfilePreferenceResponseDto
 import com.aniko.data.dto.SimpleResponseDto
@@ -73,5 +75,16 @@ class ProfilePreferenceApi(
     suspend fun privacyIncognitoEdit(): SimpleResponseDto =
         apiCall {
             client.get("profile/preference/privacy/incognito/edit").body<SimpleResponseDto>().requireOk()
+        }
+
+    /**
+     * `GET profile/preference/badge/all/{page}` — коллекция УЖЕ ПОЛУЧЕННЫХ пользователем значков
+     * (не общий каталог всех ачивок с состоянием «получено/не получено» — см. KDoc [BadgeDto]).
+     * Decompiled `ProfileBadgePageableResponse<Badge>` — тот же `PageableResponse<T>`, что и везде,
+     * плюс необязательное поле `profile`, которое здесь не нужно и в DTO не заведено.
+     */
+    suspend fun badges(page: Int): PageableResponseDto<BadgeDto> =
+        apiCall {
+            client.get("profile/preference/badge/all/$page").body<PageableResponseDto<BadgeDto>>().requireOk()
         }
 }

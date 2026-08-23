@@ -218,9 +218,25 @@ Kotlin-клиент (`shared/network`, `shared/data/.../api/*.kt`). Значен
 
 **`ProfileApi`** — `GET profile/{id}` → карточка профиля (статистика, избранное, списки). В проекте реализован только этот метод.
 
-**`ProfilePreferenceApi`** — смена email/пароля/логина, привязка VK/Google/Telegram/Yandex, темы оформления, настройки приватности. В проекте реализованы только privacy-эндпоинты.
+**`ProfilePreferenceApi`** — смена email/пароля/логина, привязка VK/Google/Telegram/Yandex, темы оформления, настройки приватности, значки. В проекте реализованы privacy-эндпоинты и `badge/all/{page}` (см. ниже).
 
-**`ProfileBadgeApi`** — значки профиля.
+**`ProfileBadgeApi`** (decompile) — в реальности реализовано как метод `ProfilePreferenceApi.badges()` в проекте, путь того же неймспейса `profile/preference/badge/...`:
+
+- `GET profile/preference/badge/all/{page}` → `PageableResponse<Badge>` (+ необязательное поле `profile` — полная карточка профиля, в проекте не мапится, не нужно).
+
+Проверено вживую 2026-08-23 (эмулятор `Pixel_6_Pro_API_33`, реальный аккаунт с 2 бейджами):
+`GET profile/preference/badge/all/0?token=...` → `HTTP 200`, `code: 0`, форма 1:1 с decompiled
+`database/entity/profile/Badge.java` — `id`, `type` (`0` статика/`1` Lottie-анимация), `name`,
+`image_url`, `timestamp` (unix-секунды получения). Сэмпл (поле `profile` вырезано, содержит личные
+данные аккаунта): `docs/api/samples/profile_preference_badge_all_page0.json`.
+
+Смысл эндпоинта — коллекция УЖЕ ПОЛУЧЕННЫХ пользователем значков (путь `profile/preference/…` +
+соседние `edit`/`remove` в decompile выбирают/снимают ОДИН активный бейдж на аватар), а не общий
+каталог всех ачивок с состоянием «получено/не получено» — данных о неполученных значках API не
+отдаёт. В проекте: `BadgeDto`/`ProfilePreferenceApi.badges()` (`shared/data`), доменная модель
+`Achievement` (`shared/model`), `ProfileRepository.achievements()`, секция `AchievementsSection`
+на экране профиля (`composeApp`).
+
 **`ProfileBlockListApi`** — чёрный список пользователей.
 **`ProfileDeletionApi`** — удаление аккаунта.
 **`ProfileFriendApi`** — друзья (запросы/подтверждение/удаление).
@@ -279,12 +295,12 @@ List<Release>` с дефолтом `emptyList()`, без `@JsonProperty` (име
 | `HistoryApi` | полностью |
 | `ProfileApi` | частично — только `profile/{id}` |
 | `ProfileListApi` | полностью |
-| `ProfilePreferenceApi` | частично — только privacy-эндпоинты |
+| `ProfilePreferenceApi` | частично — privacy-эндпоинты + `badge/all/{page}` |
 | `ReleaseApi` | полностью (+ discover) |
 | `ReleaseCommentApi` | полностью |
 | `ScheduleApi` | полностью — `GET schedule`, переиспользует `ReleaseDto` |
 | `SearchApi` | частично — только `releaseSearch` |
-| остальные ~29 классов (Article*, Channel*, Collection*, Notification*, Report, Type, Related, Export/Import, Profile{Badge,BlockList,Deletion,Friend,Health,RoleList}, ReleaseVideo*, ReleaseStreamingPlatform, Config) | не реализованы |
+| остальные ~28 классов (Article*, Channel*, Collection*, Notification*, Report, Type, Related, Export/Import, Profile{BlockList,Deletion,Friend,Health,RoleList}, ReleaseVideo*, ReleaseStreamingPlatform, Config) | не реализованы (`ProfileBadgeApi` — реализован как часть `ProfilePreferenceApi`, см. раздел 8) |
 
 ## 11. Открытые вопросы / что стоит перепроверить
 
@@ -294,6 +310,7 @@ List<Release>` с дефолтом `emptyList()`, без `@JsonProperty` (име
 3. Полные JSON-схемы `Article*`, `Channel*`, `Collection*`, `Notification*` не сверялись с живыми сэмплами (только с decompile) — при реализации этих фич сначала снять живой сэмпл.
 4. Механика 18+ toggle (`X-Amz-Meta-Is-Explicit`) в `profile/preference/my` не подтверждена живым трафиком.
 5. `[TODO: verify live]` в `ReleaseCommentApi`: смысл параметра в `GET release/comment/{id}` (releaseId или commentId?) и точный тип элемента `release/comment/votes/{commentId}/{page}` (`Profile` в decompile vs реализованный `ProfileCompact`) — низкий приоритет, не блокирует использование остальных методов.
+6. **Найден живым тестом 2026-08-23 (не исправлено, вне объёма задачи о `badge`-эндпоинте):** `GET profile/{id}` падает с `JsonConvertException` на аккаунте с непустой историей — `history[].last_view_episode` в живом ответе приходит ПОЛНЫМ объектом эпизода (`{"@id":...,"releaseId":...,"position":...,"release":{...}}`), а не числом. В `ReleaseDto.kt` (`shared/data/.../dto/ReleaseDto.kt:94`) поле `lastViewEpisode: Int? = null` рассчитано на числовой номер эпизода — верно для `last_view_episode` ВНУТРИ вложенных объектов `release` (там реально число), но не для верхнеуровневого поля `history[].last_view_episode`, у которого то же имя, но другая форма (полиморфизм по контексту, decompiled `HistoryPreview.java` этого не проговаривает явно). Ломает весь экран профиля («Не удалось загрузить профиль») для любого аккаунта, где `history` непуст, а не только страницу «Достижения» — стоит завести отдельную задачу на исправление (нужен отдельный DTO-тип для эпизода в `history[]`, отличный от числового `lastViewEpisode` в `ReleaseDto`).
 
 ### P3.T14 — сверка со сторонними reverse-engineered клиентами (2026-08-10)
 

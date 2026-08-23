@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aniko.model.Achievement
 import com.aniko.model.FriendRequestVisibility
 import com.aniko.model.PrivacyVisibility
 import com.aniko.model.ProfileDetails
@@ -129,8 +130,12 @@ fun ProfileScreen(
 
             profile != null && privacy != null ->
                 ProfileContent(
-                    profile = profile,
-                    privacy = privacy,
+                    data =
+                        ProfileContentData(
+                            profile = profile,
+                            privacy = privacy,
+                            achievements = uiState.achievements,
+                        ),
                     callbacks =
                         ProfilePrivacyCallbacks(
                             onUpdateStats = viewModel::updatePrivacyStats,
@@ -145,6 +150,16 @@ fun ProfileScreen(
         }
     }
 }
+
+/**
+ * `profile`/`privacy`/`achievements` одной группой — иначе [ProfileContent] превышала бы
+ * detekt `LongParameterList` вместе с [ProfilePrivacyCallbacks]/`onReleaseClick`/`modifier`.
+ */
+private data class ProfileContentData(
+    val profile: ProfileDetails,
+    val privacy: ProfilePrivacy,
+    val achievements: List<Achievement>,
+)
 
 /**
  * Пять privacy-колбэков одной группой — иначе [ProfileContent] и [PrivacySection] тащили бы их
@@ -200,12 +215,12 @@ private fun ProfileGuestBox(
  */
 @Composable
 private fun ProfileContent(
-    profile: ProfileDetails,
-    privacy: ProfilePrivacy,
+    data: ProfileContentData,
     callbacks: ProfilePrivacyCallbacks,
     onReleaseClick: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val (profile, privacy, achievements) = data
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
     val windowSize = LocalAnixWindowSize.current
@@ -226,6 +241,8 @@ private fun ProfileContent(
             ProfileHighlights(profile = profile, modifier = sectionPadding)
 
             FavoriteGenresSection(profile = profile, modifier = sectionPadding)
+
+            AchievementsSection(achievements = achievements)
 
             HorizontalDivider(modifier = sectionPadding)
 

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -72,13 +73,19 @@ private fun GridTitleCard(
     posterWidth: Dp?,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val resolvedPosterWidth = posterWidth ?: dimens.posterWidth
 
-    Column(modifier = modifier) {
+    // Без явной ширины на Column заголовок под постером не переносится по maxLines внутри
+    // LazyRow (HorizontalPosterRail): элемент получает не ограниченные по ширине constraints,
+    // и Text растягивается на всю "виртуально бесконечную" ширину ряда вместо переноса по
+    // ширине постера — вылезает за его рамки на главном экране (найдено сверкой с макетом,
+    // 2026-08-23). Column должна быть той же ширины, что и AnixPoster ниже.
+    Column(modifier = modifier.width(resolvedPosterWidth)) {
         Box {
             AnixPoster(
                 url = release.posterUrl,
                 contentDescription = release.title,
-                width = posterWidth ?: dimens.posterWidth,
+                width = resolvedPosterWidth,
                 modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
             )
 

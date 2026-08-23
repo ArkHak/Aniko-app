@@ -13,6 +13,8 @@ import com.aniko.app.feature.schedule.ScheduleViewModel
 import com.aniko.app.feature.search.SearchViewModel
 import com.aniko.app.feature.settings.NotificationSettingsViewModel
 import com.aniko.app.feature.settings.SettingsViewModel
+import com.aniko.app.notification.AppNotificationContentFactory
+import com.aniko.data.notification.NotificationContentFactory
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
@@ -25,6 +27,13 @@ import org.koin.dsl.module
  */
 val appModule =
     module {
+        // Найдено вживую на iOS-симуляторе (сверка с макетом, 2026-08-23): без этого биндинга
+        // приложение падало на КАЖДОМ старте с NoDefinitionFoundException — NotificationPoller
+        // (shared/data) требует NotificationContentFactory, а единственная реализация
+        // (AppNotificationContentFactory) нигде не регистрировалась в Koin. На Android это не
+        // проявлялось, потому что BackgroundSyncScheduler.android.kt не резолвит цепочку жадно
+        // при старте — iOS-версия (registerBackgroundSyncTasks() в AppDelegate) резолвит.
+        single<NotificationContentFactory> { AppNotificationContentFactory(localeStore = get()) }
         viewModelOf(::HomeViewModel)
         viewModelOf(::LoginViewModel)
         viewModelOf(::SettingsViewModel)
