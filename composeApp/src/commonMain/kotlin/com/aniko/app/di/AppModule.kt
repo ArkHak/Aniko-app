@@ -27,12 +27,12 @@ import org.koin.dsl.module
  */
 val appModule =
     module {
-        // Найдено вживую на iOS-симуляторе (сверка с макетом, 2026-08-23): без этого биндинга
+        // Найдено вживую на iOS/Desktop (сверка с макетом, 2026-08-23): без этого биндинга
         // приложение падало на КАЖДОМ старте с NoDefinitionFoundException — NotificationPoller
         // (shared/data) требует NotificationContentFactory, а единственная реализация
         // (AppNotificationContentFactory) нигде не регистрировалась в Koin. На Android это не
         // проявлялось, потому что BackgroundSyncScheduler.android.kt не резолвит цепочку жадно
-        // при старте — iOS-версия (registerBackgroundSyncTasks() в AppDelegate) резолвит.
+        // при старте — iOS/Desktop-версии резолвят.
         single<NotificationContentFactory> { AppNotificationContentFactory(localeStore = get()) }
         viewModelOf(::HomeViewModel)
         viewModelOf(::LoginViewModel)

@@ -26,9 +26,16 @@ import java.net.URI
 
 /**
  * Desktop: полноценного WebView в Compose Desktop без тяжёлых зависимостей (JCEF/KCEF) нет —
- * осознанно упрощаем (согласовано в плане фазы 5, не тащим JCEF/KCEF): открываем URL в системном
- * браузере через [Desktop.browse], а на месте плеера показываем заглушку с кнопкой «Открыть ещё
- * раз» на случай, если пользователь закрыл вкладку браузера.
+ * осознанно упрощаем (согласовано в плане фазы 5/8: JCEF физически рисуется поверх Compose,
+ * баг JetBrains CMP-6001, — не тащим). Открываем не сам исходный [url] напрямую, а локальную
+ * обёртку [KodikProxyServer] в системном браузере через [Desktop.browse] — источники вроде
+ * Kodik сверяют в своём JS, что страница загружена внутри `<iframe>` (см. KDoc
+ * `EmbedPlayer.android.kt`/`KodikProxyServer.kt`), иначе рисуют «данной страницы не существует»
+ * независимо от Referer. [referer] сознательно не используется: живой тест (2026-08-23) показал,
+ * что попытка подделать его на сервере (переотдавая содержимое страницы с локального порта)
+ * ломает собственные same-origin XHR-запросы страницы (CORS) — простой `<iframe src="url">`
+ * без переотдачи содержимого работает корректно и без Referer. На месте плеера показываем
+ * заглушку с кнопкой «Открыть ещё раз» на случай, если пользователь закрыл вкладку браузера.
  *
  * Используется `BasicText` из `compose.foundation`, а не Material `Text`/`Button` — модуль
  * `:shared:player` намеренно не тянет зависимость на compose.material3 ради одной заглушки.
@@ -36,7 +43,8 @@ import java.net.URI
 @Composable
 actual fun EmbedPlayerView(
     url: String,
-    referer: String?,
+    // Не используется намеренно — см. KDoc класса выше и KDoc `KodikProxyServer`.
+    @Suppress("UNUSED_PARAMETER") referer: String?,
     // Не используется намеренно: на Desktop нет видео-поверхности под контролем приложения,
     // JS-мост здесь физически некуда ставить — см. KDoc `EmbedVideoController` (desktopMain).
     @Suppress("UNUSED_PARAMETER") controller: EmbedVideoController?,
@@ -45,7 +53,8 @@ actual fun EmbedPlayerView(
     var reopenSignal by remember(url) { mutableIntStateOf(0) }
 
     LaunchedEffect(url, reopenSignal) {
-        openUrlInSystemBrowser(url)
+        val wrapperUrl = KodikProxyServer.wrapperUrl(url)
+        openUrlInSystemBrowser(wrapperUrl)
     }
 
     Box(
