@@ -109,8 +109,8 @@ android {
 
     defaultConfig {
         applicationId = "com.aniko.app"
-        versionCode = 1
-        versionName = "0.0.1"
+        versionCode = 2
+        versionName = "0.0.2"
     }
 
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
@@ -132,8 +132,8 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg)
             packageName = "Aniko"
             // jpackage требует, чтобы первое число версии пакета было >= 1 — это отдельная
-            // версия macOS-инсталлятора, не совпадающая с версией приложения (0.0.1).
-            packageVersion = "1.0.0"
+            // версия macOS-инсталлятора, не совпадающая с версией приложения (0.0.2).
+            packageVersion = "1.0.1"
         }
     }
 }

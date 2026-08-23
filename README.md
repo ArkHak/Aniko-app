@@ -3,7 +3,7 @@
 Неофициальный мультиплатформенный клиент [Anixart](https://anixart.tv) на Kotlin Multiplatform + Compose
 Multiplatform: Android, iOS и macOS (Desktop) из единой кодовой базы.
 
-> **Статус: альфа (`v0.0.1`).** Проект в активной разработке, часть функций Anixart ещё не реализована
+> **Статус: альфа (`v0.0.2`).** Проект в активной разработке, часть функций Anixart ещё не реализована
 > (полный список — в [`docs/api/ANIXART_API.md`](docs/api/ANIXART_API.md), раздел «что уже реализовано»).
 > Возможны баги, ломающие изменения и потеря локальных данных между версиями.
 
@@ -98,7 +98,7 @@ Aniko — независимый клиент, использующий прив
 равно нужен для первичной установки и периодического автоматического обновления подписи по Wi-Fi.
 
 1. Возьмите готовый неподписанный `.ipa` со страницы [Releases](https://github.com/ArkHak/Aniko/releases)
-   (`aniko-v0.0.1-ios-unsigned.ipa`), либо соберите его сами: в Xcode (после настройки `TEAM_ID`, как в
+   (`aniko-v0.0.2-ios-unsigned.ipa`), либо соберите его сами: в Xcode (после настройки `TEAM_ID`, как в
    Способе 1) выберите Product → Archive для реального устройства, затем Distribute App → Development →
    экспортируйте `.ipa`.
 2. Установите [AltServer](https://altstore.io/) (или [SideStore](https://sidestore.io/) — более гибкий форк
@@ -116,7 +116,7 @@ Aniko — независимый клиент, использующий прив
 
 ### macOS (Desktop)
 
-Скачайте `aniko-v0.0.1-macos.dmg` со страницы [Releases](https://github.com/ArkHak/Aniko/releases), откройте
+Скачайте `aniko-v0.0.2-macos.dmg` со страницы [Releases](https://github.com/ArkHak/Aniko/releases), откройте
 и перетащите `Aniko.app` в `Applications`. Приложение не подписано и не нотаризовано Apple — при первом
 запуске Gatekeeper заблокирует его; разрешите запуск через Настройки → Конфиденциальность и безопасность →
 «Открыть в любом случае» (или соберите `.dmg` из исходников, см. ниже).
