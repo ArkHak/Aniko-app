@@ -5,6 +5,7 @@ import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.cookies.HttpCookies
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logger
@@ -45,6 +46,13 @@ fun createAnixHttpClient(
         install(ContentNegotiation) {
             json(json)
         }
+
+        // Без этого клиент не хранит и не переотправляет cookie, которые ставит ddos-guard
+        // перед api-s.anixsekai.com (`__ddg*_`) — под антибот-защитой это может выглядеть как
+        // подозрительный трафик и приводить к отказам даже на правильных запросах (например,
+        // `auth/signIn` с верным логином/паролем). In-memory хранилище достаточно: cookie
+        // ddos-guard живут в рамках сессии приложения, персистентность между запусками не нужна.
+        install(HttpCookies)
 
         install(AnixTokenPlugin) {
             this.tokenProvider = tokenProvider

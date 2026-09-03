@@ -60,6 +60,8 @@ interface Strings {
     val loginLoginLabel: String
     val loginPasswordLabel: String
     val loginSubmit: String
+    val loginShowPassword: String
+    val loginHidePassword: String
     val loginGenericError: String
     val loginInvalidLogin: String
     val loginInvalidPassword: String

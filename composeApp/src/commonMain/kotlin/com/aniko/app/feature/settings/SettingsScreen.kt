@@ -4,6 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -52,7 +54,7 @@ fun SettingsScreen(
     // clearAndSetSemantics на каждом пункте, кроме языка (у него нет своего onClick — переключение
     // происходит через AnixLanguagePicker внутри, уже озвученный отдельно).
     Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.SETTINGS_SCREEN_ROOT)) {
-        Column {
+        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
             ListItem(
                 headlineContent = { Text(text = strings.settingsMyProfile) },
                 modifier =

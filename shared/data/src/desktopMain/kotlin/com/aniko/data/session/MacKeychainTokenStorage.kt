@@ -84,10 +84,12 @@ class MacKeychainTokenStorage : SecureTokenStorage {
                 .redirectErrorStream(true)
                 .start()
 
+        // Только сама команда, без "quit"/"exit": интерактивный режим `security -i` не знает
+        // таких команд ("security: unknown command \"quit\"") и падает с кодом выхода 1, даже
+        // если сама команда перед этим уже отработала успешно — закрытие stdin (EOF) само
+        // завершает сессию.
         process.outputStream.bufferedWriter().use { writer ->
             writer.write(command)
-            writer.newLine()
-            writer.write("quit")
             writer.newLine()
             writer.flush()
         }
