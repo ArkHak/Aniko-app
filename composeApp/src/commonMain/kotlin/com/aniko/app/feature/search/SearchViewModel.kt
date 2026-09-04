@@ -106,8 +106,6 @@ class SearchViewModel(
 
             is SearchIntent.ViewModeChanged -> updateState { copy(viewMode = intent.viewMode) }
 
-            is SearchIntent.FilterSheetVisibilityChanged -> updateState { copy(isFilterSheetOpen = intent.isOpen) }
-
             SearchIntent.LoadMore, SearchIntent.Retry -> loadNextAndReportIfMoreFailed()
         }
     }

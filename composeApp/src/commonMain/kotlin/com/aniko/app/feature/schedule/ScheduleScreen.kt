@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,6 +25,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.navigation.LocalTitleNavigator
@@ -45,36 +48,39 @@ import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Экран расписания выхода эпизодов по дням недели (P5.T2-задел, доработан P9.T4-T6).
+ * Экран расписания выхода эпизодов по дням недели (P5.T2-задел, доработан P9.T4-T6, P13.T5).
  *
- * ## Структура: день-селектор наверху, а не вертикальный список из 7 секций подряд
- * Раньше (до P9.T4) экран рисовал все 7 дней друг под другом, молча пропуская дни без релизов.
- * Заменено на горизонтальный [ChipRow] выбора дня + контент только выбранного дня — типичный
- * мобильный паттерн "расписания" (как системные календари/список эпизодов на неделю): не нужно
- * скроллить мимо 6 нерелевантных дней, чтобы увидеть нужный, а "сегодня" и выбор пользователя
- * видны сразу в одну строку, без прокрутки. Вертикальный список всех секций был бы валиден тоже
- * (и проще), но здесь релизов на день может быть много — 7 полных горизонтальных лент подряд на
- * Compact-экране означают куда больше скролла до нужного дня, чем один тап по чипу.
+ * ## Compact: вертикальный список 7 секций, а не день-селектор (P13.T5, было наоборот)
+ * До P9.T4 экран уже рисовал все 7 дней друг под другом, но молча пропуская дни без релизов;
+ * P9.T4/T5 заменили это на день-селектор [ChipRow] + контент только выбранного дня. Мокап
+ * Claude Design (сверка Фазы 13) требует обратного на Compact-ширине: сплошной вертикальный
+ * скролл всех 7 дней подряд ([ScheduleDaysList]), каждый со своим заголовком-секцией
+ * ([DaySectionHeader]) и пустым состоянием на день без релизов — без табов вообще. Опасение
+ * "7 полных лент — это больше скролла, чем один тап", из-за которого раньше выбрали табы,
+ * мокапом не подтвердилось: там список действительно длинный, но это осознанный выбор дизайна,
+ * не бага. Day-селектор (чипы) остаётся только на Medium/Expanded, см. ниже.
  *
  * ## Пустое состояние (P9.T5)
- * День без релизов теперь не пропускается, а показывает [AnixEmptyState] (тот же компонент,
- * что и `LibraryScreen` для пустой вкладки) — пользователь видит, что расписание точно
- * загружено, а не думает, что экран завис или день ещё не пришёл с сервера.
+ * День без релизов не пропускается, а показывает [AnixEmptyState] (тот же компонент, что и
+ * `LibraryScreen` для пустой вкладки) — пользователь видит, что расписание точно загружено, а
+ * не думает, что экран завис или день ещё не пришёл с сервера. Работает одинаково что в
+ * [ScheduleDaysList] на Compact, что в [DayColumn] на Medium/Expanded.
  *
- * ## Навигация по дням + подсветка "сегодня" (P9.T5)
- * Чипы [ChipRow] — единственный способ переключения (свайп между днями не добавлен: тап по чипу
- * уже даёт мгновенный переход к любому из 7 дней за одно действие, свайп добавил бы только жест
- * "вперёд/назад на один день" ценой дополнительного `Pager`-стейта ради того же результата).
- * День "сегодня" помечен точкой после названия — сравнение с [WeekDay] сегодняшнего дня уже
- * есть в [ScheduleViewModel] (используется и `HomeViewModel` для секции "Новые серии").
+ * ## Навигация по дням + подсветка "сегодня" (P9.T5, сужено до Medium/Expanded в P13.T5)
+ * На Medium/Expanded чипы [ChipRow] — способ прокрутить колонки к нужному дню (см. ниже); на
+ * Compact дня-селектора больше нет — все дни и так на экране, скроллить к нужному можно пальцем,
+ * отдельный контрол избыточен. День "сегодня" помечен точкой после названия — сравнение с
+ * [WeekDay] сегодняшнего дня уже есть в [ScheduleViewModel] (используется и `HomeViewModel` для
+ * секции "Новые серии"); тот же маркер используется и в заголовках секций [DaySectionHeader].
  *
- * ## Wide-экраны (P9.T6)
- * На [AnixWindowSize.Expanded] под селектором показываются колонки сразу нескольких дней (все 7,
- * горизонтальный скролл) — на широком экране есть место видеть соседние дни одновременно, а не
- * только один выбранный. Тап по чипу на Expanded не фильтрует контент (он и так весь на экране),
- * а прокручивает колонки до нужного дня — тот же элемент управления работает предсказуемо в обоих
- * режимах ширины. На Compact/Medium колонок не хватило бы места — там чип обычным образом
- * фильтрует единственную видимую секцию.
+ * ## Wide-экраны: колонки на Medium и Expanded (P9.T6, гейт расширен с Expanded в P13.T5)
+ * Мокап показал, что мульти-колоночная сетка дней нужна не только на Expanded, а на любой
+ * [AnixWindowSize.isTwoPane]-ширине (то есть и на Medium/tablet тоже) — раньше здесь стояла
+ * жёсткая проверка `== Expanded`, из-за чего Medium ошибочно показывал Compact-раскладку с
+ * табами. Под селектором показываются колонки сразу нескольких дней (все 7, горизонтальный
+ * скролл) — тап по чипу не фильтрует контент (он и так весь на экране), а прокручивает колонки
+ * до нужного дня. Сама визуальная доводка сетки под desktop-ширину (P13.T7) — отдельная задача,
+ * этот файл только расширяет условие её показа.
  */
 @Composable
 fun ScheduleScreen(
@@ -136,20 +142,17 @@ private fun ScheduleContent(
             modifier = Modifier.padding(horizontal = dimens.spaceM),
         )
 
-        DaySelector(
-            selectedDay = selectedDay,
-            today = today,
-            strings = strings,
-            onDaySelected = { day ->
-                onDaySelected(day)
-                if (windowSize == AnixWindowSize.Expanded) {
+        if (windowSize.isTwoPane) {
+            DaySelector(
+                selectedDay = selectedDay,
+                today = today,
+                strings = strings,
+                onDaySelected = { day ->
+                    onDaySelected(day)
                     val index = WeekDay.entries.indexOf(day)
                     coroutineScope.launch { columnsListState.animateScrollToItem(index) }
-                }
-            },
-        )
-
-        if (windowSize == AnixWindowSize.Expanded) {
+                },
+            )
             ScheduleColumns(
                 schedule = schedule,
                 strings = strings,
@@ -157,9 +160,10 @@ private fun ScheduleContent(
                 onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
             )
         } else {
-            SelectedDayContent(
-                releases = schedule.releasesOn(selectedDay),
+            ScheduleDaysList(
+                schedule = schedule,
                 strings = strings,
+                today = today,
                 onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
             )
         }
@@ -184,8 +188,9 @@ private fun DaySelector(
     )
 }
 
-/** "•" после названия — маркер "сегодня" в чипе (не отдельная иконка, чтобы не тянуть Material
- *  Icons Extended ради одного значка точки, см. KDoc [ChipRow]). */
+/** "•" после названия — маркер "сегодня", общий и для чипов [DaySelector] (Medium/Expanded), и
+ *  для заголовков секций [DaySectionHeader] (Compact, P13.T5) — не отдельная иконка, чтобы не
+ *  тянуть Material Icons Extended ради одного значка точки, см. KDoc [ChipRow]. */
 private fun WeekDay.chipLabel(
     today: WeekDay,
     strings: Strings,
@@ -194,33 +199,71 @@ private fun WeekDay.chipLabel(
     return if (this == today) "$name •" else name
 }
 
-/** Контент одного выбранного дня — Compact/Medium (P9.T5): вертикальная сетка постеров или
- *  [AnixEmptyState], если на день ничего не запланировано. */
+/** Все 7 дней вертикальным списком сразу — Compact (P13.T5), замена дневных чипов-табов. Один
+ *  [LazyColumn] на весь экран, а не по вложенному списку на день: `LazyColumn` внутри `LazyColumn`
+ *  не умеет мерить бесконечную высоту вложенного скролла — секции дописываются в общий список
+ *  плоскими `item`/`items` вызовами (тот же приём, которым [ScheduleColumns] собирает `LazyRow`
+ *  из [DayColumn]-колонок, только тут по вертикали и без вложенности). */
 @Composable
-private fun SelectedDayContent(
-    releases: List<Release>,
+private fun ScheduleDaysList(
+    schedule: Schedule,
     strings: Strings,
+    today: WeekDay,
     onReleaseClick: (Int) -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
 
-    if (releases.isEmpty()) {
-        AnixEmptyState(message = strings.scheduleEmptyDayMessage, modifier = Modifier.fillMaxSize())
-    } else {
-        LazyColumn(
-            contentPadding = PaddingValues(horizontal = dimens.spaceM, vertical = dimens.spaceS),
-            verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            items(releases, key = { it.id }) { release ->
-                ReleaseCard(release = release, onClick = { onReleaseClick(release.id) })
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = dimens.spaceM, vertical = dimens.spaceS),
+        verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        WeekDay.entries.forEach { day ->
+            item(key = "header_${day.name}") {
+                DaySectionHeader(day = day, today = today, strings = strings)
+            }
+
+            val releases = schedule.releasesOn(day)
+            if (releases.isEmpty()) {
+                item(key = "empty_${day.name}") {
+                    AnixEmptyState(message = strings.scheduleEmptyDayMessage, modifier = Modifier.fillMaxWidth())
+                }
+            } else {
+                items(releases, key = { release -> "${day.name}_${release.id}" }) { release ->
+                    ReleaseCard(release = release, onClick = { onReleaseClick(release.id) })
+                }
             }
         }
     }
 }
 
-/** Все 7 дней колонками сразу — Expanded (P9.T6): горизонтально прокручиваемый [LazyRow] колонок
- *  фиксированной ширины [dayColumnWidth], каждая — заголовок дня + своя вертикальная лента. */
+/** Заголовок секции дня внутри [ScheduleDaysList] — название дня (с маркером "сегодня" через
+ *  [chipLabel]) + разделительная линия, как в мокапе Claude Design (P13.T5). */
+@Composable
+private fun DaySectionHeader(
+    day: WeekDay,
+    today: WeekDay,
+    strings: Strings,
+) {
+    val dimens = AnixThemeTokens.dimens
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = day.chipLabel(today, strings),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f))
+    }
+}
+
+/** Все 7 дней колонками сразу — Medium/Expanded (P9.T6, гейт расширен с Expanded в P13.T5):
+ *  горизонтально прокручиваемый [LazyRow] колонок фиксированной ширины [dayColumnWidth], каждая —
+ *  заголовок дня + своя вертикальная лента. */
 @Composable
 private fun ScheduleColumns(
     schedule: Schedule,
@@ -286,7 +329,7 @@ private fun LoadError?.toScheduleMessage(strings: Strings): String =
         LoadError.GENERIC, null -> strings.homeSectionLoadError
     }
 
-/** Ширина колонки дня на Expanded (P9.T6) — как `sidebarWidth` в `SidebarSlot.kt`, локальная
- *  константа: единственный потребитель этой ширины, заводить общий токен в [AnixThemeTokens]
- *  ради одного экрана избыточно. */
+/** Ширина колонки дня на Medium/Expanded (P9.T6) — как `sidebarWidth` в `SidebarSlot.kt`,
+ *  локальная константа: единственный потребитель этой ширины, заводить общий токен в
+ *  [AnixThemeTokens] ради одного экрана избыточно. */
 private val dayColumnWidth = 280.dp

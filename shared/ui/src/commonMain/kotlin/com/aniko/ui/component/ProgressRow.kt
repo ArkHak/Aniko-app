@@ -1,6 +1,6 @@
 package com.aniko.ui.component
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,11 +34,19 @@ import com.aniko.ui.theme.AnixThemeTokens
  * внутреннему (`Constraints.constrain`), так что переданная снаружи `dimens.posterWidthS`
  * зажимает внутренний `.width(dimens.posterWidth)` компонента до этого меньшего значения — без
  * необходимости трогать `AnixPoster.kt` (вне рамок трека B этой фазы).
+ *
+ * [onLongClick] (P13.T4): опциональный — Мои списки переиспользует эту строку на Compact-ширине
+ * и вешает на неё то же долгое нажатие → контекстное меню (смена статуса/избранное/удаление),
+ * что и грид-карточка на Medium/Expanded (см. `LibraryScreen.kt`), поэтому клик заведён через
+ * `combinedClickable`, а не простой `clickable` — тот же паттерн, что уже у `ReleaseCard`
+ * (`TitleCard.kt`). У остальных двух потребителей (Continue Watching/Расписание) долгого нажатия
+ * нет — параметр по умолчанию `null` не меняет их поведение.
  */
 @Suppress("LongParameterList", "LongMethod")
 // LongParameterList: публичная сигнатура зафиксирована брифом P6.T6: примитивы
 // posterUrl/title/watchedEpisodes/totalEpisodes/onClick обязательны (три реальных потребителя
-// считают "просмотрено" по-разному, см. KDoc класса), subtitle/trailing — опциональные слоты.
+// считают "просмотрено" по-разному, см. KDoc класса), subtitle/trailing/onLongClick (P13.T4) —
+// опциональные слоты.
 // LongMethod: за порог (60) вывел `accessibleLabel`/`clearAndSetSemantics{}` (Фаза 11, T9 —
 // Modifier.clickable не сливает потомков сам по себе, см. KDoc ниже) — тело осталось линейным.
 @Composable
@@ -51,6 +59,7 @@ fun ProgressRow(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     trailing: (@Composable () -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
@@ -69,7 +78,7 @@ fun ProgressRow(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
                 // Подтверждено на устройстве (Фаза 11, T9): без явного merge TalkBack фокусирует
                 // кликабельную строку без имени, заголовок/прогресс остаются отдельными
                 // недостижимыми для навигации узлами (обычный semantics(mergeDescendants=true)

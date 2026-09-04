@@ -22,3 +22,6 @@ DerivedData/
 # Мусор ОС и логи
 .DS_Store
 *.log
+
+# Скретч-артефакты Playwright MCP (снапшоты страниц из живых инвестигаций)
+.playwright-mcp/

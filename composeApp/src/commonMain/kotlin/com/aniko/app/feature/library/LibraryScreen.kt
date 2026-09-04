@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -40,13 +41,18 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aniko.data.paging.PagingState
 import com.aniko.model.ListStatus
 import com.aniko.model.ProfileDetails
 import com.aniko.model.Release
+import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.component.AnixEmptyBox
 import com.aniko.ui.component.AnixErrorBox
 import com.aniko.ui.component.AnixLoadingBox
+import com.aniko.ui.component.ListStatusChip
+import com.aniko.ui.component.ListStatusChipStyle
+import com.aniko.ui.component.ProgressRow
 import com.aniko.ui.component.ReleaseCard
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
@@ -54,6 +60,7 @@ import com.aniko.ui.i18n.displayName
 import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
+import androidx.compose.foundation.lazy.itemsIndexed as itemsIndexedColumn
 
 /**
  * Экран «Мои списки»: 7 вкладок (5 статусов [ListStatus] + избранное + история), каждая —
@@ -79,6 +86,14 @@ import org.koin.compose.viewmodel.koinViewModel
  * как рельсы Фазы 6 (`HorizontalPosterRail`) — постоянный боковой каркас (`AnixSidebar`) уже
  * есть на уровне навигации приложения (`App.kt`/`shared/ui/.../adaptive/`), самому экрану
  * заводить его ещё раз не нужно.
+ *
+ * P13.T4: на [com.aniko.ui.adaptive.AnixWindowSize.Compact] грид постеров ([LibraryGrid]) заменён
+ * на компактные горизонтальные строки ([LibraryRows]) — под мокап Claude Design, тот же паттерн
+ * "48×48 арт + название + прогресс + чип справа", что уже даёт [ProgressRow] на Home (Continue
+ * Watching). Medium/Expanded ([LibraryGrid]) не тронуты — аудит сверки с макетом пометил их как
+ * "unaffected, works fine". Долгое нажатие/контекстное меню (смена статуса/избранное/удаление)
+ * работает одинаково в обоих вариантах — [ProgressRow] получил тот же `onLongClick`, что уже
+ * был у [ReleaseCard].
  */
 @Composable
 fun LibraryScreen(
@@ -154,60 +169,188 @@ fun LibraryScreen(
                                 modifier = Modifier.fillMaxSize(),
                             )
 
+                        // P13.T4: грид ([LibraryGrid]) остаётся на Medium/Expanded, Compact — новые
+                        // компактные строки ([LibraryRows]), см. KDoc класса.
                         else ->
-                            LazyVerticalGrid(
-                                columns =
-                                    GridCells.Adaptive(
-                                        minSize = if (windowSize.isTwoPane) dimens.posterWidthL else dimens.posterWidth,
-                                    ),
-                                contentPadding = PaddingValues(vertical = dimens.spaceM, horizontal = dimens.spaceS),
-                                horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                                verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                                modifier = Modifier.fillMaxSize(),
-                            ) {
-                                itemsIndexed(pagingState.items, key = { _, release -> release.id }) { index, release ->
-                                    if (index >= pagingState.items.size - LIBRARY_PREFETCH_THRESHOLD) {
-                                        viewModel.loadMore(selectedTab)
-                                    }
-                                    Box {
-                                        ReleaseCard(
-                                            release = release,
-                                            onClick = { onReleaseClick(release.id) },
-                                            onLongClick = { menuReleaseId = release.id },
-                                        )
-                                        LibraryContextMenu(
-                                            expanded = menuReleaseId == release.id,
-                                            release = release,
-                                            tab = selectedTab,
-                                            onDismiss = { menuReleaseId = null },
-                                            onChangeStatus = { status ->
-                                                viewModel.changeStatus(release, status)
-                                                menuReleaseId = null
-                                            },
-                                            onToggleFavorite = {
-                                                viewModel.toggleFavorite(release)
-                                                menuReleaseId = null
-                                            },
-                                            onRemoveFromList = { status ->
-                                                viewModel.removeFromList(release, status)
-                                                menuReleaseId = null
-                                            },
-                                            onRemoveFromHistory = {
-                                                viewModel.removeFromHistory(release)
-                                                menuReleaseId = null
-                                            },
-                                        )
-                                    }
-                                }
-
-                                if (pagingState.isLoading) {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        AnixLoadingBox(modifier = Modifier.fillMaxWidth())
-                                    }
-                                }
+                            if (windowSize.isTwoPane) {
+                                LibraryGrid(
+                                    pagingState = pagingState,
+                                    windowSize = windowSize,
+                                    selectedTab = selectedTab,
+                                    menuReleaseId = menuReleaseId,
+                                    onMenuReleaseIdChange = { menuReleaseId = it },
+                                    onReleaseClick = onReleaseClick,
+                                    viewModel = viewModel,
+                                )
+                            } else {
+                                LibraryRows(
+                                    pagingState = pagingState,
+                                    selectedTab = selectedTab,
+                                    menuReleaseId = menuReleaseId,
+                                    onMenuReleaseIdChange = { menuReleaseId = it },
+                                    onReleaseClick = onReleaseClick,
+                                    viewModel = viewModel,
+                                )
                             }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Сетка [ReleaseCard] — Medium/Expanded (P9.T3, layout не менялся в P13.T4: аудит сверки с
+ * макетом пометил его "unaffected, works fine"). На Compact вместо неё — [LibraryRows].
+ */
+@Suppress("LongParameterList") // Координирующий блок: пагинация + ширина экрана + вкладка + меню-стейт +
+// колбэк клика + viewModel (тот же паттерн передачи viewModel во внутренний composable, что уже
+// у HomeScreen/SearchScreen).
+@Composable
+private fun LibraryGrid(
+    pagingState: PagingState<Release>,
+    windowSize: AnixWindowSize,
+    selectedTab: LibraryTab,
+    menuReleaseId: Int?,
+    onMenuReleaseIdChange: (Int?) -> Unit,
+    onReleaseClick: (Int) -> Unit,
+    viewModel: LibraryViewModel,
+) {
+    val dimens = AnixThemeTokens.dimens
+
+    LazyVerticalGrid(
+        columns =
+            GridCells.Adaptive(
+                minSize = if (windowSize.isTwoPane) dimens.posterWidthL else dimens.posterWidth,
+            ),
+        contentPadding = PaddingValues(vertical = dimens.spaceM, horizontal = dimens.spaceS),
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+        verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        itemsIndexed(pagingState.items, key = { _, release -> release.id }) { index, release ->
+            if (index >= pagingState.items.size - LIBRARY_PREFETCH_THRESHOLD) {
+                viewModel.loadMore(selectedTab)
+            }
+            Box {
+                ReleaseCard(
+                    release = release,
+                    onClick = { onReleaseClick(release.id) },
+                    onLongClick = { onMenuReleaseIdChange(release.id) },
+                )
+                LibraryContextMenu(
+                    expanded = menuReleaseId == release.id,
+                    release = release,
+                    tab = selectedTab,
+                    onDismiss = { onMenuReleaseIdChange(null) },
+                    onChangeStatus = { status ->
+                        viewModel.changeStatus(release, status)
+                        onMenuReleaseIdChange(null)
+                    },
+                    onToggleFavorite = {
+                        viewModel.toggleFavorite(release)
+                        onMenuReleaseIdChange(null)
+                    },
+                    onRemoveFromList = { status ->
+                        viewModel.removeFromList(release, status)
+                        onMenuReleaseIdChange(null)
+                    },
+                    onRemoveFromHistory = {
+                        viewModel.removeFromHistory(release)
+                        onMenuReleaseIdChange(null)
+                    },
+                )
+            }
+        }
+
+        if (pagingState.isLoading) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                AnixLoadingBox(modifier = Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+/**
+ * P13.T4: компактные горизонтальные строки на Compact-ширине — под мокап Claude Design
+ * (DesignSync `Reelwave Prototype.dc.html`, секция `isLists`/`activeListItems`): 48×48 арт +
+ * название + подпись прогресса слева, статус-чип списка справа. Переиспользует [ProgressRow]
+ * (тот же компонент, что уже рисует "Продолжить смотреть" на Home и по KDoc [ProgressRow]
+ * задуман под трёх потребителей, включая Мои списки) — только с [ListStatusChip] в `trailing`
+ * вместо пустого слота.
+ *
+ * Долгое нажатие → то же [LibraryContextMenu], что и у грида: [ProgressRow.onLongClick] заведён
+ * через `combinedClickable`, поведение (смена статуса/избранное/удаление) не отличается от
+ * Medium/Expanded — меняется только внешний вид строки, не логика.
+ *
+ * У истории и части «избранного» `release.myListStatus` может быть `null` (релиз не состоит ни
+ * в одном статусном списке) — тогда чип справа просто не рисуется ([trailing] `null`), а не
+ * подставляется выдуманный статус.
+ */
+@Suppress("LongParameterList") // См. LibraryGrid — тот же координирующий паттерн, минус windowSize
+// (Compact всегда один размер строки, ширина экрана строкам не нужна).
+@Composable
+private fun LibraryRows(
+    pagingState: PagingState<Release>,
+    selectedTab: LibraryTab,
+    menuReleaseId: Int?,
+    onMenuReleaseIdChange: (Int?) -> Unit,
+    onReleaseClick: (Int) -> Unit,
+    viewModel: LibraryViewModel,
+) {
+    val dimens = AnixThemeTokens.dimens
+
+    LazyColumn(
+        contentPadding = PaddingValues(vertical = dimens.spaceM, horizontal = dimens.spaceS),
+        verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        itemsIndexedColumn(pagingState.items, key = { _, release -> release.id }) { index, release ->
+            if (index >= pagingState.items.size - LIBRARY_PREFETCH_THRESHOLD) {
+                viewModel.loadMore(selectedTab)
+            }
+            Box {
+                ProgressRow(
+                    posterUrl = release.posterUrl,
+                    title = release.title,
+                    watchedEpisodes = release.lastViewEpisode,
+                    totalEpisodes = release.episodesTotal,
+                    onClick = { onReleaseClick(release.id) },
+                    onLongClick = { onMenuReleaseIdChange(release.id) },
+                    trailing = {
+                        release.myListStatus?.let { status ->
+                            ListStatusChip(status, style = ListStatusChipStyle.Full)
+                        }
+                    },
+                )
+                LibraryContextMenu(
+                    expanded = menuReleaseId == release.id,
+                    release = release,
+                    tab = selectedTab,
+                    onDismiss = { onMenuReleaseIdChange(null) },
+                    onChangeStatus = { status ->
+                        viewModel.changeStatus(release, status)
+                        onMenuReleaseIdChange(null)
+                    },
+                    onToggleFavorite = {
+                        viewModel.toggleFavorite(release)
+                        onMenuReleaseIdChange(null)
+                    },
+                    onRemoveFromList = { status ->
+                        viewModel.removeFromList(release, status)
+                        onMenuReleaseIdChange(null)
+                    },
+                    onRemoveFromHistory = {
+                        viewModel.removeFromHistory(release)
+                        onMenuReleaseIdChange(null)
+                    },
+                )
+            }
+        }
+
+        if (pagingState.isLoading) {
+            item {
+                AnixLoadingBox(modifier = Modifier.fillMaxWidth())
             }
         }
     }

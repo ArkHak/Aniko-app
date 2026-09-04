@@ -3,6 +3,7 @@ package com.aniko.app.feature.release
 import com.aniko.model.Episode
 import com.aniko.model.EpisodeSource
 import com.aniko.model.Release
+import com.aniko.model.ReleaseComment
 import com.aniko.model.ReleaseDetails
 import com.aniko.model.VideoHost
 import com.aniko.model.VoiceType
@@ -18,6 +19,14 @@ import com.aniko.model.VoiceType
  * грузится отдельным запросом и падает независимо от [release]: [detailsError] НЕ блокирует
  * экран, если [release] уже есть что показать (D1 задания трека C) — секции, которые целиком
  * зависят от [details] (метаданные/скриншоты/похожее/рекомендуем), просто остаются пустыми.
+ *
+ * [commentsPreview] — первые 2-3 комментария для инлайн-превью под ссылкой "N комментариев"
+ * (P13.T12). Как и [details], грузится отдельным запросом (`CommentRepository.previewComments`,
+ * та же живьём проверенная `GET release/comment/all/{id}/0`, что и у [ReleaseComment] на полном
+ * экране комментариев) и падает молча: ошибка загрузки превью НЕ выставляет отдельное поле
+ * ошибки и не блокирует остальной экран — see `ReleaseDetailsViewModel.loadCommentsPreview`,
+ * превью — необязательное украшение ссылки на комментарии, а не отдельная точка входа с UI ошибок
+ * (та уже есть — `ReleaseCommentsScreen`).
  */
 data class ReleaseDetailsUiState(
     val isLoading: Boolean = false,
@@ -26,6 +35,7 @@ data class ReleaseDetailsUiState(
     val details: ReleaseDetails? = null,
     val isDetailsLoading: Boolean = false,
     val detailsError: LoadError? = null,
+    val commentsPreview: List<ReleaseComment> = emptyList(),
     // Флоу выбора серии: типы озвучки → источники → серии (см. `docs/api/ENDPOINTS.md`).
     val voiceTypes: List<VoiceType> = emptyList(),
     val selectedTypeId: Int? = null,

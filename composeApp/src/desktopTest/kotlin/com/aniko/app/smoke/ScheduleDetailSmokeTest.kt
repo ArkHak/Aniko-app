@@ -24,10 +24,11 @@ import kotlin.test.Test
  * несовпадение id полю проверки не мешает: сценарий проверяет саму навигацию Schedule → Details,
  * а не то, что открылся именно тайтл 19588.
  *
- * `ScheduleScreen` на Compact-ширине показывает контент только ОДНОГО дня — по умолчанию
- * реального "сегодня" (`Clock.System.now()`), а не понедельника: сначала явно выбираем чип
- * "Monday" (`strings.scheduleDayMonday`), иначе тайтл понедельника не окажется в дереве в те дни
- * недели, когда тест реально запускается не в понедельник.
+ * `ScheduleScreen` на Compact-ширине (P13.T5) показывает вертикальный скролл ВСЕХ 7 дней сразу —
+ * дневного чип-селектора на Compact больше нет (было до P13.T5, тест раньше выбирал чип "Monday"
+ * перед кликом по релизу). Релиз id=19588 из [ApiFixtures.schedule] лежит под понедельником и
+ * так и остаётся видимым в дереве независимо от реального "сегодня" (`Clock.System.now()`) — все
+ * 7 секций теперь на экране одновременно, достаточно проскроллить прямо к нужной карточке.
  *
  * Клик — по постеру (`onNodeWithContentDescription`), не по подписи-заголовку под ним: у
  * `ReleaseCard` (используется здесь и в `LibraryScreen`, `@Deprecated` в пользу `TitleCard` — см.
@@ -47,10 +48,8 @@ class ScheduleDetailSmokeTest {
             onNodeWithTag(AnixTestTags.bottomNavItem("Schedule")).performClick()
             onNodeWithTag(AnixTestTags.SCHEDULE_SCREEN_ROOT).assertIsDisplayed()
 
-            // Фаза 11, T9 (устройство): ChipRow (день-селектор) теперь озвучивает подпись через
-            // clearAndSetSemantics{contentDescription=...}, видимый Text больше не находится.
-            onNodeWithContentDescription("Monday").performClick()
-
+            // P13.T5: Compact больше не фильтрует по дню чипом — все 7 секций уже в дереве,
+            // достаточно проскроллить прямо к релизу понедельника и кликнуть.
             onNodeWithContentDescription("Аккуратная и симпатичная", substring = true)
                 .performScrollTo()
                 .performClick()

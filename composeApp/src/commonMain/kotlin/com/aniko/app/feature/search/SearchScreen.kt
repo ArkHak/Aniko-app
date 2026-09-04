@@ -3,25 +3,20 @@ package com.aniko.app.feature.search
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -31,6 +26,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.mvi.CollectEffects
 import com.aniko.ui.adaptive.AnixWindowSize
@@ -50,13 +46,15 @@ import org.koin.compose.viewmodel.koinViewModel
  *
  * Раскладка по [AnixWindowSize] ([LocalAnixWindowSize] — глобально предоставлен в `App.kt`, этот
  * файл только читает, P5.T3):
- * - Compact/Medium — фильтры (статус+жанр, см. [CatalogFilterPanel]) живут в [ModalBottomSheet],
- *   открываемом кнопкой "Фильтры". Medium отличается от Compact только тем, что `ListDetailHost`
+ * - Compact/Medium — фильтры (статус+жанр) всегда видимы как две горизонтально скроллящиеся строки
+ *   чипов ([CatalogInlineFilterChips]) прямо под полем поиска (P13.T3 — до этого жили за кнопкой
+ *   "Фильтры" в `ModalBottomSheet`, мокап Claude Design рисует их постоянно видимыми, а не
+ *   скрытыми в шторке). Medium отличается от Compact только тем, что `ListDetailHost`
  *   (`App.kt`, вне территории трека B) сам открывает detail-панель сбоку — сетка результатов
  *   получает меньше горизонтальной ширины, а `LazyVerticalGrid.Adaptive`
  *   ([CatalogResultsGrid]) сама пересчитывает число колонок, здесь ничего специального не нужно.
  * - Expanded — постоянная боковая панель [CatalogFilterPanel] (`Dimens.filterSidebarWidth`)
- *   слева от сетки, фильтры всегда развёрнуты, [ModalBottomSheet] не используется вовсе.
+ *   слева от сетки, фильтры всегда развёрнуты.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,7 +86,7 @@ fun SearchScreen(
     }
 }
 
-/** Expanded: постоянная боковая панель фильтров + сетка, без `ModalBottomSheet` (см. KDoc [SearchScreen]). */
+/** Expanded: постоянная боковая панель фильтров + сетка (см. KDoc [SearchScreen]). */
 @Composable
 private fun ExpandedCatalogLayout(
     state: SearchState,
@@ -97,6 +95,16 @@ private fun ExpandedCatalogLayout(
     viewModel: SearchViewModel,
     onReleaseClick: (Int) -> Unit,
 ) {
+    // P13.T7 [FIX]: сайдбар раньше держал фиксированные dimens.filterSidebarWidth (280dp)
+    // независимо от реальной доступной ширины — на Desktop `ExpandedCatalogLayout` живёт внутри
+    // constrained list-панели `ListDetailHost` (после P13.T6 максимум 560dp, на границе Medium/
+    // Expanded — ~420dp), а не во весь экран, как предполагала исходная раскладка P7.T6. При
+    // 280dp сайдбара body получал всего ~140-280dp — поле поиска и переключатель Сетка/Список
+    // переносились по одной букве (найдено живьём при аудите Фазы 13). Пропорциональный `weight`
+    // с потолком в исходные 280dp решает оба случая: на действительно широком экране сайдбар
+    // упирается в свой прежний максимум 280dp (весь остаток уходит body, как и раньше), на узкой
+    // list-панели сайдбар сжимается вместе с body пропорционально (1:2), не отъедая у него
+    // непропорционально много места фиксированным числом.
     Row(modifier = Modifier.fillMaxSize()) {
         CatalogFilterPanel(
             filter = state.filter,
@@ -105,7 +113,14 @@ private fun ExpandedCatalogLayout(
             onReset = { viewModel.dispatch(SearchIntent.FiltersReset) },
             modifier =
                 Modifier
-                    .width(dimens.filterSidebarWidth)
+                    .weight(FILTER_SIDEBAR_WEIGHT, fill = false)
+                    // Живая проверка (2026-09-03) вскрыла то же самое переносом-по-буквам на
+                    // заголовке "Фильтры"/"Сброс": на границе Medium/Expanded 1:2-пропорция сама
+                    // по себе может ужать сайдбар ниже FILTER_SIDEBAR_MIN_WIDTH — нижняя граница
+                    // не даёт панели сжаться настолько, что даже её собственный заголовок
+                    // перестаёт помещаться (список чипов внутри тоже теряет смысл на совсем
+                    // узкой ширине).
+                    .widthIn(min = FILTER_SIDEBAR_MIN_WIDTH, max = dimens.filterSidebarWidth)
                     .fillMaxHeight()
                     .padding(dimens.spaceM),
         )
@@ -113,20 +128,28 @@ private fun ExpandedCatalogLayout(
             state = state,
             strings = strings,
             dimens = dimens,
-            showFiltersButton = false,
             onQueryChange = { q -> viewModel.dispatch(SearchIntent.QueryChanged(q)) },
             onTabSelected = { tab -> viewModel.dispatch(SearchIntent.TabSelected(tab)) },
             onViewModeChanged = { mode -> viewModel.dispatch(SearchIntent.ViewModeChanged(mode)) },
-            onOpenFilters = {},
             onReleaseClick = onReleaseClick,
             onLoadMore = { viewModel.dispatch(SearchIntent.LoadMore) },
             onRetry = { viewModel.dispatch(SearchIntent.Retry) },
-            modifier = Modifier.weight(1f).fillMaxHeight(),
+            modifier = Modifier.weight(CATALOG_BODY_WEIGHT).fillMaxHeight(),
         )
     }
 }
 
-/** Compact/Medium: кнопка "Фильтры" открывает [ModalBottomSheet] (см. KDoc [SearchScreen]). */
+private const val FILTER_SIDEBAR_WEIGHT = 1f
+private const val CATALOG_BODY_WEIGHT = 2f
+
+/** Ниже этой ширины заголовок [CatalogFilterPanel] ("Фильтры"/"Сброс") сам не помещается в строку. */
+private val FILTER_SIDEBAR_MIN_WIDTH = 200.dp
+
+/**
+ * Compact/Medium: чипы фильтров (см. [CatalogInlineFilterChips]) рендерятся прямо в [CatalogBody]
+ * через слот `filtersContent`, никакой отдельной шторки/панели здесь больше нет (P13.T3, см. KDoc
+ * [SearchScreen]).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CompactCatalogLayout(
@@ -140,71 +163,50 @@ private fun CompactCatalogLayout(
         state = state,
         strings = strings,
         dimens = dimens,
-        showFiltersButton = true,
         onQueryChange = { q -> viewModel.dispatch(SearchIntent.QueryChanged(q)) },
         onTabSelected = { tab -> viewModel.dispatch(SearchIntent.TabSelected(tab)) },
         onViewModeChanged = { mode -> viewModel.dispatch(SearchIntent.ViewModeChanged(mode)) },
-        onOpenFilters = { viewModel.dispatch(SearchIntent.FilterSheetVisibilityChanged(true)) },
         onReleaseClick = onReleaseClick,
         onLoadMore = { viewModel.dispatch(SearchIntent.LoadMore) },
         onRetry = { viewModel.dispatch(SearchIntent.Retry) },
         modifier = Modifier.fillMaxSize(),
-    )
-
-    if (state.isFilterSheetOpen) {
-        // P11 (визуальная проверка на устройстве): по умолчанию (без skipPartiallyExpanded) шторка
-        // открывается в PartiallyExpanded — нижний ряд жанр-чипов CatalogFilterPanel физически
-        // рендерится под системной nav bar на первом кадре, до ручного доскролла. Полностью
-        // развёрнутое состояние сразу — стандартный M3-обход для скроллируемого контента высотой
-        // больше "peek".
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(
-            onDismissRequest = { viewModel.dispatch(SearchIntent.FilterSheetVisibilityChanged(false)) },
-            sheetState = sheetState,
-        ) {
-            CatalogFilterPanel(
+        filtersContent = {
+            CatalogInlineFilterChips(
                 filter = state.filter,
                 onStatusToggle = { id -> viewModel.dispatch(SearchIntent.StatusToggled(id)) },
                 onGenreToggle = { genre -> viewModel.dispatch(SearchIntent.GenreToggled(genre)) },
-                onReset = { viewModel.dispatch(SearchIntent.FiltersReset) },
-                modifier = Modifier.padding(horizontal = dimens.spaceM),
             )
-            Button(
-                onClick = { viewModel.dispatch(SearchIntent.FilterSheetVisibilityChanged(false)) },
-                modifier = Modifier.fillMaxWidth().padding(dimens.spaceM),
-            ) {
-                Text(strings.catalogFiltersApply)
-            }
-        }
-    }
+        },
+    )
 }
 
 /**
  * Поле поиска + вкладки/переключатели + сетка результатов — общая часть Compact/Medium/Expanded
- * раскладок (см. KDoc [SearchScreen]), различие только в [showFiltersButton] (Expanded скрывает
- * кнопку "Фильтры" — панель уже развёрнута сбоку) и в модификаторе ширины со стороны вызова.
+ * раскладок (см. KDoc [SearchScreen]), различие только в [filtersContent] (Compact/Medium
+ * передают [CatalogInlineFilterChips], Expanded оставляет `null` — панель уже развёрнута сбоку,
+ * P13.T3) и в модификаторе ширины со стороны вызова.
  */
 @Suppress("LongParameterList", "LongMethod")
-// LongParameterList: 8 колбэков экрана поверх общего SearchState — один экран, разбиение
-// колбэков в объект-параметр добавило бы уровень косвенности ради самого разбиения.
+// LongParameterList: 7 колбэков экрана поверх общего SearchState + опциональный слот фильтров —
+// один экран, разбиение колбэков в объект-параметр добавило бы уровень косвенности ради самого
+// разбиения.
 // LongMethod: за порог (60) вывели `clearAndSetSemantics{}`-модификаторы на кнопке очистки
-// поиска/view-mode чипах/кнопке "Фильтры" (Фаза 11, T9 — IconButton/FilterChip/TextButton не
-// сливают contentDescription сами по себе, см. их KDoc) — тело осталось линейным раскладом
-// поле+чипы+сетка, разбиение добавило бы косвенность ради счётчика строк.
+// поиска/view-mode чипах (Фаза 11, T9 — IconButton/FilterChip не сливают contentDescription сами
+// по себе, см. их KDoc) — тело осталось линейным раскладом поле+фильтры+чипы+сетка, разбиение
+// добавило бы косвенность ради счётчика строк.
 @Composable
 private fun CatalogBody(
     state: SearchState,
     strings: Strings,
     dimens: AnixDimens,
-    showFiltersButton: Boolean,
     onQueryChange: (String) -> Unit,
     onTabSelected: (CatalogTab) -> Unit,
     onViewModeChanged: (CatalogViewMode) -> Unit,
-    onOpenFilters: () -> Unit,
     onReleaseClick: (Int) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    filtersContent: (@Composable () -> Unit)? = null,
 ) {
     Column(modifier = modifier.padding(horizontal = dimens.spaceM)) {
         OutlinedTextField(
@@ -246,6 +248,10 @@ private fun CatalogBody(
             },
         )
 
+        // P13.T3: чипы статус+жанр (Compact/Medium) — прямо под полем поиска, до вкладок
+        // Все/Новинки. Expanded передаёт `null` — панель уже развёрнута сбоку CatalogFilterPanel.
+        filtersContent?.invoke()
+
         // "Горизонтальный ряд чипов" из брифа P7.T3 — вкладки Все/Новинки (см. KDoc CatalogTab).
         ChipRow(
             items = CatalogTab.entries,
@@ -261,7 +267,7 @@ private fun CatalogBody(
         ) {
             // Подтверждено на устройстве (Фаза 11, T9): M3 FilterChip не сливает подпись в свой
             // озвучиваемый узел (тот же паттерн, что и ChipRow.kt/NavigationBarItem — см. их
-            // KDoc); TextButton ниже пострадал так же, несмотря на единственного Text-потомка.
+            // KDoc).
             FilterChip(
                 selected = state.viewMode == CatalogViewMode.Grid,
                 onClick = { onViewModeChanged(CatalogViewMode.Grid) },
@@ -284,13 +290,6 @@ private fun CatalogBody(
                         selected = state.viewMode == CatalogViewMode.List
                     },
             )
-            Spacer(modifier = Modifier.weight(1f))
-            if (showFiltersButton) {
-                TextButton(
-                    onClick = onOpenFilters,
-                    modifier = Modifier.clearAndSetSemantics { contentDescription = strings.catalogFiltersTitle },
-                ) { Text(strings.catalogFiltersTitle) }
-            }
         }
 
         CatalogResultsGrid(

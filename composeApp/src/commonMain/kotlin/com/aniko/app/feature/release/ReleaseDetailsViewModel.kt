@@ -2,6 +2,7 @@ package com.aniko.app.feature.release
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aniko.data.repository.CommentRepository
 import com.aniko.data.repository.EpisodeRepository
 import com.aniko.data.repository.LibraryRepository
 import com.aniko.data.repository.ReleaseRepository
@@ -48,6 +49,7 @@ class ReleaseDetailsViewModel(
     private val releaseRepository: ReleaseRepository,
     private val episodeRepository: EpisodeRepository,
     private val libraryRepository: LibraryRepository,
+    private val commentRepository: CommentRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ReleaseDetailsUiState())
     val uiState: StateFlow<ReleaseDetailsUiState> = _uiState.asStateFlow()
@@ -108,10 +110,40 @@ class ReleaseDetailsViewModel(
             try {
                 val details = releaseRepository.releaseDetails(releaseId)
                 _uiState.update { it.copy(details = details, isDetailsLoading = false) }
+                // Отдельный независимый запрос (P13.T12) — `ReleaseDetails` не несёт сами
+                // комментарии, только commentCount (см. KDoc `ReleaseDetails` в shared/model).
+                // Гейтим на commentCount > 0 — иначе даром бьём в сеть за заведомо пустой страницей.
+                if (details.commentCount > 0) loadCommentsPreview(releaseId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _uiState.update { it.copy(isDetailsLoading = false, detailsError = e.toLoadError()) }
+            }
+        }
+    }
+
+    /**
+     * Инлайн-превью первых комментариев под ссылкой "N комментариев" (P13.T12,
+     * [ReleaseDetailsUiState.commentsPreview]) — отдельный лёгкий запрос (первая страница
+     * `CommentRepository.previewComments`, тот же живьём проверенный эндпоинт, что и у полного
+     * `ReleaseCommentsScreen`, см. KDoc `ReleaseCommentApi.comments`), не `LazyColumn`-пагинация:
+     * превью — не точка входа для листания, только затравка перед переходом на весь список.
+     *
+     * Ошибка молча проглатывается (см. KDoc [ReleaseDetailsUiState.commentsPreview]) — превью
+     * необязательное, `CommentsLinkRow` уже отрисован и рабочий независимо от её результата.
+     */
+    private fun loadCommentsPreview(releaseId: Int) {
+        viewModelScope.launch {
+            try {
+                val preview = commentRepository.previewComments(releaseId, COMMENTS_PREVIEW_LIMIT)
+                _uiState.update { it.copy(commentsPreview = preview) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("SwallowedException", "TooGenericExceptionCaught") e: Exception,
+            ) {
+                // Намеренно проглочено, см. KDoc функции: превью — необязательное украшение,
+                // не отдельная точка входа с UI ошибок.
             }
         }
     }
@@ -437,3 +469,8 @@ private fun Exception.toLoadError(): LoadError {
         else -> LoadError.GENERIC
     }
 }
+
+/** Сколько комментариев показываем инлайн под ссылкой "N комментариев" (P13.T12, макет Claude
+ *  Design — секция "comments" в мокапе на Title Detail показывает 2 карточки; 3-й элемент запаса
+ *  ради `Paginator.commentsPaginator`, отдающего первую страницу, не обязательно короче лимита). */
+private const val COMMENTS_PREVIEW_LIMIT = 3

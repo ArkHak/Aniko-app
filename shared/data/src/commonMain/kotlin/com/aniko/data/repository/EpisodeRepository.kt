@@ -24,7 +24,13 @@ import kotlin.time.Clock
  * P4.T7 (S3 — интеграция): [markWatched]/[markUnwatched] теперь пишут прогресс оптимистично в
  * [episodeProgressStore] и уходят на сервер через [SyncQueueStore]/[syncQueueWorker], а не бьют
  * в [episodeApi] напрямую — переживают офлайн (P4.T5), как и мутации `LibraryRepository`.
+ *
+ * `TooManyFunctions`: вся цепочка резолвинга плеера (types→sources→episodes→target) + watched-
+ * мутации + P13.T10 (`matchPosition`, `resolveEpisodeTarget`) держатся в одном репозитории
+ * намеренно — это один связный домен (`docs/api/ENDPOINTS.md`), резать по произвольной границе
+ * ради счётчика хуже, чем чуть более длинный класс.
  */
+@Suppress("TooManyFunctions")
 class EpisodeRepository(
     private val episodeApi: EpisodeApi,
     private val episodeProgressStore: EpisodeProgressStore,
@@ -57,13 +63,35 @@ class EpisodeRepository(
      * embed (WebView), независимо от хоста и от [com.aniko.model.EpisodeTarget.iframe] —
      * нативный `PlayerController`/`PlaybackSource.Direct` из `:shared:player` остаются заделом
      * на будущее и здесь не используются.
+     *
+     * Тонкая обёртка над [resolveEpisodeTarget] ради обратной совместимости сигнатуры (тесты и
+     * старые вызывающие стороны просят только [PlaybackSource], без имени серии) — сам сетевой
+     * запрос ровно один, второй раз `episode/target` не бьётся.
      */
     suspend fun resolvePlaybackSource(
         releaseId: Int,
         sourceId: Int,
         position: Int,
         host: VideoHost,
-    ): PlaybackSource {
+    ): PlaybackSource = resolveEpisodeTarget(releaseId, sourceId, position, host).source
+
+    /**
+     * Результат [resolveEpisodeTarget]: сам проигрываемый источник + человекочитаемое имя серии
+     * (`"1 серия"`), которое приходит в том же ответе `episode/target`, но раньше отбрасывалось.
+     * Имя нужно P13.T10 (переключение озвучки прямо в плеере) — см. [matchPosition], почему по
+     * нему, а не по `position`, ищется та же серия в другом источнике.
+     */
+    data class ResolvedEpisode(
+        val source: PlaybackSource,
+        val episodeName: String?,
+    )
+
+    suspend fun resolveEpisodeTarget(
+        releaseId: Int,
+        sourceId: Int,
+        position: Int,
+        host: VideoHost,
+    ): ResolvedEpisode {
         val target = episodeApi.target(releaseId, sourceId, position).episode?.toDomain()
         val url =
             target?.url?.takeIf { it.isNotBlank() }
@@ -72,22 +100,70 @@ class EpisodeRepository(
         // на руках реальный URL, уточняем его по домену: имя на стороне Anixart меняется
         // («Libria» → «Liberty»), домен — нет. Если домен не опознан, остаётся хост из навигации.
         val resolvedHost = VideoHost.fromUrl(url).takeIf { it != VideoHost.UNKNOWN } ?: host
-        return if (isKodikEmbedUrl(url)) {
-            // Query-параметры `?d=/&s=/&ip=` из ответа API рассчитаны на referer из исходного
-            // запроса и с нашим WebView не совпадают — Kodik отдаёт `500 "Error code: ds"`
-            // (проверено вживую). Если вместо этого загрузить страницу без query, но с
-            // `Referer: https://anixmirai.com/`, Kodik сам генерирует корректные подписи
-            // (d_sign/pd_sign/ref_sign) на основе заголовка и отдаёт настоящую страницу плеера —
-            // 200, а не 500 (проверено вживую через curl). anixmirai.com — авторизованный домен
-            // партнёра на стороне Kodik (тот же, что видно в оригинальном приложении).
-            PlaybackSource.Embed(
-                url = url.substringBefore('?'),
-                host = resolvedHost,
-                referer = "https://anixmirai.com/",
-            )
-        } else {
-            PlaybackSource.Embed(url = url, host = resolvedHost, referer = url)
+        val source =
+            if (isKodikEmbedUrl(url)) {
+                // Query-параметры `?d=/&s=/&ip=` из ответа API рассчитаны на referer из исходного
+                // запроса и с нашим WebView не совпадают — Kodik отдаёт `500 "Error code: ds"`
+                // (проверено вживую). Если вместо этого загрузить страницу без query, но с
+                // `Referer: https://anixmirai.com/`, Kodik сам генерирует корректные подписи
+                // (d_sign/pd_sign/ref_sign) на основе заголовка и отдаёт настоящую страницу плеера —
+                // 200, а не 500 (проверено вживую через curl). anixmirai.com — авторизованный домен
+                // партнёра на стороне Kodik (тот же, что видно в оригинальном приложении).
+                PlaybackSource.Embed(
+                    url = url.substringBefore('?'),
+                    host = resolvedHost,
+                    referer = "https://anixmirai.com/",
+                )
+            } else {
+                PlaybackSource.Embed(url = url, host = resolvedHost, referer = url)
+            }
+        return ResolvedEpisode(source = source, episodeName = target?.name)
+    }
+
+    /**
+     * Подбирает `position` той же серии в другом источнике/озвучке — нужен переключению
+     * аудиодорожки прямо в плеере (P13.T10), чтобы после смены озвучки воспроизведение осталось
+     * на той же серии, а не сбросилось в начало.
+     *
+     * **Живая проверка перед реализацией (2026-09-03, `api-s.anixsekai.com`, без токена — три этих
+     * эндпоинта его не требуют)** — `position` НЕ совпадает 1:1 между источниками одного релиза,
+     * даже внутри одной и той же озвучки:
+     * - `releaseId=186`, тип «AniDUB» (`typeId=1`): источник Sibnet (`sourceId=1`) нумерует с `0`
+     *   (`"1 серия"` → `position=0`), источник Kodik (`sourceId=8`) — с `1` (`"1 серия"` →
+     *   `position=1`). Тот же релиз, та же озвучка, offset различается на единицу.
+     * - `releaseId=186`: у типа «SHIZA Project» (`typeId=17`) 16 серий, у «AniDUB» (`typeId=1`) —
+     *   только 12. Количество серий у разных озвучек одного релиза может не совпадать вовсе.
+     * - `releaseId=1` — контрпример, а не общее правило: там «AniDUB» (`sourceId=8`) и
+     *   «Субтитры» (`sourceId=24`) СОВПАДАЮТ 1:1 (`position=1..104` у обоих, те же имена). То есть
+     *   поведение непредсказуемо от релиза к релизу — полагаться на голый `position` как на
+     *   стабильный номер серии нельзя в принципе (сырые сэмплы — `docs/api/samples/p13_*.json`).
+     *
+     * Поэтому матчинг идёт по человекочитаемому номеру серии из [Episode.name] (во всех проверенных
+     * источниках формат `"N серия"`, число парсится regex'ом), а не по `position`: `position` из
+     * ответа берётся только у эпизода с тем же числом. Если по имени найти не удалось (пустое имя,
+     * другой формат у стороннего источника, серии с таким номером в новой озвучке вовсе нет) —
+     * честный фолбэк на `currentPosition`, зажатый в границы списка нового источника: это не всегда
+     * та же серия, но всегда существующая позиция этого источника, а не 404 на `episode/target`.
+     *
+     * `ReturnCount`: guard clause на пустой список + матч по имени + фолбэк по индексу — три
+     * содержательно разных случая, вложенный `when`/`let` тут читался бы хуже линейной цепочки.
+     */
+    @Suppress("ReturnCount")
+    suspend fun matchPosition(
+        releaseId: Int,
+        typeId: Int,
+        sourceId: Int,
+        currentEpisodeName: String?,
+        currentPosition: Int,
+    ): Int {
+        val list = episodes(releaseId, typeId, sourceId)
+        if (list.isEmpty()) return currentPosition
+        val currentNumber = episodeNumberOf(currentEpisodeName)
+        if (currentNumber != null) {
+            list.firstOrNull { episodeNumberOf(it.name) == currentNumber }?.let { return it.position }
         }
+        val fallbackIndex = list.indices.minBy { index -> kotlin.math.abs(list[index].position - currentPosition) }
+        return list[fallbackIndex].position
     }
 
     /**
@@ -188,3 +264,9 @@ class EpisodeRepository(
      * STUDIO_MIR, TORLOOK, UNKNOWN -> требуют embed; ANILIBRIA -> предположительно прямой поток.
      */
 }
+
+/**
+ * Ведущее число из `"12 серия"` → `12`. `null`, если имени нет или числа в нём нет
+ * (см. [EpisodeRepository.matchPosition]).
+ */
+private fun episodeNumberOf(name: String?): Int? = name?.let { Regex("""\d+""").find(it)?.value?.toIntOrNull() }

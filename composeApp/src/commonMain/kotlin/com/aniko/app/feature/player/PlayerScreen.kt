@@ -50,9 +50,12 @@ import org.koin.compose.viewmodel.koinViewModel
  * маршрут. Открытие следующей серии, наоборот, идёт через навигатор — там `openPlayer` и так
  * бьёт ровно в `NavController`.
  */
-@Suppress("LongParameterList") // 4 параметра маршрута задаются `AnixDestination.Player` и
-// схлопнуть их в data-класс нельзя без изменения контракта навигации; остальные три —
-// стандартная тройка экрана (onBack + modifier + viewModel).
+@Suppress("LongParameterList", "LongMethod") // 4 параметра маршрута задаются `AnixDestination.Player`
+// и схлопнуть их в data-класс нельзя без изменения контракта навигации; остальные три —
+// стандартная тройка экрана (onBack + modifier + viewModel). Тело функции чуть перевалило за лимит
+// после P13.T10 (4 новых параметра `PlayerOverlay` для чипа «Audio») — исчерпывающий `when` по
+// состоянию загрузки плюс развилка Android/iOS-против-Desktop и так не резались на части без
+// протаскивания половины локальных `val` (`source`, `controller`, `openNextEpisode`) наружу.
 @Composable
 fun PlayerScreen(
     releaseId: Int,
@@ -111,6 +114,10 @@ fun PlayerScreen(
                                 onBack = onBack,
                                 onNextEpisode = openNextEpisode,
                                 onEpisodeNearEnd = viewModel::markWatchedIfNeeded,
+                                voiceTypes = state.voiceTypes,
+                                currentVoiceType = state.currentVoiceType,
+                                isAudioSwitching = state.isAudioSwitching,
+                                onSelectVoiceType = viewModel::selectVoiceType,
                             )
                         } else {
                             PlayerDesktopControls(

@@ -1,5 +1,6 @@
 package com.aniko.app.feature.release
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,15 +10,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,16 +33,22 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aniko.app.feature.comments.CommentMessage
 import com.aniko.app.feature.release.rating.ReleaseRatingSection
 import com.aniko.app.navigation.LocalTitleNavigator
 import com.aniko.model.Episode
 import com.aniko.model.ListStatus
 import com.aniko.model.Release
+import com.aniko.model.ReleaseComment
 import com.aniko.model.VideoHost
+import com.aniko.ui.component.AnixAvatar
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.i18n.LocalStrings
@@ -55,13 +67,18 @@ import org.koin.compose.viewmodel.koinViewModel
  *
  * Вертикальный скролл — один корневой `Column(verticalScroll)`, БЕЗ вложенных `LazyColumn`/
  * `LazyVerticalGrid` того же направления (см. D6 задания трека C и KDoc `EpisodeGrid` про тот же
- * класс проблемы: вложенный ленивый список с неограниченной высотой роняет measure). Именно
- * поэтому комментарии здесь — простая кликабельная строка-ссылка на отдельный экран
- * ([LocalTitleNavigator.openComments]), а не встроенный список.
+ * класс проблемы: вложенный ленивый список с неограниченной высотой роняет measure). Комментарии —
+ * кликабельная строка-ссылка на отдельный экран ([LocalTitleNavigator.openComments], [CommentsLinkRow])
+ * ПЛЮС инлайн-превью первых `COMMENTS_PREVIEW_LIMIT` уже загруженных комментариев
+ * (P13.T12, [CommentsPreviewList]) — по той же причине НЕ `LazyColumn`, а обычный bounded `Column`
+ * из фиксированного маленького списка: превью не листается, оно затравка перед переходом на
+ * [com.aniko.app.feature.comments.ReleaseCommentsScreen], который и остаётся единственной точкой
+ * входа с пагинацией/сортировкой/голосованием.
  */
 @Suppress("LongParameterList") // 6 параметров: releaseId/modifier/viewModel — обязательный
 // каркас экрана, pendingEpisode*/onEpisodeClick — deep link (P10.T7, см. их собственный KDoc);
 // группировать deep-link-параметры в конфиг-класс добавило бы косвенность ради одной пары полей.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReleaseDetailsScreen(
     releaseId: Int,
@@ -89,8 +106,18 @@ fun ReleaseDetailsScreen(
         onResolved = { target -> onEpisodeClick(releaseId, target.sourceId, target.position, target.host) },
     )
 
-    Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.RELEASE_DETAILS_SCREEN_ROOT)) {
-        Box(modifier = Modifier.fillMaxSize()) {
+    // P13 [FIX]: живая проверка на Android/iOS вскрыла, что у этого экрана не было НИКАКОГО
+    // способа вернуться назад, кроме системной кнопки Android — на iOS (нет edge-swipe в
+    // androidx.navigation.compose "из коробки", в отличие от нативного UIKit-стека) это был
+    // настоящий тупик. `titleNavigator.back()` уже существует и сам разбирает, где мы — pane-
+    // стек на широком экране или NavController на телефоне (см. её KDoc), поэтому кнопка works
+    // одинаково в обоих режимах отображения этого экрана (полноэкранный маршрут ИЛИ detail-панель
+    // `ListDetailHost`).
+    Scaffold(
+        modifier = modifier.testTag(AnixTestTags.RELEASE_DETAILS_SCREEN_ROOT),
+        topBar = { ReleaseDetailsTopBar(onBack = { titleNavigator.back() }) },
+    ) { innerPadding ->
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             when {
                 state.isLoading && state.release == null -> AnixLoadingState(modifier = Modifier.fillMaxSize())
 
@@ -126,6 +153,26 @@ fun ReleaseDetailsScreen(
             SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
         }
     }
+}
+
+/** `TopAppBar` с кнопкой "назад" — вынесена отдельно (detekt `LongMethod`), см. её причину в
+ *  KDoc [ReleaseDetailsScreen] про фикс P13. Без заголовка: постер/название уже показаны в
+ *  контенте ниже, дублировать текст в баре незачем. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReleaseDetailsTopBar(onBack: () -> Unit) {
+    val strings = LocalStrings.current
+    TopAppBar(
+        title = {},
+        navigationIcon = {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.clearAndSetSemantics { contentDescription = strings.backContentDescription },
+            ) {
+                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+            }
+        },
+    )
 }
 
 /**
@@ -259,15 +306,102 @@ private fun ReleaseDetailsContent(
             onOpenTitle = onOpenTitle,
         )
 
-        CommentsLinkRow(
+        ReleaseCommentsSection(
             commentCount = state.details?.commentCount ?: 0,
-            onClick = { onOpenComments(release.id) },
+            preview = state.commentsPreview,
+            onOpenComments = { onOpenComments(release.id) },
         )
     }
 }
 
 /**
- * Строка-ссылка на комментарии (P7.T12 вход, D6) — НЕ встроенный список, см. KDoc файла.
+ * Блок комментариев на Title Detail (P13.T12) — заголовок-ссылка [CommentsLinkRow] на весь
+ * счёт комментариев + инлайн-превью первых `state.commentsPreview` под ним, см. KDoc файла.
+ * [preview] может быть пустым (ещё грузится/не удалось загрузить/комментариев нет) — тогда
+ * рисуется только заголовок, как и раньше до P13.T12.
+ */
+@Composable
+private fun ReleaseCommentsSection(
+    commentCount: Int,
+    preview: List<ReleaseComment>,
+    onOpenComments: () -> Unit,
+) {
+    val dimens = AnixThemeTokens.dimens
+    Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
+        CommentsLinkRow(commentCount = commentCount, onClick = onOpenComments)
+        if (preview.isNotEmpty()) {
+            CommentsPreviewList(preview = preview, onCommentClick = onOpenComments)
+        }
+    }
+}
+
+/**
+ * Bounded `Column` из уже загруженных превью-комментариев (P13.T12) — НЕ `LazyColumn`, см. KDoc
+ * файла: список фиксированный и маленький (`COMMENTS_PREVIEW_LIMIT`), лениво отрисовывать его
+ * незачем, а вложенный ленивый список того же направления внутри неограниченного
+ * `verticalScroll`-`Column` экрана ронял бы measure (тот же класс проблемы, что и у `EpisodeGrid`).
+ */
+@Composable
+private fun CommentsPreviewList(
+    preview: List<ReleaseComment>,
+    onCommentClick: () -> Unit,
+) {
+    val dimens = AnixThemeTokens.dimens
+    Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
+        preview.forEach { comment ->
+            ReleaseCommentPreviewRow(comment = comment, onClick = onCommentClick)
+        }
+    }
+}
+
+/**
+ * Карточка одного превью-комментария (структура по мокапу Claude Design, секция `comments`
+ * `Reelwave Prototype.dc.html`: аватар-плейсхолдер + имя + текст на фоне `surfaceVariant`).
+ *
+ * Текст/спойлер — [CommentMessage] (`feature/comments`, P13.T12) — переиспользует ТУ ЖЕ логику
+ * раскрытия спойлера, что и полный `CommentRow` на [com.aniko.app.feature.comments.ReleaseCommentsScreen]
+ * (D10: плашка "Показать спойлер" вместо `Modifier.blur`, см. KDoc [CommentMessage] про причину —
+ * `blur` не гарантирован на Android <12/iOS-Skia). Мокап рисует спойлер размытым текстом — здесь
+ * сознательно то же архитектурное решение D10, что и на полном экране комментариев, а не второй,
+ * несовместимый способ показа спойлера в том же приложении.
+ *
+ * Вся карточка кликабельна ([onClick] — переход на [com.aniko.app.feature.comments.ReleaseCommentsScreen],
+ * та же точка входа, что и у [CommentsLinkRow]) — превью не умеет лайкать/отвечать само по себе,
+ * это по-прежнему функциональность только полного экрана.
+ */
+@Composable
+private fun ReleaseCommentPreviewRow(
+    comment: ReleaseComment,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val dimens = AnixThemeTokens.dimens
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(dimens.cornerM))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = COMMENT_PREVIEW_BACKGROUND_ALPHA))
+                .clickable(role = Role.Button, onClick = onClick)
+                .padding(dimens.spaceM),
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+    ) {
+        AnixAvatar(
+            avatarUrl = comment.author.avatarUrl,
+            login = comment.author.login,
+            size = COMMENT_PREVIEW_AVATAR_SIZE,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
+            Text(text = comment.author.login, style = MaterialTheme.typography.labelMedium)
+            CommentMessage(comment = comment, textStyle = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/**
+ * Заголовок блока комментариев (P7.T12 вход, D6) — кликабельная строка-ссылка на весь экран
+ * комментариев, отдельно от инлайн-превью под ней ([CommentsPreviewList], P13.T12, см. KDoc
+ * файла) — единственная точка входа с пагинацией/сортировкой/голосованием остаётся полный экран.
  * `Strings.releaseCommentsTitle(count)` уже несёт число, поэтому текст самодостаточен без
  * дополнительной подписи.
  */
@@ -293,3 +427,8 @@ private fun CommentsLinkRow(
         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
     }
 }
+
+/** См. `ReleaseDetailsViewModel.COMMENTS_PREVIEW_LIMIT` (та же цифра, дублируется намеренно —
+ *  экран не должен знать о деталях загрузки, вьюмодель не должна знать о рендере). */
+private val COMMENT_PREVIEW_AVATAR_SIZE = 30.dp
+private const val COMMENT_PREVIEW_BACKGROUND_ALPHA = 0.6f

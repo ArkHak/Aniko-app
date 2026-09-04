@@ -6,9 +6,12 @@ import com.aniko.data.repository.EpisodeRepository
 import com.aniko.data.repository.LibraryRepository
 import com.aniko.model.AnixError
 import com.aniko.model.VideoHost
+import com.aniko.model.VoiceType
 import com.aniko.player.PlaybackSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +24,16 @@ import kotlinx.coroutines.launch
  * завершилась или если её не удалось выполнить (см. `EpisodeRepository.hasEpisode`).
  * @param isWatched текущая серия отмечена просмотренной. Читается из локального стора
  * (`EpisodeProgressStore`), поэтому меняется сразу после оптимистичной записи, не дожидаясь сети.
+ * @param episodeName человекочитаемое имя текущей серии (`"1 серия"`) из `episode/target` —
+ * держим его не ради отображения (в оверлее его нет), а как вход для
+ * `EpisodeRepository.matchPosition` при переключении озвучки (P13.T10, см. [voiceTypes]).
+ * @param voiceTypes список озвучек релиза для чипа «Audio» (P13.T10). Догружается лениво отдельной
+ * корутиной после основной загрузки — открытие плеера не обязано ждать её ради кадра видео.
+ * @param currentVoiceType озвучка текущего источника — определяется подбором (маршрут плеера несёт
+ * только `sourceId`, не `typeId`, см. KDoc [resolveCurrentVoiceType]). `null`, пока подбор не
+ * завершился или для источника не нашлось соответствия.
+ * @param isAudioSwitching идёт переключение озвучки — блокирует повторный тап по строке в пикере,
+ * пока не разрешится сеть (выбор источника + список серий + резолв ссылки).
  */
 data class PlayerUiState(
     val isLoading: Boolean = true,
@@ -28,6 +41,10 @@ data class PlayerUiState(
     val error: PlayerError? = null,
     val hasNextEpisode: Boolean = false,
     val isWatched: Boolean = false,
+    val episodeName: String? = null,
+    val voiceTypes: List<VoiceType> = emptyList(),
+    val currentVoiceType: VoiceType? = null,
+    val isAudioSwitching: Boolean = false,
 )
 
 /**
@@ -102,19 +119,37 @@ class PlayerViewModel(
         if (loadedKey == key && (_uiState.value.isLoading || _uiState.value.source != null)) return
         loadedKey = key
 
-        _uiState.value = PlayerUiState(isLoading = true)
+        // Озвучка нового источника ещё не известна (её выясняет `resolveCurrentVoiceType` заново
+        // по новому `sourceId`) — список типов из прошлого источника переиспользуем как есть,
+        // чтобы пикер не мигал пустым списком при переключении на серию того же релиза.
+        _uiState.value = PlayerUiState(isLoading = true, voiceTypes = _uiState.value.voiceTypes)
         observeWatched(key)
         viewModelScope.launch {
             try {
-                val source = episodeRepository.resolvePlaybackSource(releaseId, sourceId, position, host)
-                _uiState.update { it.copy(isLoading = false, source = source, error = null) }
+                val resolved = episodeRepository.resolveEpisodeTarget(releaseId, sourceId, position, host)
+                // loadedKey могла уже смениться (пользователь быстро переключил серию/озвучку,
+                // пока этот запрос летел) — тот же guard, что и у остальных асинхронных записей в
+                // uiState в этом классе (см. hasNextEpisode/resolveCurrentVoiceType/selectVoiceType
+                // ниже), иначе устаревший ответ перетёр бы уже актуальное состояние.
+                if (loadedKey == key) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            source = resolved.source,
+                            error = null,
+                            episodeName = resolved.episodeName,
+                        )
+                    }
+                }
                 // Та же логика для истории просмотра ("Фаза 6"): плееру не нужно знать об успехе
                 // синхронизации истории, ошибку тоже проглатываем, а не мешаем воспроизведению.
                 runCatching { libraryRepository.addHistory(releaseId, sourceId, position) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, source = null, error = e.toPlayerError()) }
+                if (loadedKey == key) {
+                    _uiState.update { it.copy(isLoading = false, source = null, error = e.toPlayerError()) }
+                }
             }
         }
         viewModelScope.launch {
@@ -122,6 +157,84 @@ class PlayerViewModel(
             // ни ронять экран — `hasEpisode` сам глотает сетевую ошибку в `false`.
             val hasNext = episodeRepository.hasEpisode(releaseId, sourceId, position + 1)
             if (loadedKey == key) _uiState.update { it.copy(hasNextEpisode = hasNext) }
+        }
+        resolveCurrentVoiceType(key)
+    }
+
+    /**
+     * P13.T10 — узнаёт, какой озвучке принадлежит текущий `sourceId`, и заодно список всех
+     * озвучек релиза (для пикера в чипе «Audio»).
+     *
+     * Маршрут плеера (`AnixDestination.Player`) несёт только `sourceId`/`hostKey`, не `typeId`
+     * (см. KDoc `PlayerViewModel` про источник параметров) — расширять маршрут ради одного чипа
+     * не стали, чтобы не тащить `typeId` через всю навигацию (Detail-экран, deep links, «следующая
+     * серия»). Вместо этого typeId подбирается: под каждой озвучкой релиза (их обычно 2-4) просим
+     * список источников и ищем среди них текущий `sourceId`, все запросы — параллельно. Не самый
+     * дешёвый способ, но выполняется один раз за открытие плеера и не блокирует показ кадра
+     * видео (совсем отдельная корутина, кадр грузится своей веткой чуть выше).
+     */
+    private fun resolveCurrentVoiceType(key: LoadKey) {
+        viewModelScope.launch {
+            val types = runCatching { episodeRepository.voiceTypes(key.releaseId) }.getOrDefault(emptyList())
+            if (loadedKey != key) return@launch
+            _uiState.update { it.copy(voiceTypes = types) }
+
+            val matched =
+                coroutineScope {
+                    types
+                        .map { type -> type to async { sourcesOf(key.releaseId, type.id) } }
+                        .firstOrNull { (_, sourcesDeferred) -> sourcesDeferred.await().any { it.id == key.sourceId } }
+                        ?.first
+                }
+            if (loadedKey == key) _uiState.update { it.copy(currentVoiceType = matched) }
+        }
+    }
+
+    /** Сетевую ошибку глотаем в пустой список — не знать источники одной озвучки не должно ронять весь подбор. */
+    private suspend fun sourcesOf(
+        releaseId: Int,
+        typeId: Int,
+    ) = runCatching { episodeRepository.sources(releaseId, typeId) }.getOrDefault(emptyList())
+
+    /**
+     * Переключение озвучки прямо в плеере (P13.T10) — выбор строки в пикере поверх [PlayerOverlay],
+     * не отдельный экран/маршрут: перезагружает этот же [PlayerScreen] новым `sourceId`/`host` тем
+     * же вызовом [load], без навигации и без `popBackStack`.
+     *
+     * Источник для новой озвучки выбирается предпочтительно с тем же хостом, что играл сейчас
+     * (тише всего для пользователя — тот же плеер под капотом), иначе первый доступный.
+     * Позиция — через `EpisodeRepository.matchPosition` (см. её KDoc про то, почему не сам
+     * `position`): по номеру серии, а не по индексу.
+     *
+     * `ReturnCount`: guard clauses по «нет активной загрузки» / «та же озвучка уже выбрана» /
+     * «тип не из списка» — линейная цепочка условий читается лучше вложенного `when`.
+     */
+    @Suppress("ReturnCount")
+    fun selectVoiceType(typeId: Int) {
+        val key = loadedKey ?: return
+        if (typeId == _uiState.value.currentVoiceType?.id) return
+        if (_uiState.value.voiceTypes.none { it.id == typeId }) return // typeId не из списка озвучек этого релиза
+        val episodeName = _uiState.value.episodeName
+        _uiState.update { it.copy(isAudioSwitching = true) }
+        viewModelScope.launch {
+            val sources = sourcesOf(key.releaseId, typeId)
+            val newSource = sources.firstOrNull { it.host == key.host } ?: sources.firstOrNull()
+            if (newSource == null) {
+                // Нет ни одного источника у выбранной озвучки — переключаться некуда, оставляем
+                // как было и просто снимаем индикатор загрузки пикера.
+                if (loadedKey == key) _uiState.update { it.copy(isAudioSwitching = false) }
+                return@launch
+            }
+            val matchedPosition =
+                runCatching {
+                    episodeRepository.matchPosition(key.releaseId, typeId, newSource.id, episodeName, key.position)
+                }.getOrDefault(key.position)
+            if (loadedKey != key) return@launch // пользователь уже успел уйти с экрана/переключить снова
+            // `currentVoiceType = type` здесь не пишем: `load()` ниже тут же сбросит стейт в новый
+            // `PlayerUiState` и сам заново подберёт тип через `resolveCurrentVoiceType` (теперь уже
+            // по-настоящему — источник `newSource.id` принадлежит `typeId`, подбор найдёт его сразу).
+            _uiState.update { it.copy(isAudioSwitching = false) }
+            load(key.releaseId, newSource.id, matchedPosition, newSource.host)
         }
     }
 

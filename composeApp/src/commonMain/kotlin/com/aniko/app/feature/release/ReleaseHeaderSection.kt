@@ -101,7 +101,7 @@ fun ReleaseHeaderSection(
 
         if (detailsError != null && details == null) {
             AnixErrorState(
-                message = detailsError.toReleaseMessage(strings),
+                message = detailsError.toDetailsMessage(strings),
                 onRetry = onRetryDetails,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -356,6 +356,21 @@ internal fun LoadError?.toReleaseMessage(strings: Strings): String =
         LoadError.NO_CONNECTION -> strings.commonErrorNoConnection
         LoadError.UNAUTHORIZED -> strings.commonErrorUnauthorized
         LoadError.GENERIC, null -> strings.releaseLoadError
+    }
+
+/**
+ * P13.T7 [FIX]: [detailsError] — провал только под-запроса расширенных метаданных (студия/страна/
+ * режиссёр/сезон и т.п., [ReleaseHeaderSection]'s `details`), не всего релиза. Раньше здесь
+ * переиспользовался [toReleaseMessage] — на `LoadError.GENERIC` это давало пугающий текст «Не
+ * удалось загрузить релиз» с кнопкой «Повторить» посреди уже полностью отрисованной страницы
+ * (постер/жанры/эпизоды/рейтинг — всё из [release], не из [details]) — баг, найденный на Desktop
+ * при аудите Фазы 13. `NO_CONNECTION`/`UNAUTHORIZED` — общие для всего экрана, текст не меняется.
+ */
+private fun LoadError?.toDetailsMessage(strings: Strings): String =
+    when (this) {
+        LoadError.NO_CONNECTION -> strings.commonErrorNoConnection
+        LoadError.UNAUTHORIZED -> strings.commonErrorUnauthorized
+        LoadError.GENERIC, null -> strings.releaseDetailsLoadError
     }
 
 private fun formatGrade(grade: Double): String {

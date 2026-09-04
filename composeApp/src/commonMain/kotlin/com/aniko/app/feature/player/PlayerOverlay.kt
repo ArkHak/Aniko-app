@@ -1,3 +1,7 @@
+@file:Suppress("TooManyFunctions") // Один экран-оверлей, разложенный на маленькие приватные
+// composable по секциям макета (топбар/центр/нижняя панель/баннер/пикер озвучки, P13.T10) — это
+// декомпозиция в пользу читаемости, а не разрастание ответственности одного файла.
+
 package com.aniko.app.feature.player
 
 import androidx.compose.animation.AnimatedVisibility
@@ -23,14 +27,17 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.outlined.PictureInPictureAlt
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -51,11 +58,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.aniko.model.VoiceType
 import com.aniko.player.EmbedVideoController
 import com.aniko.player.EmbedVideoState
 import com.aniko.player.isEpisodeFinished
 import com.aniko.player.isNearEnd
 import com.aniko.player.secondsToEpisodeEnd
+import com.aniko.ui.component.VoiceTypeRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 import kotlinx.coroutines.delay
@@ -92,10 +101,20 @@ import kotlinx.coroutines.delay
  * один и тот же на обе фичи.
  * @param onNextEpisode переход на следующую серию: и по кнопке «Смотреть сейчас», и по истечении
  * обратного отсчёта. Вызывается не чаще одного раза за жизнь этого экрана.
+ * @param voiceTypes список озвучек релиза для чипа «Audio» (P13.T10, `PlayerUiState.voiceTypes`).
+ * Пустой список прячет чип целиком — переключаться некуда, показывать неактивную кнопку незачем
+ * (тот же принцип честного UI, что и у PiP-заглушки, только тут решение — не рисовать вовсе).
+ * @param currentVoiceType озвучка текущего источника (`PlayerUiState.currentVoiceType`) — подпись
+ * чипа и подсветка выбранной строки в пикере. `null`, пока подбор ещё не завершился.
+ * @param isAudioSwitching идёт переключение озвучки — индикатор в пикере ([AudioPickerOverlay]).
+ * @param onSelectVoiceType выбор строки в пикере озвучки — уходит в `PlayerViewModel.selectVoiceType`.
  */
-@Suppress("LongParameterList") // Состояние + контроллер + флаг наличия следующей серии + 3 колбэка
-// наружу (назад/следующая/конец серии) + modifier. Дробить оверлей на части с меньшим числом
-// параметров пришлось бы через общий mutable-объект состояния — это хуже, чем счётчик.
+@Suppress("LongParameterList", "LongMethod") // Состояние + контроллер + флаг наличия следующей
+// серии + 3 колбэка наружу (назад/следующая/конец серии) + аудио-пикер (список + текущая озвучка +
+// флаг загрузки + колбэк выбора, P13.T10) + modifier. Дробить оверлей на части с меньшим числом
+// параметров пришлось бы через общий mutable-объект состояния — это хуже, чем счётчик. Тело функции
+// длиннее лимита ровно из-за этого же перечисления layout-секций (топбар/центр/баннер/панель/пикер)
+// — каждая уже вынесена в свой composable, короче эта функция уже не станет без потери читаемости.
 @Composable
 fun PlayerOverlay(
     state: EmbedVideoState,
@@ -104,6 +123,10 @@ fun PlayerOverlay(
     onBack: () -> Unit,
     onNextEpisode: () -> Unit,
     onEpisodeNearEnd: () -> Unit,
+    voiceTypes: List<VoiceType> = emptyList(),
+    currentVoiceType: VoiceType? = null,
+    isAudioSwitching: Boolean = false,
+    onSelectVoiceType: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = AnixThemeTokens.colors
@@ -112,6 +135,9 @@ fun PlayerOverlay(
     // видимость. Именно счётчик, а не timestamp: ключ `LaunchedEffect` должен меняться на
     // каждое взаимодействие, даже если два подряд пришли в одну миллисекунду.
     var interactionTick by remember { mutableIntStateOf(0) }
+    // Пикер озвучки (P13.T10) — свой overlay-слой поверх этого же Box, не отдельный маршрут
+    // (см. KDoc [AudioPickerOverlay]).
+    var showAudioPicker by remember { mutableStateOf(false) }
 
     // Мост реально держит видео. Пока нет — управлять нечем, и оверлей обязан деградировать
     // до одной кнопки «назад», не перехватывая касания (см. KDoc, абзац про перехват).
@@ -177,8 +203,27 @@ fun PlayerOverlay(
                     state = state,
                     controller = controller,
                     onInteraction = { interactionTick++ },
+                    voiceTypes = voiceTypes,
+                    currentVoiceType = currentVoiceType,
+                    onOpenAudioPicker = {
+                        interactionTick++
+                        showAudioPicker = true
+                    },
                 )
             }
+        }
+
+        if (showAudioPicker) {
+            AudioPickerOverlay(
+                voiceTypes = voiceTypes,
+                currentVoiceType = currentVoiceType,
+                isSwitching = isAudioSwitching,
+                onSelect = { typeId ->
+                    onSelectVoiceType(typeId)
+                    showAudioPicker = false
+                },
+                onDismiss = { showAudioPicker = false },
+            )
         }
     }
 }
@@ -292,20 +337,33 @@ private fun PlayerCenterControls(
 }
 
 /**
- * Нижняя панель: прогресс-бар с seek (P8.T3) + скорость воспроизведения (P8.T5).
+ * Нижняя панель: прогресс-бар с seek (P8.T3), скорость воспроизведения (P8.T5) и озвучка (P13.T10).
  *
  * Прогресс-бар рисуется **только** при `durationMs != null` — до события `loadedmetadata`
  * длительности не существует вообще (`duration = NaN`), и шкала «от нуля до неизвестно чего»
  * была бы выдумкой. Пока её нет — панель показывает только скорость.
  *
- * Аудиодорожки/субтитров/качества здесь нет и не будет: это внутренний UI чужого embed-плеера
- * (CUT в таблице аудита `docs/REELWAVE_PLAN.md`), единого DOM-контракта под ним не существует.
+ * **Качества здесь нет и не будет** — CUT, см. `docs/REELWAVE_PLAN.md` (отчёт P13.T9): сегмент
+ * качества в Kodik embed-URL (`/720p`) декоративный на нашей стороне — приложение никогда само не
+ * выбирает качество, решает сервер Anixart/Kodik при подписи ссылки. Своя кнопка переключения
+ * либо ничего не даст, либо сломает подпись URL и покажет пользователю ошибку вместо видео.
+ *
+ * **Аудиодорожка (озвучка), наоборот, теперь есть** ([AudioChip]/[SubtitlesStatusChip]) — в отличие
+ * от качества это не внутренний UI чужого embed-плеера, а собственный выбор Anixart API
+ * (`episode/{releaseId}/{typeId}`), тот же список, что и в `VoiceTypeSelector` на Title Detail
+ * (`ReleaseEpisodesSection.kt`, P8.T6) — просто доступный без выхода из плеера.
  */
+@Suppress("LongParameterList") // Состояние/контроллер видео + колбэк взаимодействия (существующая
+// P8.T3/T5 тройка) + список озвучек/текущая озвучка/колбэк открытия пикера (P13.T10). Группировать
+// P13.T10-параметры в объект ради одного вызова было бы отдельным типом без другого назначения.
 @Composable
 private fun PlayerBottomPanel(
     state: EmbedVideoState,
     controller: EmbedVideoController,
     onInteraction: () -> Unit,
+    voiceTypes: List<VoiceType>,
+    currentVoiceType: VoiceType?,
+    onOpenAudioPicker: () -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
@@ -344,6 +402,121 @@ private fun PlayerBottomPanel(
                     },
                     label = { Text(strings.playerSpeedValue(rate.formatRate())) },
                 )
+            }
+        }
+
+        // Меньше двух озвучек — переключаться некуда, чип не рисуем вовсе (тот же принцип
+        // честного UI, что и у PiP-заглушки/качества выше — см. KDoc [PlayerOverlay]).
+        if (voiceTypes.size > 1) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+            ) {
+                AudioChip(currentVoiceType = currentVoiceType, onClick = onOpenAudioPicker)
+                if (currentVoiceType?.isSub == true) SubtitlesStatusChip()
+            }
+        }
+    }
+}
+
+/**
+ * Чип «Audio: {имя}» (P13.T10) — открывает [AudioPickerOverlay] поверх кадра. Подпись падает до
+ * общего `Strings.playerAudioLabel`, пока [currentVoiceType] ещё не подобран (см. его KDoc в
+ * `PlayerUiState`) — короткое окно сразу после открытия плеера, не ошибка.
+ */
+@Composable
+private fun AudioChip(
+    currentVoiceType: VoiceType?,
+    onClick: () -> Unit,
+) {
+    val strings = LocalStrings.current
+    val label = currentVoiceType?.let { strings.playerAudioChipLabel(it.name) } ?: strings.playerAudioLabel
+    AssistChip(onClick = onClick, label = { Text(label) })
+}
+
+/**
+ * Статичный лейбл «Subtitles» (P13.T10) — **не кликабельный**, ровно как в мокапе (`showDubPicker`
+ * там не вешает `onClick` на этот элемент): просто отражает `VoiceType.isSub` текущего источника.
+ * Рисуется только когда `isSub == true` — тот же приём, что уже применён к бейджу `SubBadge` в
+ * `VoiceTypeRow.kt` (P8.T6): для дубляжа (`isSub == false`) чип молчит, а не показывает «Dub».
+ */
+@Composable
+private fun SubtitlesStatusChip() {
+    val strings = LocalStrings.current
+    AssistChip(onClick = {}, enabled = false, label = { Text(strings.releaseVoiceFilterSub) })
+}
+
+/**
+ * Пикер озвучки поверх кадра плеера (P13.T10) — открывается [AudioChip], не отдельный экран или
+ * маршрут (как `showDubPicker` в мокапе): полноэкранный скрим с прижатой к низу панелью и списком
+ * [VoiceTypeRow] — тем же переиспользуемым компонентом `shared/ui`, что и `VoiceTypeSelector` на
+ * Title Detail (`ReleaseEpisodesSection.kt`, P8.T6). Список озвучек — один и тот же API-объект
+ * ([VoiceType]) в обоих местах, заводить второй визуальный компонент под него незачем.
+ *
+ * Без фильтра «Все/Дубляж/Субтитры», который есть на Detail: там он оправдан длинным списком под
+ * все сценарии использования экрана тайтла, здесь — лишний слой поверх видео ради списка, который
+ * почти всегда короче десяти строк.
+ *
+ * Тап по скриму закрывает пикер (тот же жест, что открывает/прячет контролы под ним, только
+ * пикер физически выше в Z-порядке этого же `Box`, см. вызывающую сторону [PlayerOverlay]).
+ */
+@Composable
+private fun AudioPickerOverlay(
+    voiceTypes: List<VoiceType>,
+    currentVoiceType: VoiceType?,
+    isSwitching: Boolean,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
+    val strings = LocalStrings.current
+    val sorted = remember(voiceTypes) { voiceTypes.sortedByDescending(VoiceType::pinned) }
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(colors.posterScrim)
+                .clickableNoIndication(onDismiss),
+    ) {
+        Surface(
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    // Проглатывает тап, чтобы панель не закрывалась сквозь саму себя.
+                    .clickableNoIndication {},
+            shape = RoundedCornerShape(topStart = dimens.cornerL, topEnd = dimens.cornerL),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier.padding(dimens.spaceM),
+                verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = strings.playerAudioLabel,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Filled.Close, contentDescription = strings.closeContentDescription)
+                    }
+                }
+                if (isSwitching) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
+                    sorted.forEach { type ->
+                        VoiceTypeRow(
+                            voiceType = type,
+                            selected = type.id == currentVoiceType?.id,
+                            onClick = { onSelect(type.id) },
+                        )
+                    }
+                }
             }
         }
     }

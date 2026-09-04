@@ -155,6 +155,9 @@ private fun LazyListScope.homeRailItems(
             onRetry = { viewModel.dispatch(HomeIntent.RetryRecommendations) },
             onLoadMore = { viewModel.dispatch(HomeIntent.LoadMoreRecommendations) },
             windowSize = windowSize,
+            // P13.T7: на Expanded — сетка вместо горизонтального скролла (мокап Claude Design
+            // рисует Home на десктопе сетками, не рельсами), см. KDoc [HorizontalPosterRail].
+            gridOnExpanded = true,
         ) { release -> TitleCard(release = release, onClick = { onReleaseClick(release.id) }) }
     }
 
@@ -165,6 +168,7 @@ private fun LazyListScope.homeRailItems(
             key = { it.id },
             onRetry = { viewModel.dispatch(HomeIntent.RetryDiscussing) },
             windowSize = windowSize,
+            gridOnExpanded = true,
         ) { release -> TitleCard(release = release, onClick = { onReleaseClick(release.id) }) }
     }
 
@@ -175,6 +179,7 @@ private fun LazyListScope.homeRailItems(
             key = { it.id },
             onRetry = { viewModel.dispatch(HomeIntent.RetryNewEpisodes) },
             windowSize = windowSize,
+            gridOnExpanded = true,
         ) { release ->
             TitleCard(release = release, onClick = { onReleaseClick(release.id) }, isNewEpisode = true)
         }

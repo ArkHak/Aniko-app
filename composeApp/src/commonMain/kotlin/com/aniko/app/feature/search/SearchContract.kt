@@ -49,7 +49,6 @@ data class SearchState(
     val tab: CatalogTab = CatalogTab.All,
     val filter: CatalogFilter = CatalogFilter(),
     val viewMode: CatalogViewMode = CatalogViewMode.Grid,
-    val isFilterSheetOpen: Boolean = false,
     val pagingState: PagingState<Release> = PagingState(),
 ) : UiState {
     /**
@@ -85,10 +84,6 @@ sealed interface SearchIntent : UiIntent {
 
     data class ViewModeChanged(
         val viewMode: CatalogViewMode,
-    ) : SearchIntent
-
-    data class FilterSheetVisibilityChanged(
-        val isOpen: Boolean,
     ) : SearchIntent
 
     data object LoadMore : SearchIntent

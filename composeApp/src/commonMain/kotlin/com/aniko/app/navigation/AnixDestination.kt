@@ -17,10 +17,25 @@ sealed interface AnixDestination {
     @Serializable
     data object Search : AnixDestination
 
+    /**
+     * Экран настроек — Design Gallery, уведомления, язык, выход из аккаунта.
+     *
+     * До P13.T2 был вкладкой таб-бара (см. [AnixSection]) и сам открывал [Profile] пунктом «Мой
+     * профиль». После сверки с мокапом Claude Design поток развернулся: [Profile] стал вкладкой
+     * таб-бара, а этот маршрут — дочерний экран, открываемый шестерёнкой из `TopAppBar`
+     * `ProfileScreen.kt`. Переключатель темы отсюда переехал на [Profile] (мокап рисует его прямо
+     * под шапкой профиля); переключатель языка остался здесь.
+     */
     @Serializable
     data object Settings : AnixDestination
 
-    /** Профиль текущего пользователя (Фаза 7), открывается из [Settings]. */
+    /**
+     * Профиль текущего пользователя (Фаза 7).
+     *
+     * До P13.T2 открывался только из [Settings] («Мой профиль»). После сверки с мокапом Claude
+     * Design — прямая вкладка таб-бара ([AnixSection.Profile], person-иконка), а [Settings] теперь
+     * открывается ИЗ него (шестерёнка в `TopAppBar`), а не наоборот.
+     */
     @Serializable
     data object Profile : AnixDestination
 

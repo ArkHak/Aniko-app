@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.aniko.app.feature.comments.ReleaseCommentsScreen
 import com.aniko.app.feature.release.ReleaseDetailsScreen
+import com.aniko.ui.adaptive.rememberListPanePreferredWidth
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
@@ -34,8 +35,11 @@ import org.koin.compose.viewmodel.koinViewModel
  *
  * Сигнатуры `calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth`/`calculateThreePaneScaffoldValue`/
  * `ListDetailPaneScaffold` сверены с исходниками androidx (`androidx.compose.material3.adaptive:
- * adaptive-layout:1.2.0`, `frameworks/support` на `androidx-main`) — не с декомпилированными
- * `.class`, а с реальным `.kt` (в кэше Gradle sources-jar для этого артефакта не оказалось).
+ * adaptive-layout:1.2.0`, `frameworks/support` на `androidx-main`) — не с декомпилированными `.class`,
+ * а с реальным `.kt` (**уточнение P13.T6**: sources-jar для `org.jetbrains.compose.material3.adaptive:
+ * adaptive-layout:1.2.0` в Gradle-кэше на самом деле есть — `.../modules-2/files-2.1/
+ * org.jetbrains.compose.material3.adaptive/adaptive-layout/1.2.0/…/adaptive-layout-1.2.0-sources.jar`;
+ * более ранняя версия этого комментария ошибочно утверждала обратное, не найдя его при поиске).
  *
  * Директива two-pane считается через `WithTwoPanesOnMediumWidth`, а не через дефолтный
  * `calculatePaneScaffoldDirective` — последний даёт две панели только на Expanded (>=840dp), а
@@ -49,6 +53,18 @@ import org.koin.compose.viewmodel.koinViewModel
  * `Deprecated`-атрибута в байткоде; V2 и связанное с ним deprecation появились позже в
  * androidx-main, JetBrains-форк 1.2.0 их ещё не подтянул). Параметр по умолчанию
  * (`supportLargeAndXLargeWidth = false`) не имеет значения для наших двух партиций.
+ *
+ * **P13.T6 — явная ширина list-панели на `Expanded`.** `calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth`
+ * сам по себе не принимает `defaultPanePreferredWidth` параметром (сверено с реальным `.kt` из
+ * sources-jar артефакта, не с `.class` — см. `PaneScaffoldDirective.kt`), только `windowAdaptiveInfo`/
+ * `verticalHingePolicy`; внутри он всегда берёт библиотечный дефолт 360.dp. Это годится для
+ * телефона/планшета, но на широком Desktop-окне list-панель залипает на 360dp независимо от размера
+ * окна, пока detail-панель растёт (полный разбор — KDoc [com.aniko.ui.adaptive.rememberListPanePreferredWidth],
+ * единственный источник истины для этого числа). Поэтому здесь директива, полученная от
+ * material3-adaptive, дополнительно прогоняется через `.copy(defaultPanePreferredWidth = …)` тем же
+ * значением, что `rememberAnixWindowSize()` уже использует для классификации этого окна — оба числа
+ * считаются из одной и той же ширины (`LocalWindowInfo.current.containerDpSize`), рассинхрон между
+ * ними прямо запрещён KDoc'ом `AnixWindowSize`.
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -58,7 +74,20 @@ fun ListDetailHost(
     listPane: @Composable () -> Unit,
 ) {
     val top = paneStack.top
-    val directive = calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth(currentWindowAdaptiveInfo())
+
+    // P13.T6: без override здесь material3-adaptive всегда берёт свои 360dp — верно для
+    // телефона/планшета, но не растёт вместе с широким Desktop-окном (список постов/строк остаётся
+    // в узкой нерастущей колонке). rememberListPanePreferredWidth() — единый источник истины,
+    // вычисленный из той же ширины окна, что уже классифицирует rememberAnixWindowSize(); null
+    // означает "не переопределять" (Compact/Medium, см. её KDoc).
+    val listPanePreferredWidth = rememberListPanePreferredWidth()
+    val baseDirective = calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth(currentWindowAdaptiveInfo())
+    val directive =
+        if (listPanePreferredWidth != null) {
+            baseDirective.copy(defaultPanePreferredWidth = listPanePreferredWidth)
+        } else {
+            baseDirective
+        }
 
     // Всегда ровно один "текущий" destination — либо List (ничего не выбрано на панели детали),
     // либо Detail (releaseId — contentKey, чтобы calculateThreePaneScaffoldValue считал разные

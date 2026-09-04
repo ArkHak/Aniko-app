@@ -36,11 +36,17 @@ interface Strings {
     val commonFavoriteBadge: String
 
     // --- Навигация / каркас приложения ---
+    // P13.T1 (сверка с мокапом Claude Design): порядок вкладок здесь = порядок в UI (см. KDoc
+    // `AnixSection` в `composeApp`) — Home → Catalog → Library → Schedule → Profile.
+    // `navCatalog` — переименован из `navSearch` (единственное использование — лейбл вкладки таб-
+    // бара в `App.kt:toNavItem`, Kotlin-константа `AnixSection.Search` не переименована, см. её
+    // KDoc). `navProfile` — новый ключ, вкладка `Settings` больше не в таб-баре (см. `settingsTitle`
+    // ниже в разделе «Настройки»).
     val navHome: String
-    val navSearch: String
+    val navCatalog: String
     val navLibrary: String
-    val navSettings: String
     val navSchedule: String
+    val navProfile: String
     val sessionExpiredMessage: String
     val backContentDescription: String
 
@@ -101,6 +107,12 @@ interface Strings {
     val releaseStatusOngoing: String
     val releaseStatusFinished: String
     val releaseLoadError: String
+
+    /** P13.T7: отдельная строка для провала под-запроса расширенных метаданных
+     *  (`ReleaseHeaderSection`'s `detailsError`, независим от базового [releaseLoadError]) —
+     *  раньше переиспользовал тот же текст "Не удалось загрузить релиз", хотя сам релиз к этому
+     *  моменту уже отрисован целиком (постер/жанры/эпизоды), см. KDoc `toReleaseMessage`. */
+    val releaseDetailsLoadError: String
     val releaseEpisodesLoadError: String
 
     // --- Поиск ---
@@ -150,9 +162,12 @@ interface Strings {
     val playerSourceError: (hostKey: String) -> String
 
     // Оверлей плеера (P8.T3/T4/T5/T8). Кнопка «назад» переиспользует [backContentDescription].
-    // Аудиодорожки/субтитров/качества здесь нет намеренно и не появится: это внутренний UI
-    // чужого embed-плеера (CUT в таблице аудита `docs/REELWAVE_PLAN.md`), и заводить под них
-    // ключи значило бы пообещать в UI то, чего в приложении нет.
+    // Качество по-прежнему CUT (см. KDoc `PlayerBottomPanel` в `PlayerOverlay.kt` и отчёт
+    // P13.T9 в `docs/REELWAVE_PLAN.md`): сегмент качества в Kodik embed-URL декоративный на нашей
+    // стороне, своя кнопка переключения либо ничего не даст, либо сломает подпись ссылки — ключей
+    // под него нет и не будет. Аудиодорожка (P13.T10), наоборот, теперь есть — это не UI чужого
+    // плеера, а выбор ОЗВУЧКИ/типа перевода на уровне Anixart API (`episode/{releaseId}/{typeId}`,
+    // тот же список, что и на Title Detail), просто перенесённый в плеер отдельным чипом.
     val playerPlay: String
     val playerPause: String
     val playerSeekBackward: String
@@ -167,8 +182,21 @@ interface Strings {
     val playerMarkWatched: String
     val playerMarkUnwatched: String
 
+    // Чип «Audio» (P13.T10) — переключение озвучки без выхода из плеера. [playerAudioLabel] служит
+    // и заголовком пикера, и подписью чипа, пока текущая озвучка ещё не определилась
+    // (`PlayerUiState.currentVoiceType == null`, см. её KDoc про подбор по `sourceId`).
+    val playerAudioLabel: String
+    val playerAudioChipLabel: (name: String) -> String
+
     // --- Настройки ---
-    val settingsMyProfile: String
+    // P13.T2 (сверка с мокапом Claude Design): `settingsTitle` — новый ключ, заголовок `TopAppBar`
+    // экрана настроек (раньше отдельного заголовка не было — экран был таб-рутом без `TopAppBar`,
+    // теперь это дочерний экран, открываемый шестерёнкой из `ProfileScreen`, см. её KDoc); заодно
+    // используется как `contentDescription` этой шестерёнки. `settingsMyProfile` убран — пункт
+    // «Мой профиль» удалён из `SettingsScreen` (профиль сам стал вкладкой таб-бара, обратная
+    // ссылка была бы циклом). `settingsTheme` остался тем же ключом, хотя `AnixThemePicker`
+    // физически переехал на `ProfileScreen` — переиспользуется как заголовок секции темы там же.
+    val settingsTitle: String
     val settingsSignOut: String
     val settingsDesignGallery: String
     val settingsLanguage: String

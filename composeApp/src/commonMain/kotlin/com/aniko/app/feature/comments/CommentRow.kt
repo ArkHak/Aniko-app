@@ -21,8 +21,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import com.aniko.model.ReleaseComment
 import com.aniko.ui.component.AnixAvatar
@@ -32,15 +34,9 @@ import com.aniko.ui.theme.AnixThemeTokens
 /**
  * Строка одного комментария (P7.T12).
  *
- * Спойлер (D10, обязательное архитектурное решение — см. таск P7.T12 в плане): БЕЗ
- * `Modifier.blur` — на Android <12 `RenderEffect`/`blur` no-op (требует API 31), поведение на
- * iOS/Skia не гарантировано, а полная сборка iOS-приложения даже не входит в CI (см. журнал
- * Фазы 6 плана про `-lsqlite3`/`ios.yml`), риск незамеченной регрессии слишком велик. Вместо
- * этого при `comment.isSpoiler` текст ВООБЩЕ не композится до тапа — замещается плашкой
- * [SpoilerPlaceholder] на фоне `surfaceVariant`. Раскрытое состояние живёт в `rememberSaveable`
- * с ключом по `comment.id` — переживает поворот экрана/рекомпозицию, не обязано переживать
- * перезапуск процесса (см. задание). Корректно и для скринридера: до раскрытия он видит только
- * метку "Спойлер — нажмите, чтобы показать", не текст спойлера.
+ * Текст/спойлер — вынесены в переиспользуемый [CommentMessage] (P13.T12: тот же виджет теперь
+ * рисует и инлайн-превью комментариев на Title Detail, см. `ReleaseCommentPreviewRow` в
+ * `feature/release`, без дублирования логики раскрытия спойлера).
  *
  * [effectiveVote] — голос текущего пользователя с учётом локального оптимистичного оверрайда
  * (см. `CommentsState.voteOverrides`), по умолчанию — сырое значение из модели (для превью/
@@ -56,7 +52,6 @@ fun CommentRow(
 ) {
     val strings = LocalStrings.current
     val dimens = AnixThemeTokens.dimens
-    var isSpoilerRevealed by rememberSaveable(comment.id) { mutableStateOf(false) }
 
     // Простой отступ вместо полного дерева ответов (допустимо по заданию P7.T12) — реплаи
     // визуально вложены под родительский комментарий, без соединительных линий/сворачивания веток.
@@ -73,14 +68,7 @@ fun CommentRow(
         ) {
             Text(text = comment.author.login, style = MaterialTheme.typography.labelLarge)
 
-            if (comment.isSpoiler && !isSpoilerRevealed) {
-                SpoilerPlaceholder(
-                    label = strings.commentsSpoilerLabel,
-                    onReveal = { isSpoilerRevealed = true },
-                )
-            } else {
-                Text(text = comment.message, style = MaterialTheme.typography.bodyMedium)
-            }
+            CommentMessage(comment = comment)
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(dimens.spaceM),
@@ -105,18 +93,55 @@ fun CommentRow(
     }
 }
 
-/** Плашка вместо текста спойлера — см. D10 в KDoc [CommentRow]. Высота — `defaultMinSize`, а не
- *  жёсткий `.height()`: должна расти вместе с текстом при масштабе шрифта (тот же баг класс,
+/**
+ * Текст комментария с учётом спойлера (D10, обязательное архитектурное решение — см. таск P7.T12
+ * в плане): БЕЗ `Modifier.blur` — на Android <12 `RenderEffect`/`blur` no-op (требует API 31),
+ * поведение на iOS/Skia не гарантировано, а полная сборка iOS-приложения даже не входит в CI (см.
+ * журнал Фазы 6 плана про `-lsqlite3`/`ios.yml`), риск незамеченной регрессии слишком велик.
+ * Вместо этого при `comment.isSpoiler` текст ВООБЩЕ не композится до тапа — замещается плашкой
+ * [SpoilerPlaceholder] на фоне `surfaceVariant`. Раскрытое состояние живёт в `rememberSaveable`
+ * с ключом по `comment.id` — переживает поворот экрана/рекомпозицию, не обязано переживать
+ * перезапуск процесса (см. задание). Корректно и для скринридера: до раскрытия он видит только
+ * метку "Спойлер — нажмите, чтобы показать", не текст спойлера.
+ *
+ * Публичная (не `private`), т.к. переиспользуется вне [CommentRow] — превью комментариев на Title
+ * Detail (P13.T12, `ReleaseCommentPreviewRow`) должно раскрывать спойлеры тем же способом, а не
+ * заново решать D10 в своём коде. [textStyle] параметризуем: полный список комментариев и
+ * компактное превью на Detail используют разный размер текста.
+ */
+@Composable
+fun CommentMessage(
+    comment: ReleaseComment,
+    modifier: Modifier = Modifier,
+    textStyle: TextStyle = MaterialTheme.typography.bodyMedium,
+) {
+    val strings = LocalStrings.current
+    var isSpoilerRevealed by rememberSaveable(comment.id) { mutableStateOf(false) }
+
+    if (comment.isSpoiler && !isSpoilerRevealed) {
+        SpoilerPlaceholder(
+            label = strings.commentsSpoilerLabel,
+            onReveal = { isSpoilerRevealed = true },
+            modifier = modifier,
+        )
+    } else {
+        Text(text = comment.message, style = textStyle, modifier = modifier)
+    }
+}
+
+/** Плашка вместо текста спойлера — см. D10 в KDoc [CommentMessage]. Высота — `defaultMinSize`, а
+ *  не жёсткий `.height()`: должна расти вместе с текстом при масштабе шрифта (тот же баг класс,
  *  что нашёл аудит P6.T12 у `ListStatusChip`, см. журнал Фазы 6 плана). */
 @Composable
 private fun SpoilerPlaceholder(
     label: String,
     onReveal: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
     Box(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = SPOILER_PLACEHOLDER_MIN_HEIGHT)
                 .clip(RoundedCornerShape(dimens.cornerS))
@@ -163,8 +188,13 @@ private fun VoteIndicator(
             Modifier
                 .clip(RoundedCornerShape(AnixThemeTokens.dimens.cornerPill))
                 .clickable(role = Role.Button, onClick = onClick)
-                .semantics { contentDescription = "$voteDescription, $likesCount" }
-                .padding(vertical = VOTE_INDICATOR_VERTICAL_PADDING),
+                // TalkBack не сливает Text-потомка с кликабельным родителем в этой версии CMP
+                // (см. тот же приём в NavigationBarSlot.kt/ProfileScreen.kt) — contentDescription
+                // нужно ставить явно через clearAndSetSemantics, обычный semantics{} недостаточен.
+                .clearAndSetSemantics {
+                    contentDescription = "$voteDescription, $likesCount"
+                    role = Role.Button
+                }.padding(vertical = VOTE_INDICATOR_VERTICAL_PADDING),
     )
 }
 

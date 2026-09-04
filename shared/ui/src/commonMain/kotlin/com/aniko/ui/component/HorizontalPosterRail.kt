@@ -2,6 +2,7 @@ package com.aniko.ui.component
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +35,16 @@ import com.aniko.ui.theme.AnixThemeTokens
  * Пустая секция без ошибки и без [emptyMessage] не рисует вообще ничего (ни заголовок, ни
  * ряд) — сохраняет поведение исходной `ReleaseSection`: на главном экране могут быть данные
  * хотя бы в одной секции, и пустая ничем не должна "мигать".
+ *
+ * [gridOnExpanded] (P13.T7) — опционально переключает рельсу на `Expanded` в перенос-сетку
+ * (`FlowRow`, не `LazyVerticalGrid`: рельса уже сама — один `item { }` внутри внешнего
+ * `LazyColumn`/`verticalScroll`-контейнера вызывающей стороны, вложенный ленивый список того же
+ * направления скролла упал бы на бесконечной высоте — тот же случай, что уже описан в KDoc
+ * [EpisodeGrid]). По умолчанию `false` — старое поведение (горизонтальный скролл) не меняется
+ * нигде, где параметр не передан явно (`ReleaseRelatedSection`/`LibraryScreen`/gallery), только
+ * `HomeScreen` включает его для рельс-секций. В режиме сетки список без внутреннего скролла —
+ * показывает первые [gridMaxItems] уже загруженных элементов и не дёргает [onLoadMore] (сетка —
+ * витрина, а не бесконечная лента, тот же принцип, что `maxVisibleItems` у `ContinueWatchingSection`).
  */
 @Suppress("LongParameterList") // Публичная сигнатура зафиксирована брифом P6.T5: state/key/item
 // обязательны, остальное — опциональные точки расширения (пустое сообщение/повтор/подгрузка/
@@ -51,6 +62,8 @@ fun <T : Any> HorizontalPosterRail(
     prefetchThreshold: Int = 4,
     action: (@Composable () -> Unit)? = null,
     windowSize: AnixWindowSize = LocalAnixWindowSize.current,
+    gridOnExpanded: Boolean = false,
+    gridMaxItems: Int = 12,
     item: @Composable (T) -> Unit,
 ) {
     if (state.isEmpty && emptyMessage == null) return
@@ -84,37 +97,70 @@ fun <T : Any> HorizontalPosterRail(
                     modifier = Modifier.fillMaxWidth().height(placeholderHeight),
                 )
 
-            else -> {
-                val listState = rememberLazyListState()
-
-                if (onLoadMore != null) {
-                    // Стандартный паттерн "подгрузить когда до конца списка < prefetchThreshold
-                    // элементов": derivedStateOf сравнивает индекс последнего видимого элемента
-                    // с общим количеством, LaunchedEffect дергает onLoadMore при пересечении
-                    // порога (в т.ч. повторно при появлении новых элементов).
-                    val shouldLoadMore by remember(state.items.size) {
-                        derivedStateOf {
-                            val layoutInfo = listState.layoutInfo
-                            val totalItems = layoutInfo.totalItemsCount
-                            val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-                            totalItems > 0 && lastVisibleIndex >= totalItems - prefetchThreshold
-                        }
-                    }
-                    LaunchedEffect(shouldLoadMore) {
-                        if (shouldLoadMore) onLoadMore()
-                    }
-                }
-
-                LazyRow(
-                    state = listState,
+            windowSize == AnixWindowSize.Expanded && gridOnExpanded ->
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = dimens.spaceM),
                     horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                    contentPadding = PaddingValues(horizontal = dimens.spaceM),
+                    verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
                 ) {
-                    items(items = state.items, key = key) { value ->
-                        item(value)
-                    }
+                    state.items.take(gridMaxItems).forEach { value -> item(value) }
                 }
+
+            else ->
+                PosterLazyRow(
+                    items = state.items,
+                    key = key,
+                    onLoadMore = onLoadMore,
+                    prefetchThreshold = prefetchThreshold,
+                    dimens = dimens,
+                    item = item,
+                )
+        }
+    }
+}
+
+/** Горизонтальный скролл-вариант рельсы (Compact/Medium, либо Expanded без [HorizontalPosterRail]'s
+ *  `gridOnExpanded]`) — вынесено отдельной функцией, чтобы не раздувать [HorizontalPosterRail]
+ *  (detekt `LongMethod`/`CyclomaticComplexMethod`). */
+@Suppress("LongParameterList") // Ровно по числу того, что реально нужно рельсе: данные+key+
+// load-more состояние+токены отступов+сам item-слот — группировка в конфиг-класс здесь не
+// улучшила бы читаемость вызова, см. тот же принцип в KDoc HorizontalPosterRail.
+@Composable
+private fun <T : Any> PosterLazyRow(
+    items: List<T>,
+    key: (T) -> Any,
+    onLoadMore: (() -> Unit)?,
+    prefetchThreshold: Int,
+    dimens: AnixDimens,
+    item: @Composable (T) -> Unit,
+) {
+    val listState = rememberLazyListState()
+
+    if (onLoadMore != null) {
+        // Стандартный паттерн "подгрузить когда до конца списка < prefetchThreshold элементов":
+        // derivedStateOf сравнивает индекс последнего видимого элемента с общим количеством,
+        // LaunchedEffect дергает onLoadMore при пересечении порога (в т.ч. повторно при появлении
+        // новых элементов).
+        val shouldLoadMore by remember(items.size) {
+            derivedStateOf {
+                val layoutInfo = listState.layoutInfo
+                val totalItems = layoutInfo.totalItemsCount
+                val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                totalItems > 0 && lastVisibleIndex >= totalItems - prefetchThreshold
             }
+        }
+        LaunchedEffect(shouldLoadMore) {
+            if (shouldLoadMore) onLoadMore()
+        }
+    }
+
+    LazyRow(
+        state = listState,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+        contentPadding = PaddingValues(horizontal = dimens.spaceM),
+    ) {
+        items(items = items, key = key) { value ->
+            item(value)
         }
     }
 }

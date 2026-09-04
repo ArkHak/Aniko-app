@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -45,6 +45,7 @@ import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.component.AnixAvatar
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixLoadingState
+import com.aniko.ui.component.AnixThemePicker
 import com.aniko.ui.component.ChipRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
@@ -75,13 +76,29 @@ import org.koin.compose.viewmodel.koinViewModel
  * тайтл в detail-панели, а маршрут профиля (`chromeRoutes` в `App.kt`) в `ListDetailHost` не
  * завёрнут — панели там негде отрисоваться, и клик оказался бы «мёртвым». Поэтому переход —
  * всегда полноэкранный маршрут, его подключает `App.kt`.
+ *
+ * P13.T2 (сверка с мокапом Claude Design) сделала этот экран прямой вкладкой таб-бара
+ * ([com.aniko.app.navigation.AnixSection.Profile], person-иконка) вместо дочернего экрана
+ * `Settings`. Как следствие:
+ * - `TopAppBar` больше не показывает кнопку «назад» (`onBack` убран из параметров) — этот экран
+ *   теперь таб-рут, как `Home`/`Library`/`Schedule`, у которых своей кнопки назад тоже нет;
+ * - вместо этого в `actions` появилась шестерёнка ([onSettingsClick]) — единственный оставшийся
+ *   путь на `SettingsScreen` (см. её KDoc про то, что она больше не таб-бара);
+ * - [themeMode]/[onThemeModeChange] переехали сюда вместе с `AnixThemePicker` (физически теперь
+ *   рисуется в [ProfileContent] прямо под шапкой, как в мокапе) — раньше их держал `SettingsScreen`.
  */
+@Suppress("LongParameterList") // themeMode/onThemeModeChange добавлены аддитивно к уже
+// существовавшему плоскому набору параметров (тот же случай, что и `AnixSessionGate`/
+// `SettingsScreen`) — группировка в data class ради обхода линта добавила бы косвенность без
+// пользы, экран остаётся тонким прокси без собственного стейта темы (владелец — `ThemeStore`).
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onReleaseClick: (Int) -> Unit = {},
+    onSettingsClick: () -> Unit = {},
+    themeMode: String? = null,
+    onThemeModeChange: (String?) -> Unit = {},
     viewModel: ProfileViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -92,18 +109,14 @@ fun ProfileScreen(
         topBar = {
             TopAppBar(
                 title = { Text(strings.profileTitle) },
-                navigationIcon = {
+                actions = {
                     // Подтверждено на устройстве (Фаза 11, T9): IconButton не сливает
                     // Icon.contentDescription в свой кликабельный узел.
                     IconButton(
-                        onClick = onBack,
-                        modifier =
-                            Modifier.clearAndSetSemantics { contentDescription = strings.backContentDescription },
+                        onClick = onSettingsClick,
+                        modifier = Modifier.clearAndSetSemantics { contentDescription = strings.settingsTitle },
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = null,
-                        )
+                        Icon(imageVector = Icons.Filled.Settings, contentDescription = null)
                     }
                 },
             )
@@ -135,6 +148,7 @@ fun ProfileScreen(
                             profile = profile,
                             privacy = privacy,
                             achievements = uiState.achievements,
+                            themeMode = themeMode,
                         ),
                     callbacks =
                         ProfilePrivacyCallbacks(
@@ -145,6 +159,7 @@ fun ProfileScreen(
                             onToggleIncognito = viewModel::toggleIncognito,
                         ),
                     onReleaseClick = onReleaseClick,
+                    onThemeModeChange = onThemeModeChange,
                     modifier = contentModifier,
                 )
         }
@@ -152,13 +167,17 @@ fun ProfileScreen(
 }
 
 /**
- * `profile`/`privacy`/`achievements` одной группой — иначе [ProfileContent] превышала бы
- * detekt `LongParameterList` вместе с [ProfilePrivacyCallbacks]/`onReleaseClick`/`modifier`.
+ * `profile`/`privacy`/`achievements`/`themeMode` одной группой — иначе [ProfileContent] превышала
+ * бы detekt `LongParameterList` вместе с [ProfilePrivacyCallbacks]/`onReleaseClick`/
+ * `onThemeModeChange`/`modifier`. [themeMode] добавлен в P13.T2 вместе с переездом
+ * `AnixThemePicker` на этот экран — сгруппирован с остальным read-only состоянием профиля по той
+ * же причине, что и остальные три поля.
  */
 private data class ProfileContentData(
     val profile: ProfileDetails,
     val privacy: ProfilePrivacy,
     val achievements: List<Achievement>,
+    val themeMode: String?,
 )
 
 /**
@@ -212,15 +231,27 @@ private fun ProfileGuestBox(
  * Вертикальная лента секций профиля. Горизонтальные отступы навешивают сами секции, а не общий
  * `Column` — «Недавно смотрели» (`LazyRow`) обязана скроллиться от края до края, как рельсы на
  * главном экране.
+ *
+ * P13.T2/T11 (сверка с мокапом Claude Design) добавили сюда переключатель темы сразу под шапкой
+ * ([ProfileThemeSection]) — раньше он жил на `SettingsScreen`, мокап рисует его прямо под шапкой
+ * профиля. [AchievementsSection] осталась на прежнем месте относительно остальных секций (порядок
+ * `Header → Theme → Highlights → FavoriteGenres → Achievements → Stats → Charts → RecentlyWatched →
+ * Privacy`) — план не требовал её перемещать, только подтвердить, что она есть в новой компоновке.
  */
 @Composable
 private fun ProfileContent(
     data: ProfileContentData,
     callbacks: ProfilePrivacyCallbacks,
     onReleaseClick: (Int) -> Unit,
+    onThemeModeChange: (String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val (profile, privacy, achievements) = data
+    // Не деструктуризация (`val (a, b, c, d) = data`): у detekt `DestructuringDeclarationWithTooManyEntries`
+    // лимит 3 компонента, а после P13.T2 в [ProfileContentData] их четыре.
+    val profile = data.profile
+    val privacy = data.privacy
+    val achievements = data.achievements
+    val themeMode = data.themeMode
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
     val windowSize = LocalAnixWindowSize.current
@@ -237,6 +268,12 @@ private fun ProfileContent(
             verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
         ) {
             ProfileHeader(profile = profile, modifier = sectionPadding)
+
+            ProfileThemeSection(
+                themeMode = themeMode,
+                onThemeModeChange = onThemeModeChange,
+                modifier = sectionPadding,
+            )
 
             ProfileHighlights(profile = profile, modifier = sectionPadding)
 
@@ -268,6 +305,31 @@ private fun ProfileContent(
             )
             PrivacySection(privacy = privacy, callbacks = callbacks, modifier = sectionPadding)
         }
+    }
+}
+
+/**
+ * Переключатель темы — переехал сюда из `SettingsScreen` в P13.T2 (сверка с мокапом Claude
+ * Design: мокап рисует Theme прямо под шапкой профиля). Заголовок переиспользует
+ * [Strings.settingsTheme] — тот же текст, что раньше стоял над `AnixThemePicker` на
+ * `SettingsScreen`, ключ не дублировался под новое место специально.
+ */
+@Composable
+private fun ProfileThemeSection(
+    themeMode: String?,
+    onThemeModeChange: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
+
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
+        Text(
+            text = strings.settingsTheme,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        AnixThemePicker(currentMode = themeMode, onSelect = onThemeModeChange)
     }
 }
 

@@ -30,4 +30,20 @@ class CommentRepository(
     ) {
         commentApi.vote(commentId, vote)
     }
+
+    /**
+     * Первые [limit] комментариев релиза — инлайн-превью на Title Detail (P13.T12), НЕ полный
+     * список: та же страница 0/`sort=0`, что и первая страница [commentsPaginator], но без
+     * собственного [Paginator]-состояния — превью не умеет и не должно грузить следующие страницы,
+     * это остаётся за точкой входа «показать все» (`ReleaseCommentsScreen`).
+     */
+    suspend fun previewComments(
+        releaseId: Int,
+        limit: Int,
+    ): List<ReleaseComment> =
+        commentApi
+            .comments(releaseId.toLong(), page = 0, sort = 0)
+            .toDomain { it.toDomain() }
+            .items
+            .take(limit)
 }

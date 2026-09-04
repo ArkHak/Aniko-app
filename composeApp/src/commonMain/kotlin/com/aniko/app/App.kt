@@ -9,16 +9,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.VideoLibrary
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -241,17 +241,23 @@ private fun AnixSessionGate(
     }
 }
 
-/** [AnixSection] → [AdaptiveNavItem] — лейблы из [LocalStrings], иконки из material-icons-extended. */
+/**
+ * [AnixSection] → [AdaptiveNavItem] — лейблы из [LocalStrings], иконки из material-icons-extended.
+ *
+ * P13.T1 (сверка с мокапом Claude Design): иконки и лейблы трёх вкладок сменились —
+ * `Search`→`grid_view`/«Каталог» (было `search`/«Поиск», сама Kotlin-константа не переименована,
+ * см. KDoc [AnixSection]), `Library`→`bookmark`/«Мои списки» (было `video_library`/«Списки»),
+ * последняя вкладка теперь `Profile`→`person`/«Профиль» вместо `Settings`→`settings`/«Настройки».
+ * `Home`/`Schedule` совпадали с мокапом уже до этой фазы, не менялись.
+ */
 private fun AnixSection.toNavItem(strings: Strings): AdaptiveNavItem =
     when (this) {
         AnixSection.Home -> AdaptiveNavItem(name, strings.navHome, Icons.Outlined.Home, Icons.Filled.Home)
-        AnixSection.Search -> AdaptiveNavItem(name, strings.navSearch, Icons.Outlined.Search, Icons.Filled.Search)
+        AnixSection.Search -> AdaptiveNavItem(name, strings.navCatalog, Icons.Outlined.GridView, Icons.Filled.GridView)
+        AnixSection.Library -> AdaptiveNavItem(name, strings.navLibrary, Icons.Outlined.Bookmark, Icons.Filled.Bookmark)
         AnixSection.Schedule ->
             AdaptiveNavItem(name, strings.navSchedule, Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth)
-        AnixSection.Library ->
-            AdaptiveNavItem(name, strings.navLibrary, Icons.Outlined.VideoLibrary, Icons.Filled.VideoLibrary)
-        AnixSection.Settings ->
-            AdaptiveNavItem(name, strings.navSettings, Icons.Outlined.Settings, Icons.Filled.Settings)
+        AnixSection.Profile -> AdaptiveNavItem(name, strings.navProfile, Icons.Outlined.Person, Icons.Filled.Person)
     }
 
 /**
@@ -481,7 +487,21 @@ private fun NavGraphBuilder.titleDetailRoutes(
     }
 }
 
-/** Settings + экраны, открываемые из него (Profile, TokenGallery). */
+/**
+ * Profile (таб) + Settings и остальные экраны, открываемые из него (TokenGallery,
+ * NotificationSettings).
+ *
+ * P13.T2 развернула прежний поток: раньше `Settings` был вкладкой таб-бара, а `Profile` —
+ * дочерним экраном («Настройки» → «Мой профиль»). Теперь `Profile` сам вкладка таб-бара
+ * (см. [AnixSection]), а `Settings` — дочерний маршрут, открываемый шестерёнкой из `TopAppBar`
+ * `ProfileScreen.kt` ([ProfileScreen.onSettingsClick]). Тема (`AnixThemePicker`) физически
+ * переехала на `ProfileScreen` вместе с `AchievementsSection` (мокап рисует переключатель темы
+ * прямо под шапкой профиля) — поэтому здесь `themeStore` читается уже для `AnixDestination.Profile`,
+ * а не для `Settings`. Язык (`AnixLanguagePicker`) остался в `Settings` — решение по умолчанию:
+ * мокап явно требует переноса только Theme, а на Desktop переключатель языка и так уже дублируется
+ * в `sidebarFooter` `AdaptiveScaffold` (см. `AnixAppScaffold`), так что дополнительного переезда на
+ * Profile не требуется для консистентности.
+ */
 private fun NavGraphBuilder.chromeRoutes(
     navController: NavHostController,
     localeStore: LocaleStore,
@@ -489,24 +509,24 @@ private fun NavGraphBuilder.chromeRoutes(
 ) {
     composable<AnixDestination.Settings> {
         val languageTag by localeStore.languageTag.collectAsStateWithLifecycle()
-        val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
         SettingsScreen(
-            onProfileClick = { navController.navigate(AnixDestination.Profile) },
+            onBack = { navController.popBackStack() },
             onDesignGalleryClick = { navController.navigate(AnixDestination.TokenGallery) },
             onNotificationsClick = { navController.navigate(AnixDestination.NotificationSettings) },
             languageTag = languageTag,
             onLanguageTagChange = localeStore::setLanguageTag,
-            themeMode = themeMode,
-            onThemeModeChange = themeStore::setThemeMode,
         )
     }
     composable<AnixDestination.Profile> {
+        val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
         ProfileScreen(
-            onBack = { navController.popBackStack() },
+            onSettingsClick = { navController.navigate(AnixDestination.Settings) },
             // Не `titleNavigator::openTitle`: маршрут профиля не завёрнут в `ListDetailHost`, и на
             // wide-экранах навигатор открыл бы тайтл в панели, которой здесь негде отрисоваться
             // (см. KDoc `ProfileScreen.onReleaseClick`) — отсюда всегда полноэкранный маршрут.
             onReleaseClick = { releaseId -> navController.navigate(AnixDestination.ReleaseDetails(releaseId)) },
+            themeMode = themeMode,
+            onThemeModeChange = themeStore::setThemeMode,
         )
     }
     composable<AnixDestination.TokenGallery> {
