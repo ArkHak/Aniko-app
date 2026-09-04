@@ -1,5 +1,7 @@
 package com.aniko.app.feature.library
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,12 +10,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
@@ -30,12 +34,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.data.paging.PagingState
 import com.aniko.model.ListStatus
@@ -47,6 +54,7 @@ import com.aniko.ui.component.AnixEmptyBox
 import com.aniko.ui.component.AnixErrorBox
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLoadingBox
+import com.aniko.ui.component.ChipRow
 import com.aniko.ui.component.ListStatusChip
 import com.aniko.ui.component.ListStatusChipStyle
 import com.aniko.ui.component.ProgressRow
@@ -108,27 +116,48 @@ fun LibraryScreen(
     // не "залипало" на устаревших данных карточки, если пагинатор успел обновить список.
     var menuReleaseId by remember { mutableStateOf<Int?>(null) }
 
-    Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.LIBRARY_SCREEN_ROOT)) {
+    // Track A (сверка Compact-раскладки, 2026-09-04): дефолтный цвет M3 Surface непрозрачен и
+    // перекрывает корневой радиальный градиент приложения (anixAppBackground()) — Transparent
+    // делает фон/градиент видимым сквозь экран, как в макете.
+    Surface(
+        modifier = modifier.fillMaxSize().testTag(AnixTestTags.LIBRARY_SCREEN_ROOT),
+        color = Color.Transparent,
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            ScrollableTabRow(selectedTabIndex = LibraryTab.all.indexOf(selectedTab).coerceAtLeast(0)) {
-                LibraryTab.all.forEach { tab ->
-                    val tabTitle = tab.title(strings, uiState.profile)
-                    val tabSelected = tab == selectedTab
-                    Tab(
-                        selected = tabSelected,
-                        onClick = { viewModel.selectTab(tab) },
-                        text = { Text(tabTitle) },
-                        // Подтверждено на устройстве (Фаза 11, T9): M3 Tab не сливает text{} в
-                        // свой озвучиваемый узел (тот же паттерн, что и FilterChip/
-                        // NavigationBarItem — см. ChipRow.kt/AnixNavigationBar.kt).
-                        modifier =
-                            Modifier.clearAndSetSemantics {
-                                contentDescription = tabTitle
-                                role = Role.Tab
-                                selected = tabSelected
-                            },
-                    )
+            // Track A: макет (`listsGroups`) рисует переключатель вкладок как ряд чипов
+            // (тот же паттерн, что жанр-чипы Catalog), а не M3 таб-бар с подчёркиванием — только
+            // на Compact. isTwoPane (Medium/Expanded) сохраняет прежний ScrollableTabRow дословно
+            // (см. LibraryGrid/LibraryRows ниже — тот же уже существующий в файле паттерн
+            // ветвления по windowSize.isTwoPane).
+            if (windowSize.isTwoPane) {
+                ScrollableTabRow(selectedTabIndex = LibraryTab.all.indexOf(selectedTab).coerceAtLeast(0)) {
+                    LibraryTab.all.forEach { tab ->
+                        val tabTitle = tab.title(strings, uiState.profile)
+                        val tabSelected = tab == selectedTab
+                        Tab(
+                            selected = tabSelected,
+                            onClick = { viewModel.selectTab(tab) },
+                            text = { Text(tabTitle) },
+                            // Подтверждено на устройстве (Фаза 11, T9): M3 Tab не сливает text{} в
+                            // свой озвучиваемый узел (тот же паттерн, что и FilterChip/
+                            // NavigationBarItem — см. ChipRow.kt/AnixNavigationBar.kt).
+                            modifier =
+                                Modifier.clearAndSetSemantics {
+                                    contentDescription = tabTitle
+                                    role = Role.Tab
+                                    selected = tabSelected
+                                },
+                        )
+                    }
                 }
+            } else {
+                LibraryTabChips(
+                    selectedTab = selectedTab,
+                    onTabSelected = { tab -> viewModel.selectTab(tab) },
+                    strings = strings,
+                    profile = uiState.profile,
+                    modifier = Modifier.padding(horizontal = dimens.spaceM),
+                )
             }
 
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -194,6 +223,30 @@ fun LibraryScreen(
             }
         }
     }
+}
+
+/**
+ * Track A (сверка Compact-раскладки, 2026-09-04): ряд чипов-групп статусов списков (макет
+ * `listsGroups`) — Compact-замена [ScrollableTabRow] выше (тот же визуальный паттерн, что и
+ * жанр-чипы Catalog, см. [ChipRow.selectedColor]). Medium/Expanded ([windowSize.isTwoPane])
+ * продолжают использовать M3 таб-бар с подчёркиванием, эта функция для них не вызывается.
+ */
+@Composable
+private fun LibraryTabChips(
+    selectedTab: LibraryTab,
+    onTabSelected: (LibraryTab) -> Unit,
+    strings: Strings,
+    profile: ProfileDetails?,
+    modifier: Modifier = Modifier,
+) {
+    ChipRow(
+        items = LibraryTab.all,
+        isSelected = { it == selectedTab },
+        label = { tab -> tab.title(strings, profile) },
+        onClick = onTabSelected,
+        modifier = modifier,
+        selectedColor = MaterialTheme.colorScheme.primary,
+    )
 }
 
 /**
@@ -284,8 +337,12 @@ private fun LibraryGrid(
  * в одном статусном списке) — тогда чип справа просто не рисуется ([trailing] `null`), а не
  * подставляется выдуманный статус.
  */
-@Suppress("LongParameterList") // См. LibraryGrid — тот же координирующий паттерн, минус windowSize
-// (Compact всегда один размер строки, ширина экрана строкам не нужна).
+@Suppress("LongParameterList", "LongMethod")
+// LongParameterList: См. LibraryGrid — тот же координирующий паттерн, минус windowSize (Compact
+// всегда один размер строки, ширина экрана строкам не нужна).
+// LongMethod: Track A (сверка Compact-раскладки, 2026-09-04) добавил контейнер-modifier
+// (фон/бордер/radius) вокруг ProgressRow — тело осталось линейным, разбиение добавило бы
+// косвенность ради счётчика строк.
 @Composable
 private fun LibraryRows(
     pagingState: PagingState<Release>,
@@ -296,6 +353,7 @@ private fun LibraryRows(
     viewModel: LibraryViewModel,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
 
     LazyColumn(
         contentPadding = PaddingValues(vertical = dimens.spaceM, horizontal = dimens.spaceS),
@@ -319,6 +377,14 @@ private fun LibraryRows(
                             ListStatusChip(status, style = ListStatusChipStyle.Full)
                         }
                     },
+                    // Track A (сверка Compact-раскладки, 2026-09-04): макет оборачивает строку
+                    // "Мои списки" в контейнер w045/w07/radius12 — снаружи через modifier, сам
+                    // ProgressRow.kt (общий и на Home Continue Watching) не тронут.
+                    modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(dimens.cornerM))
+                            .background(colors.overlay045)
+                            .border(1.dp, colors.overlay07, RoundedCornerShape(dimens.cornerM)),
                 )
                 LibraryContextMenu(
                     expanded = menuReleaseId == release.id,
@@ -373,42 +439,66 @@ private fun LibraryToolbar(
 ) {
     val strings = LocalStrings.current
     val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
 
     Row(
         modifier = modifier.fillMaxWidth().padding(horizontal = dimens.spaceS),
-        horizontalArrangement = Arrangement.End,
+        // Track A (сверка Compact-раскладки, 2026-09-04): макет добавляет счётчик "N titles"
+        // слева от shuffle/реверс — SpaceBetween вместо End, чтобы счётчик и кнопки разошлись по
+        // разным краям строки.
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Подтверждено на устройстве (Фаза 11, T9): IconButton не сливает Icon.contentDescription
-        // в свой кликабельный узел (тот же паттерн, что и остальные M3-компоненты этой фазы) —
-        // явный clearAndSetSemantics на самом IconButton.
-        IconButton(
-            onClick = onShuffleClick,
-            enabled = itemCount > 1,
-            modifier = Modifier.clearAndSetSemantics { contentDescription = strings.libraryShuffle },
-        ) {
-            AnixIcon(
-                name = "shuffle",
-                contentDescription = null,
-                filled = true,
-                tint = if (isShuffled) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-            )
-        }
-        if (tab != LibraryTab.History) {
+        Text(
+            text = strings.libraryItemsCountFormat(itemCount),
+            style = MaterialTheme.typography.labelMedium,
+            color = colors.textSecondary55,
+        )
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Подтверждено на устройстве (Фаза 11, T9): IconButton не сливает
+            // Icon.contentDescription в свой кликабельный узел (тот же паттерн, что и остальные
+            // M3-компоненты этой фазы) — явный clearAndSetSemantics на самом IconButton.
+            // Track A: макет рисует shuffle маленькой квадратной кнопкой 28×28 с фоном overlay06
+            // — обёрнуто снаружи модификатором, сам IconButton внутри не тронут.
             IconButton(
-                onClick = onReverseClick,
-                modifier = Modifier.clearAndSetSemantics { contentDescription = strings.libraryReverseSort },
+                onClick = onShuffleClick,
+                enabled = itemCount > 1,
+                modifier =
+                    Modifier
+                        .size(SHUFFLE_BUTTON_SIZE)
+                        .clip(RoundedCornerShape(dimens.cornerS))
+                        .background(colors.overlay06)
+                        .clearAndSetSemantics { contentDescription = strings.libraryShuffle },
             ) {
                 AnixIcon(
-                    name = "swap_vert",
+                    name = "shuffle",
                     contentDescription = null,
                     filled = true,
-                    tint = if (isReversed) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    tint = if (isShuffled) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                 )
+            }
+            if (tab != LibraryTab.History) {
+                IconButton(
+                    onClick = onReverseClick,
+                    modifier = Modifier.clearAndSetSemantics { contentDescription = strings.libraryReverseSort },
+                ) {
+                    AnixIcon(
+                        name = "swap_vert",
+                        contentDescription = null,
+                        filled = true,
+                        tint = if (isReversed) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    )
+                }
             }
         }
     }
 }
+
+/** Track A (сверка Compact-раскладки, 2026-09-04): размер квадратной кнопки shuffle в тулбаре
+ *  (см. [LibraryToolbar]) — точное значение макета, не токен [AnixThemeTokens.dimens] (единственный
+ *  потребитель — этот тулбар). */
+private val SHUFFLE_BUTTON_SIZE = 28.dp
 
 /**
  * Меню долгого нажатия: смена статуса (кроме текущего), тоггл избранного и удаление,

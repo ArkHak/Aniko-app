@@ -7,16 +7,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.unit.dp
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
@@ -54,9 +59,19 @@ fun RatingHistogram(
                 horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
             ) {
                 Text(text = stars.toString(), style = MaterialTheme.typography.bodySmall)
+                // Track A (design-match-remaining-screens, 2026-09-04): макет задаёт тонкую
+                // (5dp) золотую (`gold` = [AnixThemeTokens.colors.warning]) полоску на треке
+                // `overlay08`, radius 3dp — раньше здесь был дефолтный M3-индикатор (толще,
+                // цвет `primary`, квадратные края).
                 LinearProgressIndicator(
                     progress = { progressFraction(count, maxCount) },
-                    modifier = Modifier.weight(1f),
+                    color = AnixThemeTokens.colors.warning,
+                    trackColor = AnixThemeTokens.colors.overlay08,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .height(HISTOGRAM_BAR_HEIGHT)
+                            .clip(RoundedCornerShape(HISTOGRAM_BAR_RADIUS)),
                 )
                 Text(text = count.toString(), style = MaterialTheme.typography.bodySmall)
             }
@@ -116,7 +131,10 @@ fun RatingInput(
                         name = "star",
                         contentDescription = null,
                         filled = filled,
-                        tint = MaterialTheme.colorScheme.primary,
+                        // Track A: макет красит звёзды рейтинга (гистограмма и своя оценка)
+                        // одним и тем же `gold`-токеном (`colors.warning`), не accent/primary.
+                        tint = AnixThemeTokens.colors.warning,
+                        modifier = Modifier.size(RATING_INPUT_STAR_SIZE),
                     )
                 }
             }
@@ -137,3 +155,6 @@ internal fun progressFraction(
 }
 
 private const val RATING_STARS_COUNT = 5
+private val HISTOGRAM_BAR_HEIGHT = 5.dp
+private val HISTOGRAM_BAR_RADIUS = 3.dp
+private val RATING_INPUT_STAR_SIZE = 20.dp

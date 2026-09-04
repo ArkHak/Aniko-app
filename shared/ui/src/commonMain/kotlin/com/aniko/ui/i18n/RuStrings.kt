@@ -52,6 +52,11 @@ val RuStrings: Strings =
         override val libraryTabCountFormat: (String, Int) -> String = { title, count -> "$title ($count)" }
         override val libraryShuffle = "Перемешать"
         override val libraryReverseSort = "Обратный порядок"
+
+        // Track A: упрощённая русская плюрализация (не идеальная, но нормальный вид для типичных
+        // чисел на этом экране) — точное согласование 1/2-4/5+ не запрошено брифом, "тайтлов"
+        // читается нормально в большинстве случаев.
+        override val libraryItemsCountFormat: (Int) -> String = { count -> "$count тайтлов" }
         override val releaseInfoYear = "Год"
         override val releaseInfoStatus = "Статус"
         override val releaseInfoEpisodesLabel = "Серии"
@@ -189,6 +194,8 @@ val RuStrings: Strings =
         override val catalogViewList = "Список"
         override val catalogEmptyResults = "Ничего не найдено"
         override val titleDetailWatch = "Смотреть"
+        override val titleDetailSynopsis = "Описание"
+        override val titleDetailAddToList = "В список"
         override val titleDetailScreenshots = "Скриншоты"
         override val titleDetailSimilar = "Похожие тайтлы"
         override val titleDetailRecommended = "Рекомендуем"

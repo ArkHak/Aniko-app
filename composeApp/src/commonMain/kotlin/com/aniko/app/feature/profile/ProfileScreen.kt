@@ -1,5 +1,6 @@
 package com.aniko.app.feature.profile
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +34,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.model.Achievement
 import com.aniko.model.FriendRequestVisibility
@@ -95,6 +98,7 @@ fun ProfileScreen(
     modifier: Modifier = Modifier,
     onReleaseClick: (Int) -> Unit = {},
     onSettingsClick: () -> Unit = {},
+    onOpenLists: () -> Unit = {},
     themeMode: String? = null,
     onThemeModeChange: (String?) -> Unit = {},
     viewModel: ProfileViewModel = koinViewModel(),
@@ -158,6 +162,7 @@ fun ProfileScreen(
                         ),
                     onReleaseClick = onReleaseClick,
                     onThemeModeChange = onThemeModeChange,
+                    onOpenLists = onOpenLists,
                     modifier = contentModifier,
                 )
         }
@@ -236,12 +241,16 @@ private fun ProfileGuestBox(
  * `Header → Theme → Highlights → FavoriteGenres → Achievements → Stats → Charts → RecentlyWatched →
  * Privacy`) — план не требовал её перемещать, только подтвердить, что она есть в новой компоновке.
  */
+@Suppress("LongParameterList") // Тот же координирующий блок, что и `ProfileScreen` — см. её
+// KDoc/Suppress. `onOpenLists` (P13, точное соответствие макету: ссылка "My Lists →" под именем в
+// шапке) добавлен аддитивно к уже сгруппированным data/callbacks-параметрам.
 @Composable
 private fun ProfileContent(
     data: ProfileContentData,
     callbacks: ProfilePrivacyCallbacks,
     onReleaseClick: (Int) -> Unit,
     onThemeModeChange: (String?) -> Unit,
+    onOpenLists: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Не деструктуризация (`val (a, b, c, d) = data`): у detekt `DestructuringDeclarationWithTooManyEntries`
@@ -265,7 +274,7 @@ private fun ProfileContent(
                     .padding(vertical = dimens.spaceM),
             verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
         ) {
-            ProfileHeader(profile = profile, modifier = sectionPadding)
+            ProfileHeader(profile = profile, onOpenLists = onOpenLists, modifier = sectionPadding)
 
             ProfileThemeSection(
                 themeMode = themeMode,
@@ -283,7 +292,7 @@ private fun ProfileContent(
 
             Text(
                 text = strings.profileStatsTitle,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = sectionPadding,
             )
@@ -331,11 +340,19 @@ private fun ProfileThemeSection(
     }
 }
 
-/** Аватар + логин + (опционально) бейдж спонсора и баннер бана. Ничего лишнего, если аккаунт в порядке. */
+/**
+ * Аватар + логин + ссылка «Мои списки →» + (опционально) бейдж спонсора и баннер бана.
+ *
+ * [onOpenLists] — Track A (точное соответствие макету): мокап рисует кликабельную ссылку "My
+ * Lists →" прямо под именем в шапке профиля, ведущую на тот же экран, что и вкладка таб-бара
+ * `Library` (см. [com.aniko.app.navigation.AnixSection.Library]) — колбэк подключает координатор
+ * (`App.kt`), как и остальные навигационные колбэки этого экрана ([onSettingsClick]-подобные).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProfileHeader(
     profile: ProfileDetails,
+    onOpenLists: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -347,7 +364,36 @@ private fun ProfileHeader(
         verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
     ) {
         AnixAvatar(avatarUrl = profile.avatarUrl, login = profile.login, size = AVATAR_SIZE)
-        Text(text = profile.login, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(
+            text = profile.login,
+            style = MaterialTheme.typography.titleLarge.copy(fontSize = PROFILE_NAME_FONT_SIZE),
+            fontWeight = FontWeight.ExtraBold,
+        )
+
+        // Подтверждено паттерном Фазы 11 (T9, см. `ReleaseDetailsScreen.CommentsLinkRow`): Text
+        // внутри кликабельного Row не сливается с ним сам по себе, поэтому семантика
+        // переустанавливается вручную на весь Row.
+        Row(
+            modifier =
+                Modifier
+                    .clickable(onClick = onOpenLists)
+                    .clearAndSetSemantics { contentDescription = strings.navLibrary },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.spaceXs),
+        ) {
+            Text(
+                text = strings.navLibrary,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            AnixIcon(
+                name = "arrow_forward",
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(PROFILE_LISTS_LINK_ICON_SIZE),
+            )
+        }
 
         if (profile.isSponsor) {
             AssistChip(onClick = {}, label = { Text(strings.profileSponsorBadge) })
@@ -463,4 +509,9 @@ private fun FriendRequestVisibility.toDisplayName(strings: Strings): String =
         FriendRequestVisibility.NOBODY -> strings.friendRequestVisibilityNobody
     }
 
-private val AVATAR_SIZE = 96.dp
+// Track A (точное соответствие макету, 2026-09-04): аватар 64dp (был 96dp), имя 17px/800 —
+// точные значения макета, не из `AnixDimens`/`anixTypography` (нет готовых слотов под эти
+// конкретные px, тот же приём, что и `ACHIEVEMENT_BADGE_SIZE` в `ProfileStatsSections.kt`).
+private val AVATAR_SIZE = 64.dp
+private val PROFILE_NAME_FONT_SIZE = 17.sp
+private val PROFILE_LISTS_LINK_ICON_SIZE = 14.dp

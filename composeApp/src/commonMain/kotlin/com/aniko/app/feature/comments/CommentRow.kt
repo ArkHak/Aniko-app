@@ -1,6 +1,8 @@
 package com.aniko.app.feature.comments
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +27,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aniko.model.ReleaseComment
 import com.aniko.ui.component.AnixAvatar
@@ -52,13 +55,27 @@ fun CommentRow(
 ) {
     val strings = LocalStrings.current
     val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
 
     // Простой отступ вместо полного дерева ответов (допустимо по заданию P7.T12) — реплаи
     // визуально вложены под родительский комментарий, без соединительных линий/сворачивания веток.
     val indent = if (comment.isReply) dimens.spaceL else 0.dp
+    val cardShape = RoundedCornerShape(dimens.cornerM)
 
+    // Track A (design-match-remaining-screens, 2026-09-04): карточка комментария под макет
+    // `showDetail`/`comments` — тот же язык (`overlay045` фон + `overlay07` бордер, radius 12,
+    // padding 12), что уже использует превью-карточка на Title Detail
+    // (`ReleaseCommentPreviewRow` в `ReleaseDetailsScreen.kt`) — раньше здесь была голая строка
+    // без контейнера вовсе.
     Row(
-        modifier = modifier.fillMaxWidth().padding(start = indent),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(start = indent)
+                .clip(cardShape)
+                .background(colors.overlay045, cardShape)
+                .border(BorderStroke(COMMENT_CARD_BORDER_WIDTH, colors.overlay07), cardShape)
+                .padding(dimens.space12),
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
     ) {
         AnixAvatar(avatarUrl = comment.author.avatarUrl, login = comment.author.login, size = AVATAR_SIZE)
@@ -66,7 +83,10 @@ fun CommentRow(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(dimens.spaceXs),
         ) {
-            Text(text = comment.author.login, style = MaterialTheme.typography.labelLarge)
+            Text(
+                text = comment.author.login,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            )
 
             CommentMessage(comment = comment)
 
@@ -122,6 +142,7 @@ fun CommentMessage(
         SpoilerPlaceholder(
             label = strings.commentsSpoilerLabel,
             onReveal = { isSpoilerRevealed = true },
+            baseStyle = textStyle,
             modifier = modifier,
         )
     } else {
@@ -132,10 +153,20 @@ fun CommentMessage(
 /** Плашка вместо текста спойлера — см. D10 в KDoc [CommentMessage]. Высота — `defaultMinSize`, а
  *  не жёсткий `.height()`: должна расти вместе с текстом при масштабе шрифта (тот же баг класс,
  *  что нашёл аудит P6.T12 у `ListStatusChip`, см. журнал Фазы 6 плана). */
+/**
+ * Track A (design-match-remaining-screens, 2026-09-04): подпись плашки перекрашена в accent
+ * (`MaterialTheme.colorScheme.primary`, см. KDoc [EpisodeGrid][com.aniko.ui.component.EpisodeGrid]
+ * про то же самое равенство primary/accent после Track A) и выведена жирным — раньше была
+ * нейтральным `onSurfaceVariant` без акцента, как обычный неактивный текст, хотя визуально это
+ * кликабельный призыв к действию. [baseStyle] — тот же `textStyle`, что получил бы обычный текст
+ * комментария у конкретного вызывающего кода (полный список — крупнее, превью на Title Detail —
+ * мельче), чтобы плашка не "прыгала" размером относительно окружающего текста.
+ */
 @Composable
 private fun SpoilerPlaceholder(
     label: String,
     onReveal: () -> Unit,
+    baseStyle: TextStyle,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -152,8 +183,7 @@ private fun SpoilerPlaceholder(
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = baseStyle.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary),
         )
     }
 }
@@ -201,6 +231,11 @@ private fun VoteIndicator(
 private const val LIKE_VOTE = 1
 private const val NO_VOTE = 0
 private const val LIKE_MARK = "▲"
-private val AVATAR_SIZE = 40.dp
+
+// Track A: 30dp — тот же размер, что и `ReleaseCommentPreviewRow` на Title Detail (см. её
+// `COMMENT_PREVIEW_AVATAR_SIZE` в `ReleaseDetailsScreen.kt`) и разметка макета `comments` (было
+// 40dp — крупнее, чем в мокапе).
+private val AVATAR_SIZE = 30.dp
 private val SPOILER_PLACEHOLDER_MIN_HEIGHT = 48.dp
 private val VOTE_INDICATOR_VERTICAL_PADDING = 2.dp
+private val COMMENT_CARD_BORDER_WIDTH = 1.dp

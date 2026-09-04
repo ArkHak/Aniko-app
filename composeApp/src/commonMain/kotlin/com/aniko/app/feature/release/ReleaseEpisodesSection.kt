@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import com.aniko.model.Episode
 import com.aniko.model.EpisodeSource
 import com.aniko.model.VideoHost
@@ -54,9 +55,13 @@ fun ReleaseEpisodesSection(
     val strings = LocalStrings.current
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(dimens.spaceM)) {
+        // Track A (design-match-remaining-screens, 2026-09-04): заголовки секций внутри карточки
+        // Title Detail на макете — все 14px/700 (см. тот же приём в `ReleaseHeaderSection.
+        // HeroSectionTitle`/`ReleaseDetailsScreen.CommentsLinkRow`), раньше здесь был `titleMedium`
+        // (16px).
         Text(
             text = strings.releaseInfoEpisodesLabel,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleSmall.copy(fontSize = SECTION_TITLE_SIZE),
             fontWeight = FontWeight.Bold,
         )
 
@@ -221,3 +226,4 @@ private fun sourceIcon(source: EpisodeSource): String =
     if (source.host == VideoHost.UNKNOWN) "help" else "play_circle"
 
 private const val SECTION_LABEL_ALPHA = 0.6f
+private val SECTION_TITLE_SIZE = 14.sp

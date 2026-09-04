@@ -3,10 +3,13 @@ package com.aniko.app.feature.release.rating
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.mvi.CollectEffects
 import com.aniko.ui.component.AnixErrorState
@@ -31,11 +34,18 @@ import org.koin.compose.viewmodel.koinViewModel
  *
  * Публичная сигнатура зафиксирована архитектором — не менять без координации с Треком C, который
  * вызывает эту секцию из `ReleaseDetailsScreen`.
+ *
+ * @param averageGrade Средняя оценка релиза (уже загруженная `ReleaseDetailsViewModel`'ем как
+ * часть базового [com.aniko.model.Release], не отдельным сетевым вызовом) — Track A (2026-09-04):
+ * макет рисует её крупной цифрой над гистограммой, раньше секция её вообще не отображала, хотя
+ * значение уже было на экране (см. `InfoRow` "рейтинг" в `ReleaseHeaderSection`). `null` — оценок
+ * ещё нет/поле не пришло, крупная цифра просто не рисуется.
  */
 @Composable
 fun ReleaseRatingSection(
     releaseId: Int,
     modifier: Modifier = Modifier,
+    averageGrade: Double? = null,
     viewModel: ReleaseRatingViewModel = koinViewModel(key = "release-rating-$releaseId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -69,6 +79,12 @@ fun ReleaseRatingSection(
             state.isLoading -> AnixLoadingState(modifier = Modifier.fillMaxWidth())
 
             else -> {
+                if (averageGrade != null) {
+                    Text(
+                        text = formatAverageGrade(averageGrade),
+                        style = MaterialTheme.typography.displayLarge.copy(fontSize = AVERAGE_GRADE_FONT_SIZE),
+                    )
+                }
                 RatingHistogram(counts = state.voteCounts)
                 RatingInput(
                     myRating = state.yourVote,
@@ -86,3 +102,15 @@ private fun RatingLoadError.toMessage(strings: Strings): String =
         RatingLoadError.UNAUTHORIZED -> strings.commonErrorUnauthorized
         RatingLoadError.GENERIC -> strings.homeSectionLoadError
     }
+
+/** Тот же приём округления до сотых без JVM-only `String.format`, что и `formatGrade` в
+ *  `ReleaseHeaderSection.kt` (`releaseInfoRating` `InfoRow`) — сознательно не переиспользован
+ *  напрямую: та функция `private` в другом файле/пакете, дублирование дешевле лишнего публичного
+ *  API ради одной формулы в три строки. */
+private fun formatAverageGrade(grade: Double): String {
+    val rounded = (grade * AVERAGE_GRADE_ROUNDING_FACTOR).toInt() / AVERAGE_GRADE_ROUNDING_FACTOR
+    return rounded.toString()
+}
+
+private const val AVERAGE_GRADE_ROUNDING_FACTOR = 100.0
+private val AVERAGE_GRADE_FONT_SIZE = 32.sp

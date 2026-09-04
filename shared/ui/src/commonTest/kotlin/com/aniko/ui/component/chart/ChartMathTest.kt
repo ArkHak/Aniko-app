@@ -46,8 +46,11 @@ class ChartMathTest {
     }
 
     @Test
-    fun barHeightFractions_allZeroAndNoExplicitMax_allFractionsZero() {
-        assertEquals(listOf(0f, 0f), barHeightFractions(listOf(0f, 0f), maxValue = null))
+    fun barHeightFractions_allZeroAndNoExplicitMax_allFractionsAtMinVisibleFloor() {
+        // Track A (точное соответствие макету Профиля, 2026-09-04): нулевые столбики больше не
+        // полностью невидимы (`0f`) — минимальный видимый "огрызок" 6%, как в референсном
+        // макете (`Math.max(6, ...)`), см. KDoc barHeightFractions.
+        assertEquals(listOf(0.06f, 0.06f), barHeightFractions(listOf(0f, 0f), maxValue = null))
     }
 
     @Test

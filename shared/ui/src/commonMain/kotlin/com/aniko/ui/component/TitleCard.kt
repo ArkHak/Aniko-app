@@ -16,8 +16,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.sp
 import com.aniko.model.Release
 import com.aniko.model.ReleaseStatus
 import com.aniko.ui.theme.AnixThemeTokens
@@ -153,9 +155,16 @@ private fun ListTitleCard(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(dimens.spaceXs),
         ) {
+            // Track A (сверка Compact-раскладки Catalog, 2026-09-04): макет хочет 13.5px
+            // Manrope Bold(700) — точного готового стиля с таким размером нет, `titleSmall` уже
+            // на Manrope (см. Type.kt), переопределены только size/weight локально.
             Text(
                 text = release.title,
-                style = MaterialTheme.typography.bodyMedium,
+                style =
+                    MaterialTheme.typography.titleSmall.copy(
+                        fontSize = LIST_TITLE_FONT_SIZE,
+                        fontWeight = FontWeight.Bold,
+                    ),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -163,13 +172,29 @@ private fun ListTitleCard(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AnixThemeTokens.colors.textSecondary60,
+                    maxLines = LIST_SUBTITLE_MAX_LINES,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            PersonalStateOverlay(release = release, modifier = Modifier, horizontal = true)
+            PersonalStateOverlay(
+                release = release,
+                modifier = Modifier,
+                horizontal = true,
+                // Track A: список Catalog хочет "пилюлю 10px/700 с текстом статуса" —
+                // ListStatusChipStyle.Full, а не кружок-буква Compact (используемый в
+                // GridTitleCard/по умолчанию, см. KDoc PersonalStateOverlay). Единственный
+                // потребитель Full — эта раскладка.
+                chipStyle = ListStatusChipStyle.Full,
+            )
         }
     }
 }
+
+// Track A (сверка Compact-раскладки Catalog, 2026-09-04): точное значение макета для заголовка
+// списочной карточки — нет готового стиля с таким размером.
+private val LIST_TITLE_FONT_SIZE = 13.5.sp
+private const val LIST_SUBTITLE_MAX_LINES = 2
 
 /** Оверлей "объективного" состояния релиза: рейтинг / скоро / новая серия. */
 @Composable
@@ -196,12 +221,21 @@ private fun TitleCardStatusOverlay(
     }
 }
 
-/** Оверлей персонального состояния: избранное / статус в списке пользователя. */
+/**
+ * Оверлей персонального состояния: избранное / статус в списке пользователя.
+ *
+ * @param chipStyle стиль [ListStatusChip] статуса — по умолчанию [ListStatusChipStyle.Compact]
+ *   (кружок-буква, уместен на маленьком постере [GridTitleCard]/вызывающей стороне по умолчанию).
+ *   [ListTitleCard] (Трек A, сверка Compact-раскладки Catalog) передаёт
+ *   [ListStatusChipStyle.Full] — макет хочет полную пилюлю с текстом статуса на списочной
+ *   карточке, где горизонтального места достаточно.
+ */
 @Composable
 private fun PersonalStateOverlay(
     release: Release,
     modifier: Modifier = Modifier,
     horizontal: Boolean = false,
+    chipStyle: ListStatusChipStyle = ListStatusChipStyle.Compact,
 ) {
     val dimens = AnixThemeTokens.dimens
     val status = release.myListStatus
@@ -213,7 +247,7 @@ private fun PersonalStateOverlay(
             horizontalArrangement = Arrangement.spacedBy(dimens.spaceXs),
         ) {
             if (release.isFavorite) FavoriteIndicatorBadge()
-            status?.let { ListStatusChip(it, style = ListStatusChipStyle.Compact) }
+            status?.let { ListStatusChip(it, style = chipStyle) }
         }
     } else {
         Column(
@@ -222,7 +256,7 @@ private fun PersonalStateOverlay(
             verticalArrangement = Arrangement.spacedBy(dimens.spaceXs),
         ) {
             if (release.isFavorite) FavoriteIndicatorBadge()
-            status?.let { ListStatusChip(it, style = ListStatusChipStyle.Compact) }
+            status?.let { ListStatusChip(it, style = chipStyle) }
         }
     }
 }

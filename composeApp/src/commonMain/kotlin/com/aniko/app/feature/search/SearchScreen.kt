@@ -11,12 +11,14 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -75,7 +77,13 @@ fun SearchScreen(
         }
     }
 
-    Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.SEARCH_SCREEN_ROOT)) {
+    // Track A (сверка Compact-раскладки, 2026-09-04): дефолтный цвет M3 Surface непрозрачен и
+    // перекрывает корневой радиальный градиент приложения (anixAppBackground()) — Transparent
+    // делает фон/градиент видимым сквозь экран, как в макете.
+    Surface(
+        modifier = modifier.fillMaxSize().testTag(AnixTestTags.SEARCH_SCREEN_ROOT),
+        color = Color.Transparent,
+    ) {
         if (isExpanded) {
             ExpandedCatalogLayout(state, strings, dimens, viewModel, onReleaseClick)
         } else {
@@ -252,12 +260,15 @@ private fun CatalogBody(
         filtersContent?.invoke()
 
         // "Горизонтальный ряд чипов" из брифа P7.T3 — вкладки Все/Новинки (см. KDoc CatalogTab).
+        // Track A: `selectedColor` — макет (`catalogViewTabs`) рисует активный таб с акцентной
+        // заливкой/бордером/radius 10dp вместо дефолтного M3 FilterChip, см. KDoc ChipRow.
         ChipRow(
             items = CatalogTab.entries,
             isSelected = { it == state.tab },
             label = { tab -> tab.label(strings) },
             onClick = onTabSelected,
             modifier = Modifier.fillMaxWidth(),
+            selectedColor = MaterialTheme.colorScheme.primary,
         )
 
         Row(

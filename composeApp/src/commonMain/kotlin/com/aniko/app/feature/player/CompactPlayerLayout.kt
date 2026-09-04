@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,7 +29,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aniko.model.VoiceType
 import com.aniko.player.EmbedVideoController
@@ -137,16 +140,11 @@ private fun BoxScope.CompactVideoOverlay(
             )
         }
 
-        IconButton(
-            onClick = { controller.togglePlayPause() },
-            modifier = Modifier.align(Alignment.Center).size(dimens.minTouchTarget * PLAY_BUTTON_SCALE),
-        ) {
-            AnixIcon(
-                name = if (isPlaying) "pause" else "play_arrow",
-                filled = true,
+        Box(modifier = Modifier.align(Alignment.Center)) {
+            CompactPlayPauseButton(
+                isPlaying = isPlaying,
+                onClick = { controller.togglePlayPause() },
                 contentDescription = if (isPlaying) strings.playerPause else strings.playerPlay,
-                tint = Color.White,
-                modifier = Modifier.size(dimens.minTouchTarget),
             )
         }
     }
@@ -229,7 +227,7 @@ internal fun PlayerPillChip(
 ) {
     val dimens = AnixThemeTokens.dimens
     val backgroundAlpha = if (selected) PILL_CHIP_SELECTED_ALPHA else PILL_CHIP_ALPHA
-    val shape = RoundedCornerShape(dimens.cornerM)
+    val shape = RoundedCornerShape(PILL_CHIP_CORNER)
     var base =
         Modifier
             .clip(shape)
@@ -245,11 +243,18 @@ internal fun PlayerPillChip(
             text = label,
             color = Color.White,
             fontSize = PILL_CHIP_FONT_SIZE,
+            fontWeight = PILL_CHIP_FONT_WEIGHT,
             style = MaterialTheme.typography.labelMedium,
         )
     }
 }
 
+/**
+ * Круглая полупрозрачная чёрная подложка 34×34 под back/fullscreen (Track A, точное соответствие
+ * макету Claude Design, `showPlayer`) — тач-таргет остаётся не меньше [AnixDimens.minTouchTarget]
+ * (доступность), сама видимая подложка отдельным вложенным [Box] — макет рисует именно
+ * `rgba(0,0,0,0.5)`-круг фиксированного размера, а не растянутый на весь тач-таргет.
+ */
 @Composable
 private fun CompactOverlayIconButton(
     iconName: String,
@@ -265,11 +270,68 @@ private fun CompactOverlayIconButton(
                 .size(dimens.minTouchTarget)
                 .clearAndSetSemantics { this.contentDescription = contentDescription },
     ) {
-        AnixIcon(name = iconName, contentDescription = null, filled = filled, tint = Color.White)
+        Box(
+            modifier =
+                Modifier
+                    .size(OVERLAY_BUTTON_SIZE)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = OVERLAY_BUTTON_SCRIM_ALPHA)),
+            contentAlignment = Alignment.Center,
+        ) {
+            AnixIcon(name = iconName, contentDescription = null, filled = filled, tint = Color.White)
+        }
     }
 }
 
-private const val PLAY_BUTTON_SCALE = 1.3f
+/** Круглая подложка 52×52 `rgba(0,0,0,0.45)` под центральной play/pause-кнопкой (Track A) —
+ *  тот же приём, что и [CompactOverlayIconButton], только свой размер/альфа по макету. */
+@Composable
+private fun CompactPlayPauseButton(
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    contentDescription: String,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier =
+            Modifier
+                .size(maxOf(AnixThemeTokens.dimens.minTouchTarget, PLAY_PAUSE_BUTTON_SIZE))
+                .clearAndSetSemantics { this.contentDescription = contentDescription },
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(PLAY_PAUSE_BUTTON_SIZE)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = PLAY_PAUSE_SCRIM_ALPHA)),
+            contentAlignment = Alignment.Center,
+        ) {
+            AnixIcon(
+                name = if (isPlaying) "pause" else "play_arrow",
+                filled = true,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(PLAY_PAUSE_ICON_SIZE),
+            )
+        }
+    }
+}
+
+/** Круг back/fullscreen-кнопки компактного оверлея (Track A, `showPlayer`). */
+private val OVERLAY_BUTTON_SIZE = 34.dp
+private const val OVERLAY_BUTTON_SCRIM_ALPHA = 0.5f
+
+/** Круг центральной play/pause-кнопки (Track A, `showPlayer`). */
+private val PLAY_PAUSE_BUTTON_SIZE = 52.dp
+private const val PLAY_PAUSE_SCRIM_ALPHA = 0.45f
+private val PLAY_PAUSE_ICON_SIZE = 28.dp
+
 private const val PILL_CHIP_ALPHA = 0.07f
 private const val PILL_CHIP_SELECTED_ALPHA = 0.16f
-private val PILL_CHIP_FONT_SIZE = 12.sp
+
+/** Радиус/типографика чипов Audio/Speed компактного оверлея — точное соответствие макету
+ *  (`showPlayer`): 10px radius, 11.5px/600, не берётся из [AnixDimens] (шаг токенов 8/12/16
+ *  не содержит 10, а этот чип — единственное место, которому нужно именно 10). */
+private val PILL_CHIP_CORNER = 10.dp
+private val PILL_CHIP_FONT_SIZE = 11.5.sp
+private val PILL_CHIP_FONT_WEIGHT = FontWeight.SemiBold

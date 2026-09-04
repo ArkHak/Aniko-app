@@ -69,6 +69,8 @@ internal fun PlayerProgressBar(
                 SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.primary,
                     activeTrackColor = MaterialTheme.colorScheme.primary,
+                    // Точное соответствие макету Claude Design (`showPlayer`): трек-подложка
+                    // `rgba(255,255,255,0.15)` (Track A, было 0.3 — заметно светлее референса).
                     inactiveTrackColor = OVERLAY_CONTENT_COLOR.copy(alpha = INACTIVE_TRACK_ALPHA),
                 ),
         )
@@ -106,7 +108,7 @@ internal fun formatPlaybackTime(millis: Long): String {
 /** Насколько близко подтверждённая позиция должна подойти к запрошенной, чтобы снять ползунок. */
 private const val SEEK_SETTLE_MS = 1_500L
 
-private const val INACTIVE_TRACK_ALPHA = 0.3f
+private const val INACTIVE_TRACK_ALPHA = 0.15f
 
 private const val MILLIS_IN_SECOND = 1_000L
 private const val SECONDS_IN_MINUTE = 60L

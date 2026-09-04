@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
@@ -45,13 +46,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.aniko.model.VoiceType
 import com.aniko.player.EmbedVideoController
 import com.aniko.player.EmbedVideoState
@@ -507,16 +511,7 @@ internal fun AudioPickerOverlay(
                 modifier = Modifier.padding(dimens.spaceM),
                 verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = strings.playerAudioLabel,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = onDismiss) {
-                        AnixIcon(name = "close", contentDescription = strings.closeContentDescription, filled = true)
-                    }
-                }
+                AudioPickerHeader(title = strings.playerAudioLabel, onDismiss = onDismiss)
                 if (isSwitching) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
@@ -526,6 +521,12 @@ internal fun AudioPickerOverlay(
                             voiceType = type,
                             selected = type.id == currentVoiceType?.id,
                             onClick = { onSelect(type.id) },
+                            // Пикер плеера — единственное место, где выбранная строка озвучки
+                            // подсвечивается акцентным тинтом альфа 0.14 (Track A, `showDubPicker`)
+                            // — заметно светлее, чем 0.22 у фильтр-чипов `ChipRow`/`FilterChip` в
+                            // остальном приложении (Detail и т.д.), сознательно не унифицировано:
+                            // так задано макетом для ДВУХ разных визуальных паттернов "выбрано".
+                            accentSelected = true,
                         )
                     }
                 }
@@ -534,7 +535,51 @@ internal fun AudioPickerOverlay(
     }
 }
 
+/** Шапка пикера озвучки: заголовок 17px/800 + круглая кнопка закрытия 34×34 `overlay08` — точное
+ *  соответствие макету (`showDubPicker`). Вынесена отдельно из [AudioPickerOverlay] (detekt
+ *  `LongMethod`). */
+@Composable
+private fun AudioPickerHeader(
+    title: String,
+    onDismiss: () -> Unit,
+) {
+    val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
+    val strings = LocalStrings.current
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            fontSize = AUDIO_PICKER_TITLE_FONT_SIZE,
+            fontWeight = FontWeight.ExtraBold,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier.size(dimens.minTouchTarget),
+        ) {
+            // Круглая подложка 34×34 `overlay08` вокруг кнопки закрытия — точное соответствие
+            // макету (`showDubPicker`), не голая иконка без фона.
+            Box(
+                modifier =
+                    Modifier
+                        .size(AUDIO_PICKER_CLOSE_BUTTON_SIZE)
+                        .clip(CircleShape)
+                        .background(colors.overlay08),
+                contentAlignment = Alignment.Center,
+            ) {
+                AnixIcon(
+                    name = "close",
+                    contentDescription = strings.closeContentDescription,
+                    filled = true,
+                )
+            }
+        }
+    }
+}
+
 private const val AUDIO_PICKER_MAX_HEIGHT_FRACTION = 0.6f
+private val AUDIO_PICKER_TITLE_FONT_SIZE = 17.sp
+private val AUDIO_PICKER_CLOSE_BUTTON_SIZE = 34.dp
 
 /**
  * P8.T4 — баннер «следующая серия через Nс» с отменой.
@@ -572,31 +617,65 @@ private fun NextEpisodeBanner(
 
     if (!visible) return
     val seconds = state.secondsToEpisodeEnd() ?: return
+    // Точное соответствие макету Claude Design (`showPlayer`): фиксированный тёмный фон
+    // `rgba(15,16,22,0.9)`, а не тема-зависимый `colorScheme.surface` — баннер, как и остальной
+    // оверлей плеера, всегда рисуется поверх тёмного кадра видео независимо от темы приложения
+    // (тот же принцип, что и у [OVERLAY_CONTENT_COLOR]).
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = dimens.spaceM, vertical = dimens.spaceS),
         shape = RoundedCornerShape(dimens.cornerM),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = dimens.spaceXs,
+        color = NEXT_EPISODE_BANNER_COLOR,
+        contentColor = OVERLAY_CONTENT_COLOR,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = dimens.space12, vertical = dimens.spaceS),
+            modifier =
+                Modifier.padding(
+                    horizontal = NEXT_EPISODE_BANNER_PADDING_H,
+                    vertical = NEXT_EPISODE_BANNER_PADDING_V,
+                ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
         ) {
             Text(
                 text = strings.playerNextEpisodeIn(seconds),
-                style = MaterialTheme.typography.bodyMedium,
+                fontSize = NEXT_EPISODE_BANNER_FONT_SIZE,
                 textAlign = TextAlign.Start,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = { cancelled = true }) { Text(strings.playerCancel) }
+            TextButton(onClick = { cancelled = true }) {
+                Text(
+                    text = strings.playerCancel,
+                    fontSize = NEXT_EPISODE_BANNER_FONT_SIZE,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             TextButton(onClick = {
                 navigated = true
                 onNextEpisode()
-            }) { Text(strings.playerNextEpisodeNow) }
+            }) {
+                Text(
+                    text = strings.playerNextEpisodeNow,
+                    fontSize = NEXT_EPISODE_BANNER_FONT_SIZE,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
 }
+
+/** Фон баннера «следующая серия» — точный hex макета (`rgba(15,16,22,0.9)`), см. комментарий у
+ *  места использования. */
+private const val NEXT_EPISODE_BANNER_BG_ALPHA = 0.9f
+
+@Suppress("MagicNumber") // hex-литерал цвета — то же обоснование, что и у `AnixPalette`
+// (shared/ui, Color.kt): сам hex и есть содержательная константа, заводить под него ещё одну
+// именованную числовую метрику было бы шумом.
+private val NEXT_EPISODE_BANNER_COLOR = Color(0xFF0F1016).copy(alpha = NEXT_EPISODE_BANNER_BG_ALPHA)
+private val NEXT_EPISODE_BANNER_PADDING_H = 12.dp
+private val NEXT_EPISODE_BANNER_PADDING_V = 10.dp
+private val NEXT_EPISODE_BANNER_FONT_SIZE = 11.sp
 
 /** Кнопка-иконка оверлея: белая на кадре видео (см. [OVERLAY_CONTENT_COLOR]). */
 @Composable

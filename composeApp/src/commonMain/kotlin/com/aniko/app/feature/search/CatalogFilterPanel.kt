@@ -116,11 +116,16 @@ fun CatalogInlineFilterChips(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(dimens.spaceXs),
     ) {
+        // Track A (сверка Compact-раскладки, 2026-09-04): статус-чипы и жанр-чипы раньше
+        // рендерились одинаково (дефолтный M3 FilterChip) — макет разводит их на РАЗНЫЕ акценты:
+        // статус — secondary, жанр — primary. Только Compact-вариант (эта функция) — боковая
+        // панель Expanded (CatalogFilterPanel выше) не трогается, вне периметра этой сверки.
         AnixFilterChipRow(
             items = STATUS_OPTIONS.map { it.id },
             selected = setOfNotNull(filter.statusId),
             label = { id -> STATUS_OPTIONS.first { it.id == id }.label(strings) },
             onToggle = onStatusToggle,
+            selectedColor = MaterialTheme.colorScheme.secondary,
         )
 
         AnixFilterChipRow(
@@ -128,6 +133,7 @@ fun CatalogInlineFilterChips(
             selected = filter.genres,
             label = { genre -> genre },
             onToggle = onGenreToggle,
+            selectedColor = MaterialTheme.colorScheme.primary,
         )
     }
 }

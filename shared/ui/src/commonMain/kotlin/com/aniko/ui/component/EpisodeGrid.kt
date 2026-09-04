@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -83,19 +84,34 @@ private fun EpisodeCell(
     val strings = LocalStrings.current
     val shape = RoundedCornerShape(dimens.cornerS)
     val alpha = if (isFiller) FILLER_ALPHA else 1f
+    val accent = MaterialTheme.colorScheme.primary
 
+    // Track A (design-match-remaining-screens, 2026-09-04) [FIX]: раньше было ровно наоборот —
+    // НЕпросмотренная серия получала подсветку `primaryContainer`, а просмотренная — нейтральный
+    // `surfaceVariant`. Разметка макета (`showDetail`/episodes) требует обратного: просмотренная
+    // серия — accent(primary)-тинт подложки/бордера, непросмотренная — просто нейтральная ячейка
+    // с тонким бордером `overlay09`. Использует `MaterialTheme.colorScheme.primary` напрямую —
+    // после Track A он равен accent-токену макета (см. `AnixPalette.PrimaryDark`/`PrimaryLight`,
+    // `Color.kt`), отдельного alias-токена в [AnixThemeTokens.colors] под "accent" нет.
     val containerColor =
         if (episode.isWatched) {
-            MaterialTheme.colorScheme.surfaceVariant
+            accent.copy(alpha = WATCHED_BACKGROUND_ALPHA)
         } else {
-            MaterialTheme.colorScheme.primaryContainer
+            Color.Transparent
         }
     val contentColor =
         if (episode.isWatched) {
-            MaterialTheme.colorScheme.onSurfaceVariant
+            AnixThemeTokens.colors.primaryText
         } else {
-            MaterialTheme.colorScheme.onPrimaryContainer
+            MaterialTheme.colorScheme.onSurface
         }
+    val borderColor =
+        when {
+            isCurrent -> accent
+            episode.isWatched -> accent.copy(alpha = WATCHED_BORDER_ALPHA)
+            else -> AnixThemeTokens.colors.overlay09
+        }
+    val borderWidth = if (isCurrent) CURRENT_BORDER_WIDTH else DEFAULT_BORDER_WIDTH
     val contentDescription =
         if (episode.isWatched) {
             strings.episodeWatchedContentDescription
@@ -108,13 +124,8 @@ private fun EpisodeCell(
             Modifier
                 .defaultMinSize(minWidth = cellMinSize, minHeight = cellMinSize)
                 .clip(shape)
-                .then(
-                    if (isCurrent) {
-                        Modifier.border(BorderStroke(CURRENT_BORDER_WIDTH, MaterialTheme.colorScheme.primary), shape)
-                    } else {
-                        Modifier
-                    },
-                ).background(containerColor.copy(alpha = alpha), shape)
+                .background(containerColor.copy(alpha = alpha), shape)
+                .border(BorderStroke(borderWidth, borderColor.copy(alpha = borderColor.alpha * alpha)), shape)
                 .semantics { this.contentDescription = contentDescription }
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         contentAlignment = Alignment.Center,
@@ -128,4 +139,7 @@ private fun EpisodeCell(
 }
 
 private val CURRENT_BORDER_WIDTH = 2.dp
+private val DEFAULT_BORDER_WIDTH = 1.dp
 private const val FILLER_ALPHA = 0.55f
+private const val WATCHED_BACKGROUND_ALPHA = 0.22f
+private const val WATCHED_BORDER_ALPHA = 0.5f

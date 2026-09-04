@@ -68,7 +68,7 @@ fun CommunityListBar(
                     Modifier
                         .fillMaxWidth()
                         .height(BAR_HEIGHT)
-                        .clip(RoundedCornerShape(dimens.cornerS)),
+                        .clip(RoundedCornerShape(BAR_RADIUS)),
             ) {
                 for (index in entries.indices) {
                     val count = entries[index].second
@@ -90,11 +90,12 @@ fun CommunityListBar(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(dimens.spaceXs),
                     ) {
+                        val legendShape = RoundedCornerShape(LEGEND_SWATCH_RADIUS)
                         Box(
                             modifier =
                                 Modifier
                                     .size(LEGEND_SWATCH_SIZE)
-                                    .background(palette[index % palette.size], RoundedCornerShape(dimens.cornerS)),
+                                    .background(palette[index % palette.size], legendShape),
                         )
                         Text(text = status.displayName(strings), style = MaterialTheme.typography.bodySmall)
                         Text(text = count.toString(), style = MaterialTheme.typography.bodySmall)
@@ -105,5 +106,10 @@ fun CommunityListBar(
     }
 }
 
-private val BAR_HEIGHT = 24.dp
-private val LEGEND_SWATCH_SIZE = 12.dp
+// Track A (design-match-remaining-screens, 2026-09-04): макет задаёт полосу 8dp высотой с radius
+// 4dp (было 24dp/cornerS=8dp — заметно толще и более скруглённо) и легенду квадратиками 7×7 radius
+// 2dp (было 12dp/cornerS=8dp — почти кружки, а не квадраты из мокапа).
+private val BAR_HEIGHT = 8.dp
+private val BAR_RADIUS = 4.dp
+private val LEGEND_SWATCH_SIZE = 7.dp
+private val LEGEND_SWATCH_RADIUS = 2.dp

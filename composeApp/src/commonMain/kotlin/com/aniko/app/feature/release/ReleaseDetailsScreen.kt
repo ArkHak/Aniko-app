@@ -1,13 +1,17 @@
 package com.aniko.app.feature.release
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,7 +38,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.feature.comments.CommentMessage
 import com.aniko.app.feature.release.rating.ReleaseRatingSection
@@ -44,6 +50,8 @@ import com.aniko.model.ListStatus
 import com.aniko.model.Release
 import com.aniko.model.ReleaseComment
 import com.aniko.model.VideoHost
+import com.aniko.ui.adaptive.AnixWindowSize
+import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.component.AnixAvatar
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixIcon
@@ -71,6 +79,16 @@ import org.koin.compose.viewmodel.koinViewModel
  * из фиксированного маленького списка: превью не листается, оно затравка перед переходом на
  * [com.aniko.app.feature.comments.ReleaseCommentsScreen], который и остаётся единственной точкой
  * входа с пагинацией/сортировкой/голосованием.
+ *
+ * **Кнопка "назад"**: `titleNavigator.back()` (P13 [FIX] — живая проверка на Android/iOS вскрыла,
+ * что раньше у экрана не было НИКАКОГО способа вернуться назад, кроме системной кнопки Android —
+ * на iOS, без edge-swipe в androidx.navigation.compose "из коробки", это был настоящий тупик;
+ * `titleNavigator.back()` сам разбирает, где мы — pane-стек на широком экране или NavController на
+ * телефоне, см. её KDoc). Track A (design-match-remaining-screens, 2026-09-04): на phone Compact
+ * разметка макета (`showDetail`) кладёт эту кнопку прямо поверх hero-обложки шапки (полупрозрачный
+ * круг, [ReleaseHeaderSection]), не отдельным `TopAppBar` над контентом — иначе получилась бы
+ * дублирующая кнопка назад. На Medium/Expanded (та же `ReleaseDetailsScreen`, встроенная в
+ * detail-панель `ListDetailHost`) раскладка НЕ меняется (P13.T13/P5.T3) — `TopAppBar` остаётся.
  */
 @Suppress("LongParameterList") // 6 параметров: releaseId/modifier/viewModel — обязательный
 // каркас экрана, pendingEpisode*/onEpisodeClick — deep link (P10.T7, см. их собственный KDoc);
@@ -91,6 +109,7 @@ fun ReleaseDetailsScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = LocalStrings.current
     val titleNavigator = LocalTitleNavigator.current
+    val windowSize = LocalAnixWindowSize.current
     val snackbarHostState = remember { SnackbarHostState() }
     val onShareClick = rememberShareReleaseHandler(snackbarHostState) { state.release }
 
@@ -103,16 +122,11 @@ fun ReleaseDetailsScreen(
         onResolved = { target -> onEpisodeClick(releaseId, target.sourceId, target.position, target.host) },
     )
 
-    // P13 [FIX]: живая проверка на Android/iOS вскрыла, что у этого экрана не было НИКАКОГО
-    // способа вернуться назад, кроме системной кнопки Android — на iOS (нет edge-swipe в
-    // androidx.navigation.compose "из коробки", в отличие от нативного UIKit-стека) это был
-    // настоящий тупик. `titleNavigator.back()` уже существует и сам разбирает, где мы — pane-
-    // стек на широком экране или NavController на телефоне (см. её KDoc), поэтому кнопка works
-    // одинаково в обоих режимах отображения этого экрана (полноэкранный маршрут ИЛИ detail-панель
-    // `ListDetailHost`).
+    // См. KDoc функции про кнопку "назад" (P13 [FIX] + Track A: `TopAppBar` только на Medium/Expanded).
+    val isCompact = windowSize == AnixWindowSize.Compact
     Scaffold(
         modifier = modifier.testTag(AnixTestTags.RELEASE_DETAILS_SCREEN_ROOT),
-        topBar = { ReleaseDetailsTopBar(onBack = { titleNavigator.back() }) },
+        topBar = { if (!isCompact) ReleaseDetailsTopBar(onBack = { titleNavigator.back() }) },
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             when {
@@ -144,6 +158,7 @@ fun ReleaseDetailsScreen(
                         onOpenTitle = titleNavigator::openTitle,
                         onOpenComments = titleNavigator::openComments,
                         onShareClick = onShareClick,
+                        onBackClick = { titleNavigator.back() },
                     )
             }
 
@@ -257,19 +272,27 @@ private fun ReleaseDetailsContent(
     onOpenTitle: (Int) -> Unit,
     onOpenComments: (Int) -> Unit,
     onShareClick: () -> Unit,
+    onBackClick: () -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
     val release = state.release ?: return
     val scope = rememberCoroutineScope()
+    // Track A: см. KDoc [ReleaseDetailsScreen] про `isCompact` в `Scaffold.topBar` — тот же
+    // признак здесь решает, нужна ли горизонтальная страничная отбивка (`spaceM`) вокруг шапки:
+    // Compact-шапка ([ReleaseHeaderSection]) рисует свою hero-обложку край-в-край сама и сама
+    // задаёт padding у карточки-нахлёста (18dp по макету, не `spaceM`=16dp), поэтому родительский
+    // отступ ей не нужен и даже мешал бы (обложка перестала бы быть во всю ширину). Остальные
+    // секции ниже (рейтинг/серии/похожее/комментарии) и Medium/Expanded-раскладка шапки — как и
+    // раньше, получают `spaceM` тем же способом, каким раньше был запятнан весь `Column`.
+    val isCompact = LocalAnixWindowSize.current == AnixWindowSize.Compact
+    val sectionModifier = Modifier.padding(horizontal = dimens.spaceM)
 
     Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(dimens.spaceM),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
     ) {
+        if (!isCompact) Spacer(modifier = Modifier.height(dimens.spaceM))
+
         ReleaseHeaderSection(
             release = release,
             details = state.details,
@@ -285,9 +308,11 @@ private fun ReleaseDetailsContent(
             onToggleFavorite = onToggleFavorite,
             onRetryDetails = onRetryDetails,
             onShareClick = onShareClick,
+            onBackClick = onBackClick,
+            modifier = if (isCompact) Modifier else sectionModifier,
         )
 
-        ReleaseRatingSection(releaseId = release.id)
+        ReleaseRatingSection(releaseId = release.id, averageGrade = release.grade, modifier = sectionModifier)
 
         ReleaseEpisodesSection(
             state = state,
@@ -295,19 +320,24 @@ private fun ReleaseDetailsContent(
             onSelectSource = onSelectSource,
             onEpisodeClick = onEpisodeClick,
             onEpisodeLongClick = onEpisodeLongClick,
+            modifier = sectionModifier,
         )
 
         ReleaseRelatedSection(
             related = state.details?.relatedReleases.orEmpty(),
             recommended = state.details?.recommendedReleases.orEmpty(),
             onOpenTitle = onOpenTitle,
+            modifier = sectionModifier,
         )
 
         ReleaseCommentsSection(
             commentCount = state.details?.commentCount ?: 0,
             preview = state.commentsPreview,
             onOpenComments = { onOpenComments(release.id) },
+            modifier = sectionModifier,
         )
+
+        Spacer(modifier = Modifier.height(dimens.spaceM))
     }
 }
 
@@ -322,9 +352,10 @@ private fun ReleaseCommentsSection(
     commentCount: Int,
     preview: List<ReleaseComment>,
     onOpenComments: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
-    Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
         CommentsLinkRow(commentCount = commentCount, onClick = onOpenComments)
         if (preview.isNotEmpty()) {
             CommentsPreviewList(preview = preview, onCommentClick = onOpenComments)
@@ -373,14 +404,22 @@ private fun ReleaseCommentPreviewRow(
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
+    val shape = RoundedCornerShape(dimens.cornerM)
+    // Track A (design-match-remaining-screens, 2026-09-04): точные токены разметки `comments` —
+    // фон `overlay045` + бордер `overlay07` (было: непрозрачность 0.6 поверх `surfaceVariant`,
+    // без бордера вовсе), padding 12dp (было 16dp/`spaceM`), имя 12/700 (было `labelMedium`
+    // 12/500), текст 12.5px на `textSecondary75` (было `bodySmall` 12/400 на дефолтном
+    // `onSurface`).
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(dimens.cornerM))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = COMMENT_PREVIEW_BACKGROUND_ALPHA))
+                .clip(shape)
+                .background(colors.overlay045, shape)
+                .border(BorderStroke(COMMENT_PREVIEW_BORDER_WIDTH, colors.overlay07), shape)
                 .clickable(role = Role.Button, onClick = onClick)
-                .padding(dimens.spaceM),
+                .padding(dimens.space12),
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
     ) {
         AnixAvatar(
@@ -389,8 +428,18 @@ private fun ReleaseCommentPreviewRow(
             size = COMMENT_PREVIEW_AVATAR_SIZE,
         )
         Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
-            Text(text = comment.author.login, style = MaterialTheme.typography.labelMedium)
-            CommentMessage(comment = comment, textStyle = MaterialTheme.typography.bodySmall)
+            Text(
+                text = comment.author.login,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+            )
+            CommentMessage(
+                comment = comment,
+                textStyle =
+                    MaterialTheme.typography.bodySmall.copy(
+                        fontSize = COMMENT_PREVIEW_TEXT_SIZE,
+                        color = colors.textSecondary75,
+                    ),
+            )
         }
     }
 }
@@ -420,7 +469,17 @@ private fun CommentsLinkRow(
                 .clearAndSetSemantics { contentDescription = title },
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(text = title, style = MaterialTheme.typography.titleMedium)
+        // Track A (design-match-remaining-screens, 2026-09-04): заголовки секций карточки Title
+        // Detail на макете — 14px/700 (было `titleMedium` — 16px/700), тот же приём, что и
+        // `HeroSectionTitle` в `ReleaseHeaderSection.kt`/секция серий в `ReleaseEpisodesSection.kt`.
+        Text(
+            text = title,
+            style =
+                MaterialTheme.typography.titleSmall.copy(
+                    fontSize = COMMENTS_TITLE_SIZE,
+                    fontWeight = FontWeight.Bold,
+                ),
+        )
         AnixIcon(name = "arrow_forward", contentDescription = null)
     }
 }
@@ -428,4 +487,6 @@ private fun CommentsLinkRow(
 /** См. `ReleaseDetailsViewModel.COMMENTS_PREVIEW_LIMIT` (та же цифра, дублируется намеренно —
  *  экран не должен знать о деталях загрузки, вьюмодель не должна знать о рендере). */
 private val COMMENT_PREVIEW_AVATAR_SIZE = 30.dp
-private const val COMMENT_PREVIEW_BACKGROUND_ALPHA = 0.6f
+private val COMMENT_PREVIEW_BORDER_WIDTH = 1.dp
+private val COMMENT_PREVIEW_TEXT_SIZE = 12.5.sp
+private val COMMENTS_TITLE_SIZE = 14.sp

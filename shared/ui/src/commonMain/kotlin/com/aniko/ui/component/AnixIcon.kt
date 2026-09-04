@@ -1,6 +1,7 @@
 package com.aniko.ui.component
 
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,12 +30,22 @@ import org.jetbrains.compose.resources.Font
  * outline↔filled (напр. выбранная вкладка профиля/таба навигации), `wght`/`GRAD`/`opsz`
  * зафиксированы на значениях мокапа.
  *
- * Размер иконки подстраивается под layout-ограничения, которые доходят до этого composable: если
- * вызывающий код передал `modifier.size(x)` (как делают ~44 места использования по проекту), рамка
- * [BoxWithConstraints] получает фиксированные `x×x`-ограничения и шрифт рисуется этим размером в
- * sp; если ограничений нет (иконка без явного размера, напр. `navigationIcon` в `TopAppBar`),
- * используется [DefaultIconSize] — 24dp, тот же дефолт, что был у M3 `Icon()` для векторов без
- * собственного intrinsic-размера.
+ * Размер иконки: если вызывающий код передал `modifier.size(x)` (как делают ~44 места
+ * использования по проекту), этот размер и используется; иначе — [DefaultIconSize] (24dp), тот
+ * же дефолт, что был у M3 `Icon()` для векторов без собственного intrinsic-размера. Дефолт задаётся
+ * через `modifier.then(Modifier.size(DefaultIconSize))` (тот же порядок, что в исходнике M3
+ * `Icon()` — `defaultSizeFor`) — размер-модификатор caller'а, если он есть, идёт первым (внешним)
+ * и побеждает; наш `size(DefaultIconSize)` — последним (внутренним) и просто сужает то, что
+ * осталось, если caller ничего не передал.
+ *
+ * **Важно, найдено живым запуском на iOS-симуляторе (не видно по коду/detekt/компиляции)**: до
+ * этого фикса размер брался из АМБИЕНТНЫХ constraints `BoxWithConstraints` (что бы ни отдал
+ * родитель) — рабочая гипотеза была, что «bounded constraints = вызывающий код явно запросил
+ * размер». Это неверно: `NavigationBarItem` отдаёт слоту иконки собственные bounded constraints
+ * (область под indicator-пилюлю), НЕ совпадающие с 24dp и не являющиеся намеренным запросом
+ * размера — `AnixIcon` растягивался на них, давая иконки нижней навигации в разы больше макета.
+ * M3 `Icon()` никогда не подстраивался под амбиентные constraints — всегда фиксированный дефолт,
+ * если caller явно не попросил другое; исправление возвращает то же поведение.
  *
  * @param name имя иконки Material Symbols (напр. "home", "arrow_back", "search") — то же имя,
  *   что в референсном мокапе и в ключах [MaterialSymbolsCodepoints.map].
@@ -73,7 +84,11 @@ fun AnixIcon(
             Modifier.clearAndSetSemantics {}
         }
     BoxWithConstraints(
-        modifier = modifier.then(semanticsModifier),
+        // .size(DefaultIconSize) последним: caller'ский modifier (если задаёт свой size) идёт
+        // первым и побеждает — тот же порядок, что defaultSizeFor() в исходнике M3 Icon(). Без
+        // этого фиксированного дефолта размер брался из ambient constraints, которые сюда
+        // прилетают (см. KDoc выше про находку на NavigationBarItem).
+        modifier = modifier.then(semanticsModifier).size(DefaultIconSize),
         contentAlignment = Alignment.Center,
     ) {
         val density = LocalDensity.current

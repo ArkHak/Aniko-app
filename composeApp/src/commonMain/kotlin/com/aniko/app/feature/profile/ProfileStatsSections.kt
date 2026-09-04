@@ -5,9 +5,13 @@
 
 package com.aniko.app.feature.profile
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -19,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -28,16 +33,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.aniko.model.Achievement
 import com.aniko.model.ProfileDetails
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.component.StatTileData
-import com.aniko.ui.component.StatTileRow
 import com.aniko.ui.component.TitleCard
 import com.aniko.ui.component.chart.BarEntry
 import com.aniko.ui.component.chart.ChartSlice
@@ -165,7 +171,7 @@ internal fun AchievementsSection(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
         Text(
             text = strings.profileAchievementsTitle,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = dimens.spaceM),
         )
@@ -212,15 +218,25 @@ private val ACHIEVEMENT_BADGE_SIZE = 56.dp
 private val ACHIEVEMENT_BADGE_WIDTH = 72.dp
 
 /**
- * Сетка статистики на переиспользуемом [StatTileRow] (`:shared:ui`, P6.T9 — переключение с
- * инлайнового кода было явно отложено до этой фазы). Часы просмотра сюда не входят — они
- * в [ProfileHighlights].
+ * Сетка статистики — Track A (точное соответствие макету): мокап рисует ровно 4 плитки в сетке
+ * 2×2 (`padding 14/radius 14/фон w045/бордер w07`, значение 20px/800 Manrope + лейбл 11px t2-60).
+ * Реальных полей у профиля восемь (watching/plan/completed/hold_on/dropped/favorite/friend/
+ * comment) — ни одно не CUT-ано и не спрятано: убрать 4 из 8 значило бы решать судьбу данных
+ * (продуктовое решение), а не только визуальную сверку, которую просит эта фаза. Вместо этого
+ * сохранены все 8 плиток, но раскладка переведена на 2 колонки (ближе к "2×2" мокапа, чем прежние
+ * 4) и получила точный стиль карточки/типографику мокапа.
+ *
+ * Не через [StatTileRow]/[StatTile][com.aniko.ui.component.StatTile]: у того нет слотов под
+ * кастомный контейнер (фон/бордер/radius) и типографику значения/лейбла из мокапа — расширять
+ * публичный API общего компонента ради стиля одного экрана здесь не стали (тот же прецедент, что
+ * `NewEpisodeCard` в `HomeScreen.kt` — см. её KDoc), а [StatTileData] как модель переиспользован.
  */
 @Composable
 internal fun StatsGrid(
     profile: ProfileDetails,
     modifier: Modifier = Modifier,
 ) {
+    val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
     val tiles =
         listOf(
@@ -234,7 +250,46 @@ internal fun StatsGrid(
             StatTileData(profile.commentCount.toString(), strings.profileCommentsLabel),
         )
 
-    StatTileRow(tiles = tiles, modifier = modifier)
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
+        tiles.chunked(STATS_GRID_COLUMNS).forEach { rowTiles ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
+                rowTiles.forEach { tile -> ProfileStatCard(tile = tile, modifier = Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** Одна карточка сетки [StatsGrid] — см. её KDoc про причину не переиспользовать `StatTile`. */
+@Composable
+private fun ProfileStatCard(
+    tile: StatTileData,
+    modifier: Modifier = Modifier,
+) {
+    val colors = AnixThemeTokens.colors
+    val shape = RoundedCornerShape(PROFILE_CARD_RADIUS)
+    val onClick = tile.onClick
+    val clickModifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+
+    Column(
+        modifier =
+            modifier
+                .clip(shape)
+                .background(colors.overlay045, shape)
+                .border(BorderStroke(PROFILE_CARD_BORDER_WIDTH, colors.overlay07), shape)
+                .then(clickModifier)
+                .padding(PROFILE_CARD_PADDING),
+    ) {
+        Text(
+            text = tile.value,
+            style = MaterialTheme.typography.titleLarge.copy(fontSize = STAT_VALUE_FONT_SIZE),
+            fontWeight = FontWeight.ExtraBold,
+        )
+        Text(
+            text = tile.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.textSecondary60,
+        )
+    }
 }
 
 /**
@@ -272,6 +327,19 @@ internal fun ProfileChartsSection(
 /**
  * P9.T8: распределение по 5 спискам + легенда. Полностью пустой профиль (сумма нулевая)
  * обрабатывает сам [DonutChart] — рисует `chartNoData` вместо кольца.
+ *
+ * Track A (точное соответствие макету): карточка `w045`/`w07`/radius14/padding14 вокруг кольца
+ * 88dp/13dp-обводка + легенда СПРАВА (не под кольцом, как раньше) с gap 18dp — заголовок секции
+ * оставлен (в отличие от [StatsGrid] выше, у которого свой собственный заголовок «Watch Stats»,
+ * здесь заголовок про сам донат-график; убирать его не стали, чтобы не менять видимый состав
+ * Expanded-раскладки [ProfileChartsSection], которую эта фаза не трогает). Кольцо рисует
+ * [DonutChart] без встроенной легенды (`legend = false`) — легенду строит сама секция, так как
+ * мокап отделяет лейбл (`text-1` alpha 0.8) от счётчика (жирный, полная непрозрачность), а
+ * встроенная легенда [DonutChart] красит всю строку одним стилем. «Вырез» в центре кольца —
+ * не дырка в Canvas (тот и так рисует только Stroke-дугу, а не залитый сектор), а отдельный
+ * закрашенный `bg-elevated` (`colorScheme.surface`) круг поверх неё через `centerContent` — так
+ * его цвет ОТЛИЧАЕТСЯ от полупрозрачного фона самой карточки (`overlay045`), как в макете, а не
+ * просвечивает его.
  */
 @Composable
 private fun ListsDonutSection(
@@ -279,6 +347,7 @@ private fun ListsDonutSection(
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
     val strings = LocalStrings.current
     val counts =
         listOf(
@@ -288,9 +357,11 @@ private fun ListsDonutSection(
             strings.listStatusOnHold to profile.holdOnCount,
             strings.listStatusDropped to profile.droppedCount,
         )
-    // Подпись сегмента легенды — название списка + число тайтлов в нём.
-    val slices = counts.map { (name, count) -> ChartSlice(label = "$name · $count", value = count.toFloat()) }
+    val slices = counts.map { (name, count) -> ChartSlice(label = name, value = count.toFloat()) }
     val total = counts.sumOf { it.second }
+    val palette = colors.chartSeries
+    val cardShape = RoundedCornerShape(PROFILE_CARD_RADIUS)
+    val holeSize = DONUT_RING_SIZE - DONUT_RING_STROKE * 2
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
         Text(
@@ -298,23 +369,75 @@ private fun ListsDonutSection(
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
         )
-        DonutChart(
-            slices = slices,
-            centerContent = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = total.toString(),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = strings.profileListsChartTotalLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(cardShape)
+                    .background(colors.overlay045, cardShape)
+                    .border(BorderStroke(PROFILE_CARD_BORDER_WIDTH, colors.overlay07), cardShape)
+                    .padding(PROFILE_CARD_PADDING),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(DONUT_LEGEND_GAP),
+        ) {
+            DonutChart(
+                slices = slices,
+                modifier = Modifier.size(DONUT_RING_SIZE),
+                size = DONUT_RING_SIZE,
+                strokeWidth = DONUT_RING_STROKE,
+                legend = false,
+                centerContent = {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(holeSize)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surface),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = total.toString(),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                text = strings.profileListsChartTotalLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                },
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
+                counts.forEachIndexed { index, (name, count) ->
+                    val color = palette[index % palette.size]
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(dimens.spaceXs),
+                    ) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .size(LEGEND_SWATCH_SIZE)
+                                    .background(color, RoundedCornerShape(LEGEND_SWATCH_RADIUS)),
+                        )
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = LEGEND_LABEL_ALPHA),
+                        )
+                        Text(
+                            text = count.toString(),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
-            },
-        )
+            }
+        }
     }
 }
 
@@ -322,6 +445,12 @@ private fun ListsDonutSection(
  * P9.T9: недельный график активности из `watch_dynamics` — срез последних 7 точек по времени
  * (см. [ProfileDetails.recentWatchDynamics]). Подпись столбика — число месяца, как его отдаёт
  * сервер: локали это не касается, календарь пересчитывать не нужно.
+ *
+ * Track A (точное соответствие макету): столбики — accent/primary с альфой 0.8, скругление
+ * сверху 5dp/снизу 2dp, ширина до 20dp, gap 7dp, высота контейнера 64dp, без видимой "подложки"
+ * (`trackColor = Color.Transparent` — в отличие от дефолта [WeeklyBarChart], мокап не рисует
+ * фоновую дорожку под столбиками). Все эти параметры уже существовали или добавлены аддитивно в
+ * [WeeklyBarChart] (см. её KDoc) — сам компонент не переписан, изменился только вызов.
  */
 @Composable
 private fun WeeklyActivitySection(
@@ -341,7 +470,15 @@ private fun WeeklyActivitySection(
         if (points.isEmpty()) {
             Text(text = strings.chartNoData, style = MaterialTheme.typography.bodyMedium)
         } else {
-            WeeklyBarChart(entries = points.map { BarEntry(label = it.day.toString(), value = it.count.toFloat()) })
+            WeeklyBarChart(
+                entries = points.map { BarEntry(label = it.day.toString(), value = it.count.toFloat()) },
+                barColor = MaterialTheme.colorScheme.primary.copy(alpha = ACTIVITY_BAR_ALPHA),
+                trackColor = Color.Transparent,
+                height = ACTIVITY_CHART_HEIGHT,
+                barShape = ACTIVITY_BAR_SHAPE,
+                gap = ACTIVITY_BAR_GAP,
+                maxBarWidth = ACTIVITY_BAR_MAX_WIDTH,
+            )
         }
     }
 }
@@ -367,7 +504,7 @@ internal fun RecentlyWatchedSection(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
         Text(
             text = strings.profileRecentlyWatchedTitle,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = dimens.spaceM),
         )
@@ -390,3 +527,37 @@ internal fun RecentlyWatchedSection(
         }
     }
 }
+
+// Track A (точное соответствие макету, 2026-09-04) — точные px/dp/alpha значения макета без
+// готовых слотов в `AnixDimens`/`anixTypography` (тот же приём, что и `ACHIEVEMENT_BADGE_SIZE`
+// выше/`AVATAR_SIZE` в `ProfileScreen.kt`).
+
+/** [StatsGrid] — сетка карточек. */
+private const val STATS_GRID_COLUMNS = 2
+private val PROFILE_CARD_RADIUS = 14.dp
+private val PROFILE_CARD_PADDING = 14.dp
+private val PROFILE_CARD_BORDER_WIDTH = 1.dp
+private val STAT_VALUE_FONT_SIZE = 20.sp
+
+/** [ListsDonutSection] — кольцо 88dp/13dp-обводка + легенда справа с gap 18dp. */
+private val DONUT_RING_SIZE = 88.dp
+private val DONUT_RING_STROKE = 13.dp
+private val DONUT_LEGEND_GAP = 18.dp
+private val LEGEND_SWATCH_SIZE = 8.dp
+private val LEGEND_SWATCH_RADIUS = 3.dp
+private const val LEGEND_LABEL_ALPHA = 0.8f
+
+/** [WeeklyActivitySection] — accent-столбики альфа 0.8, скругление 5dp сверху/2dp снизу. */
+private const val ACTIVITY_BAR_ALPHA = 0.8f
+private val ACTIVITY_CHART_HEIGHT = 64.dp
+private val ACTIVITY_BAR_GAP = 7.dp
+private val ACTIVITY_BAR_MAX_WIDTH = 20.dp
+private val ACTIVITY_BAR_TOP_RADIUS = 5.dp
+private val ACTIVITY_BAR_BOTTOM_RADIUS = 2.dp
+private val ACTIVITY_BAR_SHAPE =
+    RoundedCornerShape(
+        topStart = ACTIVITY_BAR_TOP_RADIUS,
+        topEnd = ACTIVITY_BAR_TOP_RADIUS,
+        bottomStart = ACTIVITY_BAR_BOTTOM_RADIUS,
+        bottomEnd = ACTIVITY_BAR_BOTTOM_RADIUS,
+    )

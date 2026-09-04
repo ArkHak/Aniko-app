@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -109,7 +110,21 @@ fun PlayerScreen(
         LockLandscapeOrientationEffect()
     }
 
-    Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.PLAYER_SCREEN_ROOT)) {
+    // color = Color.Black: найдено живым запуском на iOS-симуляторе (не видно по коду/detekt/
+    // компиляции) — без явного цвета Surface брал MaterialTheme.colorScheme.surface (после
+    // Track A — светлый в light-теме), а PlayerPillChip/CompactOverlayIconButton/
+    // CompactPlayPauseButton рисуют белый текст/иконки на предположении "плеер всегда на чёрном
+    // фоне", как в макете (`showPlayer` root — `background:#000`, вне зависимости от темы
+    // приложения) — получался невидимый белый текст на белом/светлом фоне под видео.
+    Surface(
+        modifier = modifier.fillMaxSize().testTag(AnixTestTags.PLAYER_SCREEN_ROOT),
+        color = Color.Black,
+        // contentColorFor(Color.Black) не резолвится ни в один слот темы (это не М3-роль) и
+        // молча оставляет прежний ambient LocalContentColor — на светлой теме это тёмный
+        // текст, что дало бы то же самое невидимое сочетание для AnixLoadingBox/AnixErrorBox
+        // (state.isLoading/state.error), только тёмный-на-чёрном вместо белого-на-белом.
+        contentColor = Color.White,
+    ) {
         when {
             state.isLoading -> AnixLoadingBox(modifier = Modifier.fillMaxSize())
 

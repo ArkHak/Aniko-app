@@ -15,6 +15,9 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -24,9 +27,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.navigation.LocalTitleNavigator
 import com.aniko.model.Release
@@ -38,6 +44,7 @@ import com.aniko.ui.component.AnixEmptyState
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.component.ChipRow
+import com.aniko.ui.component.ProgressRow
 import com.aniko.ui.component.ReleaseCard
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
@@ -91,7 +98,13 @@ fun ScheduleScreen(
     val strings = LocalStrings.current
     val windowSize = LocalAnixWindowSize.current
 
-    Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.SCHEDULE_SCREEN_ROOT)) {
+    // Track A (сверка Compact-раскладки, 2026-09-04): дефолтный цвет M3 Surface непрозрачен и
+    // перекрывает корневой радиальный градиент приложения (anixAppBackground()) — Transparent
+    // делает фон/градиент видимым сквозь экран, как в макете.
+    Surface(
+        modifier = modifier.fillMaxSize().testTag(AnixTestTags.SCHEDULE_SCREEN_ROOT),
+        color = Color.Transparent,
+    ) {
         when {
             state.isLoading && state.schedule == null -> AnixLoadingState(modifier = Modifier.fillMaxSize())
 
@@ -136,9 +149,18 @@ private fun ScheduleContent(
         modifier = Modifier.fillMaxSize().padding(vertical = dimens.spaceM),
         verticalArrangement = Arrangement.spacedBy(dimens.spaceM),
     ) {
+        // Track A (сверка Compact-раскладки, 2026-09-04): макет хочет 20sp ExtraBold(800) вместо
+        // дефолтного titleLarge (22sp Bold) — общий заголовок экрана, не специфичен раскладке
+        // дней ниже (Compact/Medium/Expanded различаются только в ScheduleDaysList/
+        // ScheduleColumns), поэтому правится как есть.
         Text(
             text = title,
-            style = MaterialTheme.typography.titleLarge,
+            style =
+                MaterialTheme.typography.titleLarge.copy(
+                    fontSize = 20.sp,
+                    lineHeight = 26.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                ),
             modifier = Modifier.padding(horizontal = dimens.spaceM),
         )
 
@@ -212,6 +234,7 @@ private fun ScheduleDaysList(
     onReleaseClick: (Int) -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
 
     LazyColumn(
         contentPadding = PaddingValues(horizontal = dimens.spaceM, vertical = dimens.spaceS),
@@ -226,11 +249,38 @@ private fun ScheduleDaysList(
             val releases = schedule.releasesOn(day)
             if (releases.isEmpty()) {
                 item(key = "empty_${day.name}") {
-                    AnixEmptyState(message = strings.scheduleEmptyDayMessage, modifier = Modifier.fillMaxWidth())
+                    // Track A (сверка Compact-раскладки, 2026-09-04): AnixEmptyState — тяжёлый
+                    // центрированный компонент с крупным паддингом, задуманный под пустой ЭКРАН
+                    // целиком (см. LibraryScreen). Внутри списка из 7 секций макет хочет простую
+                    // надпись без контейнера/центрирования — AnixEmptyState/её импорт не убраны,
+                    // используются ниже в DayColumn (Medium/Expanded, вне периметра этой правки).
+                    Text(
+                        text = strings.scheduleEmptyDayMessage,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        color = colors.textSecondary45,
+                    )
                 }
             } else {
                 items(releases, key = { release -> "${day.name}_${release.id}" }) { release ->
-                    ReleaseCard(release = release, onClick = { onReleaseClick(release.id) })
+                    // Track A: макет хочет горизонтальную строку (44×44 арт + название + прогресс-
+                    // лейбл в контейнере w045/w07/radius12), а не вертикальную плитку-карточку
+                    // ReleaseCard — заменено на ProgressRow, тот же паттерн, что уже даёт
+                    // LibraryScreen.LibraryRows (см. её KDoc) для строки "Мои списки". У Release
+                    // нет понятия "просмотрено пользователем" на этом экране (это расписание
+                    // ВЫХОДА серий, не прогресс просмотра) — переиспользуем episodesReleased/
+                    // episodesTotal вместо выдумывания нового поля модели, см. KDoc ProgressRow.
+                    ProgressRow(
+                        posterUrl = release.posterUrl,
+                        title = release.title,
+                        watchedEpisodes = release.episodesReleased,
+                        totalEpisodes = release.episodesTotal,
+                        onClick = { onReleaseClick(release.id) },
+                        modifier =
+                            Modifier
+                                .clip(RoundedCornerShape(dimens.cornerM))
+                                .background(colors.overlay045)
+                                .border(1.dp, colors.overlay07, RoundedCornerShape(dimens.cornerM)),
+                    )
                 }
             }
         }
@@ -246,18 +296,23 @@ private fun DaySectionHeader(
     strings: Strings,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
         modifier = Modifier.fillMaxWidth(),
     ) {
+        // Track A (сверка Compact-раскладки, 2026-09-04): макет хочет 11px/700 UPPERCASE t2-60
+        // вместо titleMedium (Manrope 16sp SemiBold). uppercase() без Locale — в common-коде это
+        // единственный доступный вариант (Locale-aware overload — платформенный API), и для
+        // латиницы/кириллицы названий дней недели даёт корректный результат.
         Text(
-            text = day.chipLabel(today, strings),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
+            text = day.chipLabel(today, strings).uppercase(),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
+            color = colors.textSecondary60,
         )
-        HorizontalDivider(modifier = Modifier.weight(1f))
+        HorizontalDivider(modifier = Modifier.weight(1f), thickness = 1.dp, color = colors.overlay08)
     }
 }
 

@@ -1,6 +1,8 @@
 package com.aniko.ui.component
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,6 +26,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.aniko.model.VoiceType
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
@@ -45,6 +48,14 @@ import com.aniko.ui.theme.AnixThemeTokens
  * Заменяет собой прежний плоский [ChipRow] для списка типов озвучки — тот не мог показать
  * состав/счётчики/бейдж одной строкой, а превращать его в чип с многострочным лейблом было бы
  * хуже читаемо, чем отдельный переиспользуемый компонент строки.
+ *
+ * @param accentSelected точное соответствие макету Claude Design (Track A): пикер озвучки плеера
+ * (`AudioPickerOverlay`, `showDubPicker`) подсвечивает выбранную строку акцентным тинтом альфа
+ * `0.14` + бордер альфа `0.5`, а не дефолтным M3 `primaryContainer`/`onPrimaryContainer` — заметно
+ * СВЕТЛЕЕ, чем альфа `0.22` у фильтр-чипов (`ChipRow`/`FilterChip`) в остальном приложении
+ * (Title Detail и т.д.). Сознательно НЕ унифицировано с ними — это два разных визуальных паттерна
+ * "выбрано" по макету. По умолчанию `false` — единственный существовавший вызывающий
+ * (`ReleaseEpisodesSection`) не меняет вид.
  */
 @Composable
 fun VoiceTypeRow(
@@ -53,13 +64,23 @@ fun VoiceTypeRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     sameCastAsName: String? = null,
+    accentSelected: Boolean = false,
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
+    val accent = MaterialTheme.colorScheme.primary
     val containerColor =
-        if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+        when {
+            selected && accentSelected -> accent.copy(alpha = ACCENT_SELECTED_CONTAINER_ALPHA)
+            selected -> MaterialTheme.colorScheme.primaryContainer
+            else -> MaterialTheme.colorScheme.surfaceVariant
+        }
     val contentColor =
-        if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+        when {
+            selected && accentSelected -> MaterialTheme.colorScheme.onSurface
+            selected -> MaterialTheme.colorScheme.onPrimaryContainer
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
     val subtitle = voiceTypeSubtitle(voiceType, sameCastAsName, strings)
     val rowDescription =
         buildString {
@@ -68,14 +89,23 @@ fun VoiceTypeRow(
             voiceType.episodesCount?.let { append(", ").append(strings.releaseEpisodesCount(it)) }
             voiceType.viewCount?.let { append(", ").append(strings.releaseVoiceTypeViewsContentDescription(it)) }
         }
+    val shape = RoundedCornerShape(dimens.cornerM)
 
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(dimens.cornerM))
+                .clip(shape)
                 .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
                 .background(containerColor)
+                .let {
+                    if (selected && accentSelected) {
+                        val borderColor = accent.copy(alpha = ACCENT_SELECTED_BORDER_ALPHA)
+                        it.border(BorderStroke(ACCENT_SELECTED_BORDER_WIDTH, borderColor), shape)
+                    } else {
+                        it
+                    }
+                }
                 .padding(horizontal = dimens.spaceM, vertical = dimens.space12)
                 // Подтверждено на устройстве (Фаза 11, T9): подписи/счётчики строки не сливаются
                 // с кликабельным Row сами по себе — TalkBack фокусировал строку без имени.
@@ -211,3 +241,8 @@ private fun compactSuffix(
 private const val SUBTITLE_ALPHA = 0.7f
 private const val COMPACT_THRESHOLD = 1000
 private const val DECIMAL_SCALE = 10
+
+/** См. KDoc параметра `accentSelected` у [VoiceTypeRow] — точные альфы макета (`showDubPicker`). */
+private const val ACCENT_SELECTED_CONTAINER_ALPHA = 0.14f
+private const val ACCENT_SELECTED_BORDER_ALPHA = 0.5f
+private val ACCENT_SELECTED_BORDER_WIDTH = 1.dp

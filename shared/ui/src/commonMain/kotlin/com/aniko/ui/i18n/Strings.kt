@@ -93,6 +93,11 @@ interface Strings {
     val libraryShuffle: String
     val libraryReverseSort: String
 
+    /** Track A (сверка Compact-раскладки, 2026-09-04): счётчик "N titles" слева в [LibraryToolbar]
+     *  (макет Claude Design) — отдельный от [libraryTabCountFormat] ключ: тот форматирует заголовок
+     *  вкладки ("Смотрю (12)"), этот — отдельную строку тулбара над списком ("12 тайтлов"). */
+    val libraryItemsCountFormat: (count: Int) -> String
+
     // --- Карточка релиза ---
     val releaseInfoYear: String
     val releaseInfoStatus: String
@@ -310,6 +315,14 @@ interface Strings {
 
     // Title Detail (P7.T7-T13)
     val titleDetailWatch: String
+    // Track A (design-match-remaining-screens, 2026-09-04): заголовок блока синопсиса на
+    // phone Compact — раньше текст описания рисовался вообще без подписи (см. журнал ветки).
+    val titleDetailSynopsis: String
+    // Track A: подпись кнопки "Add to list" на phone Compact-шапке, когда релиз ещё не в
+    // списке пользователя ([com.aniko.model.Release.myListStatus] == null) — кнопка открывает то
+    // же самое меню статусов, что раньше рисовалось всегда видимым [ChipRow] (см. KDoc
+    // `HeroAddToListButton` в `ReleaseHeaderSection.kt`).
+    val titleDetailAddToList: String
     val titleDetailScreenshots: String
     val titleDetailSimilar: String
     val titleDetailRecommended: String

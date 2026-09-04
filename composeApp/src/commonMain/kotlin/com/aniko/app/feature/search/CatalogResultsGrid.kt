@@ -113,6 +113,10 @@ private fun CatalogList(
                 release = release,
                 onClick = { onReleaseClick(release.id) },
                 layout = TitleCardLayout.List,
+                // Track A (сверка Compact-раскладки Catalog, 2026-09-04): макет рисует
+                // мета-строку/синопсис под заголовком — `Release.description` уже несёт этот
+                // текст, раньше subtitle сюда не пробрасывался вовсе.
+                subtitle = release.description,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

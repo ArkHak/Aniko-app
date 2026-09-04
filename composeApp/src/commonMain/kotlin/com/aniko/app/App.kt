@@ -553,6 +553,9 @@ private fun NavGraphBuilder.chromeRoutes(
             // wide-экранах навигатор открыл бы тайтл в панели, которой здесь негде отрисоваться
             // (см. KDoc `ProfileScreen.onReleaseClick`) — отсюда всегда полноэкранный маршрут.
             onReleaseClick = { releaseId -> navController.navigate(AnixDestination.ReleaseDetails(releaseId)) },
+            // Track A (точное соответствие макету): ссылка "My Lists →" в шапке профиля ведёт на
+            // тот же маршрут, что и вкладка таб-бара `Library` (см. KDoc `ProfileScreen.onOpenLists`).
+            onOpenLists = { navController.navigate(AnixDestination.Library) },
             themeMode = themeMode,
             onThemeModeChange = themeStore::setThemeMode,
         )
