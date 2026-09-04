@@ -1,5 +1,7 @@
 package com.aniko.app.navigation
 
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import kotlinx.serialization.Serializable
 
 /**
@@ -102,4 +104,34 @@ sealed interface AnixDestination {
     data class ReleaseComments(
         val releaseId: Int,
     ) : AnixDestination
+}
+
+/**
+ * Единственный корректный способ попасть на одну из пяти "корневых" секций таб-бара
+ * ([AnixDestination.Home]/`.Search`/`.Library`/`.Schedule`/`.Profile`) — используется и
+ * `onItemClick` таб-бара (`AnixAppScaffold` в `App.kt`), и быстрыми ссылками с самого Home
+ * (`listSectionRoutes` в `App.kt`: "Открыть: Каталог"/"Расписание"/"Библиотека").
+ *
+ * Найдено живой инструментацией (`println`/`adb logcat` вокруг `navigate()`, воспроизведено
+ * детерминированно на эмуляторе через 2 тапа от чистого старта): раньше три быстрые ссылки на
+ * `HomeScreen` вызывали `navController.navigate(AnixDestination.X)` НАПРЯМУЮ, без опций —
+ * рецепт `popUpTo(startDestinationId) { saveState = true } / launchSingleTop = true /
+ * restoreState = true` был только в `onItemClick` таб-бара. Как только целевая вкладка была
+ * достигнута ОДИН РАЗ в обход этого рецепта (например, тапом по карточке "Открыть: Каталог" на
+ * Home, а не по вкладке "Каталог" таб-бара), последующий `navigate()` с полным рецептом из
+ * `onItemClick` — ЛЮБОЙ, включая тап по "Главная" — превращался в полный no-op: ни
+ * `currentDestination`, ни `currentBackStack` не менялись вообще (залогировано побайтово
+ * идентичными до/после). Это и есть баг "тап по Главная не работает"/"открывает не то" —
+ * `NavController` совместим только с ОДНИМ путём в back stack для каждой корневой секции;
+ * смешение "чистого" `navigate()` и `navigate()` с этим рецептом на одну и ту же секцию ломает
+ * его внутренний учёт `saveState`/`restoreState`. Фикс — маршрутизировать ЛЮБОЙ переход на
+ * корневую секцию через одну и ту же функцию с одним и тем же рецептом, независимо от того, кто
+ * его инициирует — таб-бар или быстрая ссылка с экрана.
+ */
+fun NavHostController.navigateToTabRoot(destination: AnixDestination) {
+    navigate(destination) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
 }

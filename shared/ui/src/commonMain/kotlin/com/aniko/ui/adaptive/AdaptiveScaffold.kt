@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 
 /**
@@ -22,6 +24,18 @@ import androidx.compose.ui.Modifier
  * (bottomBar) — на широком/альбомном окне играющее видео оставалось притиснутым к сайдбару
  * вместо честного fullscreen. `true` по умолчанию — поведение для всех остальных маршрутов
  * не меняется.
+ *
+ * **`movableContentOf` вокруг [content], не прямой вызов.** У этой функции четыре разных места
+ * вызова [content] — по одному на ветку `when (windowSize)` плюс ранний `return` при
+ * `showNavigationChrome == false`. Каждое место вызова — для Compose отдельный узел композиции;
+ * когда `windowSize`/`showNavigationChrome` меняются НА ЛЕТУ (реальный поворот экрана пересекает
+ * границу класса ширины; вход/выход из маршрута плеера переключает `showNavigationChrome`), без
+ * `movableContentOf` Compose разбирал бы и заново строил ВСЁ поддерево внутри [content] (obычно
+ * это целый `NavHost`) — живая проверка поймала это как два одновременно видимых UI плеера и
+ * нерабочие кнопки во время такого перехода: `NavHost` прерывал свой обычный переход между
+ * экранами (crossfade из старого и нового пункта назначения) на середине, потому что сам его
+ * call site физически менялся. `movableContentOf` сохраняет идентичность поддерева при переносе
+ * между этими местами вызова вместо разбора/пересборки.
  */
 @Suppress("LongParameterList") // Публичная сигнатура зафиксирована брифом P5.T5: два слота
 // сайдбара (header/footer), snackbarHost и content — все опциональны с дефолтами, кроме первых
@@ -40,8 +54,10 @@ fun AdaptiveScaffold(
     snackbarHost: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
+    val movableContent = remember { movableContentOf(content) }
+
     if (!showNavigationChrome) {
-        content(PaddingValues())
+        movableContent(PaddingValues())
         return
     }
 
@@ -51,7 +67,7 @@ fun AdaptiveScaffold(
                 modifier = modifier,
                 bottomBar = { AnixNavigationBar(items, selectedItemId, onItemClick) },
                 snackbarHost = snackbarHost,
-            ) { innerPadding -> content(innerPadding) }
+            ) { innerPadding -> movableContent(innerPadding) }
         }
 
         AnixWindowSize.Medium -> {
@@ -60,7 +76,7 @@ fun AdaptiveScaffold(
                 Scaffold(
                     modifier = Modifier.weight(1f),
                     snackbarHost = snackbarHost,
-                ) { innerPadding -> content(innerPadding) }
+                ) { innerPadding -> movableContent(innerPadding) }
             }
         }
 
@@ -76,7 +92,7 @@ fun AdaptiveScaffold(
                 Scaffold(
                     modifier = Modifier.weight(1f),
                     snackbarHost = snackbarHost,
-                ) { innerPadding -> content(innerPadding) }
+                ) { innerPadding -> movableContent(innerPadding) }
             }
         }
     }

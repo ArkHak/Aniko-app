@@ -1,5 +1,7 @@
 package com.aniko.app
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,7 +33,6 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -61,6 +62,7 @@ import com.aniko.app.navigation.DetailPaneStack
 import com.aniko.app.navigation.ListDetailHost
 import com.aniko.app.navigation.LocalTitleNavigator
 import com.aniko.app.navigation.TitleNavigator
+import com.aniko.app.navigation.navigateToTabRoot
 import com.aniko.app.navigation.parseDeepLink
 import com.aniko.app.navigation.rememberDetailPaneStack
 import com.aniko.app.navigation.rememberTitleNavigator
@@ -321,15 +323,7 @@ private fun AnixAppScaffold(
             // Плеер — "поверх" каркаса, см. KDoc `AdaptiveScaffold.showNavigationChrome`.
             showNavigationChrome = backStackEntry?.destination?.hasRoute(AnixDestination.Player::class) != true,
             onItemClick = { item ->
-                val section = AnixSection.valueOf(item.id)
-                navController.navigate(section.destination) {
-                    // Канонический рецепт сохранения состояния табов (скролл, введённый поиск)
-                    // при переключении между секциями — раньше отсутствовал, состояние терялось
-                    // при каждом клике (найдено в журнале Фазы 5, P5.T1).
-                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
-                }
+                navController.navigateToTabRoot(AnixSection.valueOf(item.id).destination)
             },
             sidebarFooter = {
                 AnixLanguagePicker(
@@ -345,7 +339,17 @@ private fun AnixAppScaffold(
                 titleNavigator = titleNavigator,
                 localeStore = localeStore,
                 themeStore = themeStore,
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
+                // `consumeWindowInsets`, не только `padding` — без него `innerPadding` физически
+                // сдвигает контент, но не помечает эти insets как уже потреблённые: экраны со
+                // своим собственным `Scaffold`/`TopAppBar` внутри графа (Settings, Profile,
+                // Comments, Gallery, ReleaseDetails...) заново читают `WindowInsets.safeDrawing` и
+                // отступают от статус-бара ВТОРОЙ раз — снаружи уже есть `.padding(innerPadding)`,
+                // и поверх него их собственный TopAppBar добавляет то же самое (жалоба живой
+                // проверки: "шапка ниже верхней части экрана, как будто лишний отступ"). Тот же
+                // приём уже применён точечно у офлайн-баннера чуть выше по файлу (см. её комментарий
+                // про `onConsumedWindowInsetsChanged` в `Scaffold`) — здесь тот же механизм, но для
+                // всего `AnixNavGraph` целиком.
+                modifier = Modifier.fillMaxSize().padding(innerPadding).consumeWindowInsets(innerPadding),
             )
         }
     }
@@ -424,29 +428,59 @@ private fun AnixNavGraph(
     }
 }
 
-/** Четыре list-секции каркаса (P5.T5) — каждая оборачивается в [ListDetailHost] (P5.T3). */
+/**
+ * Четыре list-секции каркаса (P5.T5) — каждая оборачивается в [ListDetailHost] (P5.T3).
+ *
+ * `enterTransition`/`exitTransition` = `None` на все четыре — иначе действует дефолт самого
+ * `NavHost` (не переопределён нигде в [AnixNavGraph]): `androidx.navigation:navigation-compose`
+ * с версии 2.8 анимирует КАЖДЫЙ `composable()` без явного оверрайда через `fadeIn(tween(700))`/
+ * `fadeOut(tween(700))` (сверено с реальным `NavHost.kt` из sources-jar артефакта
+ * `navigation-compose-android:2.9.7`). Живая проверка на эмуляторе (`dumpsys gfxinfo`) подтвердила
+ * реальный джанк при переключении вкладок (78–100% janky-кадров), но A/B-тест того же перехода с
+ * этими `None` против дефолтного fade НЕ показал измеримой разницы (в пределах шума), а джанк той
+ * же интенсивности воспроизвёлся даже на локальной рекомпозиции без единой навигации — то есть
+ * жалоба "фриз при переключении вкладок", скорее всего, НЕ объясняется полностью этим 700мс-фейдом
+ * (честный вывод расследования, не переоценивать). Оставлено как отдельное валидное улучшение:
+ * bottom-таб-бары по конвенции Material Design (см. Now-in-Android) не анимируют переключение
+ * между вкладками верхнего уровня — мгновенный переход здесь корректен сам по себе, независимо от
+ * того, решает ли он замеченный джанк целиком. Только эти четыре маршрута: `titleDetailRoutes`/
+ * `chromeRoutes` ниже (drill-down на карточку релиза/комментарии/плеер/настройки) сохраняют
+ * дефолтный fade — он уместен для перехода "вглубь", не между вкладками.
+ */
 private fun NavGraphBuilder.listSectionRoutes(
     navController: NavHostController,
     paneStack: DetailPaneStack,
     titleNavigator: TitleNavigator,
 ) {
-    composable<AnixDestination.Home> {
+    composable<AnixDestination.Home>(
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None },
+    ) {
         ListDetailHost(paneStack) {
             HomeScreen(
                 onReleaseClick = titleNavigator::openTitle,
-                onCatalogClick = { navController.navigate(AnixDestination.Search) },
-                onScheduleClick = { navController.navigate(AnixDestination.Schedule) },
-                onLibraryClick = { navController.navigate(AnixDestination.Library) },
+                onCatalogClick = { navController.navigateToTabRoot(AnixDestination.Search) },
+                onScheduleClick = { navController.navigateToTabRoot(AnixDestination.Schedule) },
+                onLibraryClick = { navController.navigateToTabRoot(AnixDestination.Library) },
             )
         }
     }
-    composable<AnixDestination.Search> {
+    composable<AnixDestination.Search>(
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None },
+    ) {
         ListDetailHost(paneStack) { SearchScreen(onReleaseClick = titleNavigator::openTitle) }
     }
-    composable<AnixDestination.Schedule> {
+    composable<AnixDestination.Schedule>(
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None },
+    ) {
         ListDetailHost(paneStack) { ScheduleScreen() }
     }
-    composable<AnixDestination.Library> {
+    composable<AnixDestination.Library>(
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None },
+    ) {
         ListDetailHost(paneStack) { LibraryScreen(onReleaseClick = titleNavigator::openTitle) }
     }
 }
