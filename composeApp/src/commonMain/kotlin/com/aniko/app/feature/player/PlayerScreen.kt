@@ -1,18 +1,27 @@
 package com.aniko.app.feature.player
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.navigation.LocalTitleNavigator
 import com.aniko.model.VideoHost
 import com.aniko.player.EmbedPlayerView
+import com.aniko.player.LockLandscapeOrientationEffect
 import com.aniko.player.PlaybackSource
 import com.aniko.player.rememberEmbedVideoController
 import com.aniko.ui.component.AnixErrorBox
@@ -34,14 +43,27 @@ import org.koin.compose.viewmodel.koinViewModel
  * На Desktop `controller.isSupported == false` — там видео играет в системном браузере, и
  * никакого элемента под нашим контролем нет.
  *
- * **Отсюда единственная развилка платформ на этом экране** — обычный `if` по `isSupported`,
+ * **P13 — компактный режим по умолчанию + переключение на fullscreen.** Сверка с мокапом Claude
+ * Design (`showPlayer`) показала, что референс НЕ полноэкранный: видео закреплено сверху
+ * фиксированной областью, под ним в обычном потоке — метаданные/прогресс/чипы озвучки-скорости,
+ * не в auto-hide оверлее. `isFullscreen` (по умолчанию `false`) переключает между
+ * [CompactPlayerChrome] (chrome компактного режима) и [PlayerOverlay] (старый полноэкранный режим
+ * с авто-скрытием, P8.T3-T5) — **`EmbedPlayerView` вызывается РОВНО ОДИН РАЗ** вне этого
+ * ветвления (см. KDoc [CompactPlayerChrome] про то, почему второй call site оборвал бы
+ * воспроизведение при переключении). `LockLandscapeOrientationEffect()` вызывается, пока
+ * `isFullscreen == true` (см. комментарий у вызова ниже) — принудительно поворачивает устройство
+ * в альбомную ориентацию на Android, на iOS остаётся честным CUT (см. KDoc самой функции).
+ *
+ * **Единственная развилка платформ на этом экране** — обычный `if` по `controller.isSupported`,
  * без `expect/actual`: сам флаг уже разруливает платформу за нас (см. его KDoc).
- * - `isSupported == true` (Android/iOS) → [PlayerOverlay]: назад/PiP/тап-зона play-pause/
- *   прогресс-бар с seek (P8.T3), баннер «следующая серия через Nс» (P8.T4), скорость 1.0–2.0
- *   (P8.T5) и авто-отметка «просмотрено» на подходе к концу серии (P8.T8);
+ * - `isSupported == true` (Android/iOS) → компактный режим по умолчанию + [PlayerOverlay] по
+ *   кнопке "На весь экран": назад/PiP/тап-зона play-pause/прогресс-бар с seek (P8.T3), баннер
+ *   «следующая серия через Nс» (P8.T4), скорость 1.0–2.0 (P8.T5) и авто-отметка «просмотрено» на
+ *   подходе к концу серии (P8.T8);
  * - `isSupported == false` (Desktop) → [PlayerDesktopControls]: только две кнопки, «следующая
  *   серия» и ручная отметка просмотра, потому что позиции воспроизведения там не существует
- *   (P8.T1). Ни прогресс-бара, ни таймера, ни панели скорости — см. KDoc [PlayerDesktopControls].
+ *   (P8.T1). Компактный режим/fullscreen-кнопка на Desktop не показываются вовсе — там и так
+ *   видео играет в системном браузере, а не в этом окне (P8.T1).
  *
  * @param onBack закрыть плеер. Приходит параметром, а не берётся из
  * [com.aniko.app.navigation.LocalTitleNavigator]: `TitleNavigator.back()` на wide-экранах сначала
@@ -53,8 +75,8 @@ import org.koin.compose.viewmodel.koinViewModel
 @Suppress("LongParameterList", "LongMethod") // 4 параметра маршрута задаются `AnixDestination.Player`
 // и схлопнуть их в data-класс нельзя без изменения контракта навигации; остальные три —
 // стандартная тройка экрана (onBack + modifier + viewModel). Тело функции чуть перевалило за лимит
-// после P13.T10 (4 новых параметра `PlayerOverlay` для чипа «Audio») — исчерпывающий `when` по
-// состоянию загрузки плюс развилка Android/iOS-против-Desktop и так не резались на части без
+// после P13.T10/P13 (compact/fullscreen) — исчерпывающий `when` по состоянию загрузки плюс
+// развилка Android/iOS-против-Desktop и режим compact/fullscreen не резались на части без
 // протаскивания половины локальных `val` (`source`, `controller`, `openNextEpisode`) наружу.
 @Composable
 fun PlayerScreen(
@@ -73,6 +95,19 @@ fun PlayerScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = LocalStrings.current
     val navigator = LocalTitleNavigator.current
+    // `state.isFullscreen`, не `remember` здесь — см. KDoc [PlayerUiState.isFullscreen] про то,
+    // почему это состояние обязано жить в ViewModel: реальный поворот экрана нередко пересекает
+    // границу `AnixWindowSize`, из-за чего `AdaptiveScaffold` целиком пересобирает поддерево с
+    // этим экраном и любой `remember` в нём стирается, хотя `Activity` не пересоздаётся.
+    val isFullscreen = state.isFullscreen
+    // Общий на compact/fullscreen пикер озвучки (P13) — см. KDoc [AudioPickerOverlay] про то,
+    // почему состояние здесь, а не внутри [PlayerOverlay].
+    var showAudioPicker by remember { mutableStateOf(false) }
+
+    if (isFullscreen) {
+        // Принудительный поворот в альбомную ориентацию, пока открыт fullscreen (P13).
+        LockLandscapeOrientationEffect()
+    }
 
     Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.PLAYER_SCREEN_ROOT)) {
         when {
@@ -99,27 +134,85 @@ fun PlayerScreen(
                     // не заводим — иначе back вернул бы не на предыдущую серию, а мимо неё.
                     val openNextEpisode = { navigator.openPlayer(releaseId, sourceId, position + 1, host) }
 
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        EmbedPlayerView(
-                            url = source.url,
-                            referer = source.referer,
-                            controller = controller,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        if (controller.isSupported) {
-                            PlayerOverlay(
-                                state = videoState,
+                    if (controller.isSupported) {
+                        // `BoxWithConstraints` (SubcomposeLayout) здесь НЕ подходит — живая
+                        // проверка показала, что её содержимое переставало реагировать на смену
+                        // `isFullscreen` после того, как внутри уже был смонтирован `EmbedPlayerView`
+                        // (AndroidView/WebView): состояние менялось (подтверждено логом в обработчике
+                        // клика), но ветка `if (isFullscreen)` внутри `BoxWithConstraints` продолжала
+                        // видеть старое значение кадр за кадром — похоже на известный класс проблем
+                        // пересборки `SubcomposeLayout` рядом с interop-`AndroidView`. Обычный `Box`
+                        // + ширина экрана из [LocalWindowInfo] вместо `maxWidth`/`maxHeight` эту
+                        // проблему не воспроизводит.
+                        val screenWidth = LocalWindowInfo.current.containerDpSize.width
+                        val screenHeight = LocalWindowInfo.current.containerDpSize.height
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            val targetVideoHeight =
+                                if (isFullscreen) screenHeight else screenWidth / COMPACT_VIDEO_ASPECT_RATIO
+                            // Анимированный переход, а не мгновенный скачок высоты: резкий ресайз
+                            // Android-`WebView` (Chromium) на переходе compact->fullscreen ронял
+                            // системный `libmonochrome_64.so` нативным SIGSEGV на живой проверке
+                            // (эмулятор Pixel_6_Pro_API_33/Android 13) — плавная анимация даёт
+                            // рендереру кадры на промежуточных размерах вместо одного скачка.
+                            val videoHeight by
+                                animateDpAsState(
+                                    targetValue = targetVideoHeight,
+                                    animationSpec = tween(VIDEO_RESIZE_ANIMATION_MS),
+                                    label = "playerVideoHeight",
+                                )
+                            EmbedPlayerView(
+                                url = source.url,
+                                referer = source.referer,
                                 controller = controller,
-                                hasNextEpisode = state.hasNextEpisode,
-                                onBack = onBack,
-                                onNextEpisode = openNextEpisode,
-                                onEpisodeNearEnd = viewModel::markWatchedIfNeeded,
-                                voiceTypes = state.voiceTypes,
-                                currentVoiceType = state.currentVoiceType,
-                                isAudioSwitching = state.isAudioSwitching,
-                                onSelectVoiceType = viewModel::selectVoiceType,
+                                modifier = Modifier.fillMaxWidth().height(videoHeight).align(Alignment.TopStart),
                             )
-                        } else {
+                            if (isFullscreen) {
+                                PlayerOverlay(
+                                    state = videoState,
+                                    controller = controller,
+                                    hasNextEpisode = state.hasNextEpisode,
+                                    onBack = onBack,
+                                    onCollapseFullscreen = { viewModel.setFullscreen(false) },
+                                    onNextEpisode = openNextEpisode,
+                                    onEpisodeNearEnd = viewModel::markWatchedIfNeeded,
+                                    voiceTypes = state.voiceTypes,
+                                    currentVoiceType = state.currentVoiceType,
+                                    onOpenAudioPicker = { showAudioPicker = true },
+                                )
+                            } else {
+                                CompactPlayerChrome(
+                                    videoHeight = videoHeight,
+                                    state = videoState,
+                                    controller = controller,
+                                    onBack = onBack,
+                                    onEnterFullscreen = { viewModel.setFullscreen(true) },
+                                    voiceTypes = state.voiceTypes,
+                                    currentVoiceType = state.currentVoiceType,
+                                    onOpenAudioPicker = { showAudioPicker = true },
+                                )
+                            }
+
+                            if (showAudioPicker) {
+                                AudioPickerOverlay(
+                                    voiceTypes = state.voiceTypes,
+                                    currentVoiceType = state.currentVoiceType,
+                                    isSwitching = state.isAudioSwitching,
+                                    onSelect = { typeId ->
+                                        viewModel.selectVoiceType(typeId)
+                                        showAudioPicker = false
+                                    },
+                                    onDismiss = { showAudioPicker = false },
+                                )
+                            }
+                        }
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            EmbedPlayerView(
+                                url = source.url,
+                                referer = source.referer,
+                                controller = controller,
+                                modifier = Modifier.fillMaxSize(),
+                            )
                             PlayerDesktopControls(
                                 isWatched = state.isWatched,
                                 hasNextEpisode = state.hasNextEpisode,
@@ -138,6 +231,13 @@ fun PlayerScreen(
         }
     }
 }
+
+/** 16:9 — инженерно разумный эквивалент фиксированных 226px видео-области мокапа
+ *  (`Reelwave Prototype.dc.html`, `showPlayer`), см. KDoc [PlayerScreen]. */
+private const val COMPACT_VIDEO_ASPECT_RATIO = 16f / 9f
+
+/** См. KDoc у `animateDpAsState` в [PlayerScreen] — длительность плавного ресайза видео-области. */
+private const val VIDEO_RESIZE_ANIMATION_MS = 300
 
 private fun PlayerError?.toMessage(strings: Strings): String =
     when (this) {

@@ -19,16 +19,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
@@ -53,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
@@ -96,6 +101,9 @@ import kotlinx.coroutines.delay
  * состоянии из оверлея остаётся только кнопка «назад», причём постоянно видимая: на iOS другого
  * способа уйти с экрана нет.
  *
+ * @param onCollapseFullscreen сворачивает обратно в [CompactPlayerLayout] (P13) — отдельная от
+ * [onBack] кнопка в топбаре: `onBack` всегда покидает экран плеера целиком (единственный выход на
+ * iOS без edge-swipe, см. абзац выше), а это — просто смена раскладки без навигации.
  * @param onEpisodeNearEnd вызывается, когда серия подходит к концу — сюда подвешена авто-отметка
  * «просмотрено» (P8.T8). Порог — общий с баннером ([isNearEnd] из `:shared:player`), сознательно
  * один и тот же на обе фичи.
@@ -106,8 +114,9 @@ import kotlinx.coroutines.delay
  * (тот же принцип честного UI, что и у PiP-заглушки, только тут решение — не рисовать вовсе).
  * @param currentVoiceType озвучка текущего источника (`PlayerUiState.currentVoiceType`) — подпись
  * чипа и подсветка выбранной строки в пикере. `null`, пока подбор ещё не завершился.
- * @param isAudioSwitching идёт переключение озвучки — индикатор в пикере ([AudioPickerOverlay]).
- * @param onSelectVoiceType выбор строки в пикере озвучки — уходит в `PlayerViewModel.selectVoiceType`.
+ * @param onOpenAudioPicker тап по чипу «Audio» (P13) — сам [AudioPickerOverlay] здесь больше не
+ * рисуется (см. её KDoc), состояние видимости пикера и выбор строки (`selectVoiceType`) подняты в
+ * [PlayerScreen], один пикер общий для compact- и fullscreen-режимов вместо двух независимых копий.
  */
 @Suppress("LongParameterList", "LongMethod") // Состояние + контроллер + флаг наличия следующей
 // серии + 3 колбэка наружу (назад/следующая/конец серии) + аудио-пикер (список + текущая озвучка +
@@ -121,12 +130,12 @@ fun PlayerOverlay(
     controller: EmbedVideoController,
     hasNextEpisode: Boolean,
     onBack: () -> Unit,
+    onCollapseFullscreen: () -> Unit,
     onNextEpisode: () -> Unit,
     onEpisodeNearEnd: () -> Unit,
     voiceTypes: List<VoiceType> = emptyList(),
     currentVoiceType: VoiceType? = null,
-    isAudioSwitching: Boolean = false,
-    onSelectVoiceType: (Int) -> Unit = {},
+    onOpenAudioPicker: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = AnixThemeTokens.colors
@@ -135,9 +144,6 @@ fun PlayerOverlay(
     // видимость. Именно счётчик, а не timestamp: ключ `LaunchedEffect` должен меняться на
     // каждое взаимодействие, даже если два подряд пришли в одну миллисекунду.
     var interactionTick by remember { mutableIntStateOf(0) }
-    // Пикер озвучки (P13.T10) — свой overlay-слой поверх этого же Box, не отдельный маршрут
-    // (см. KDoc [AudioPickerOverlay]).
-    var showAudioPicker by remember { mutableStateOf(false) }
 
     // Мост реально держит видео. Пока нет — управлять нечем, и оверлей обязан деградировать
     // до одной кнопки «назад», не перехватывая касания (см. KDoc, абзац про перехват).
@@ -181,7 +187,11 @@ fun PlayerOverlay(
             // `|| !bridgeActive` — когда управлять нечем, «назад» висит постоянно: это
             // единственный выход с экрана на iOS.
             AnimatedVisibility(visible = controlsShown || !bridgeActive, enter = fadeIn(), exit = fadeOut()) {
-                PlayerTopBar(onBack = onBack, onInteraction = { interactionTick++ })
+                PlayerTopBar(
+                    onBack = onBack,
+                    onCollapseFullscreen = onCollapseFullscreen,
+                    onInteraction = { interactionTick++ },
+                )
             }
 
             PlayerCenterArea(
@@ -207,31 +217,19 @@ fun PlayerOverlay(
                     currentVoiceType = currentVoiceType,
                     onOpenAudioPicker = {
                         interactionTick++
-                        showAudioPicker = true
+                        onOpenAudioPicker()
                     },
                 )
             }
         }
-
-        if (showAudioPicker) {
-            AudioPickerOverlay(
-                voiceTypes = voiceTypes,
-                currentVoiceType = currentVoiceType,
-                isSwitching = isAudioSwitching,
-                onSelect = { typeId ->
-                    onSelectVoiceType(typeId)
-                    showAudioPicker = false
-                },
-                onDismiss = { showAudioPicker = false },
-            )
-        }
     }
 }
 
-/** Кнопка «назад» + PiP-заглушка (P8.T3). */
+/** Кнопка «назад» + сворачивание из fullscreen (P13) + PiP-заглушка (P8.T3). */
 @Composable
 private fun PlayerTopBar(
     onBack: () -> Unit,
+    onCollapseFullscreen: () -> Unit,
     onInteraction: () -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -249,6 +247,14 @@ private fun PlayerTopBar(
             },
         )
         Spacer(modifier = Modifier.weight(1f))
+        OverlayIconButton(
+            icon = Icons.Filled.FullscreenExit,
+            contentDescription = strings.playerExitFullscreen,
+            onClick = {
+                onInteraction()
+                onCollapseFullscreen()
+            },
+        )
         OverlayIconButton(
             icon = Icons.Outlined.PictureInPictureAlt,
             contentDescription = strings.playerPictureInPicture,
@@ -447,21 +453,26 @@ private fun SubtitlesStatusChip() {
 }
 
 /**
- * Пикер озвучки поверх кадра плеера (P13.T10) — открывается [AudioChip], не отдельный экран или
- * маршрут (как `showDubPicker` в мокапе): полноэкранный скрим с прижатой к низу панелью и списком
+ * Пикер озвучки поверх кадра плеера (P13.T10) — открывается чипом «Audio» ([AudioChip] в
+ * fullscreen-режиме, [PlayerPillChip] в compact), не отдельный экран или маршрут (как
+ * `showDubPicker` в мокапе): полноэкранный скрим с прижатой к низу панелью и списком
  * [VoiceTypeRow] — тем же переиспользуемым компонентом `shared/ui`, что и `VoiceTypeSelector` на
  * Title Detail (`ReleaseEpisodesSection.kt`, P8.T6). Список озвучек — один и тот же API-объект
  * ([VoiceType]) в обоих местах, заводить второй визуальный компонент под него незачем.
+ *
+ * `internal`, не `private` (P13) — состояние видимости (`showAudioPicker`) поднято из
+ * [PlayerOverlay] в [PlayerScreen], один и тот же пикер рисуется поверх ОБОИХ режимов
+ * (compact/fullscreen) вместо двух независимых копий с отдельным состоянием каждая.
  *
  * Без фильтра «Все/Дубляж/Субтитры», который есть на Detail: там он оправдан длинным списком под
  * все сценарии использования экрана тайтла, здесь — лишний слой поверх видео ради списка, который
  * почти всегда короче десяти строк.
  *
- * Тап по скриму закрывает пикер (тот же жест, что открывает/прячет контролы под ним, только
- * пикер физически выше в Z-порядке этого же `Box`, см. вызывающую сторону [PlayerOverlay]).
+ * Тап по скриму закрывает пикер (тот же жест, что открывает/прячет контролы под ним в fullscreen-
+ * режиме, только пикер физически выше в Z-порядке общего `Box` в [PlayerScreen]).
  */
 @Composable
-private fun AudioPickerOverlay(
+internal fun AudioPickerOverlay(
     voiceTypes: List<VoiceType>,
     currentVoiceType: VoiceType?,
     isSwitching: Boolean,
@@ -472,6 +483,12 @@ private fun AudioPickerOverlay(
     val colors = AnixThemeTokens.colors
     val strings = LocalStrings.current
     val sorted = remember(voiceTypes) { voiceTypes.sortedByDescending(VoiceType::pinned) }
+    // Живая проверка нашла: список озвучек у некоторых релизов доходит до 10+ студий, а старая
+    // версия рисовала их обычным `Column.forEach` без ограничения высоты и без скролла — панель
+    // росла выше экрана, верхние строки списка оказывались за его пределами и были физически
+    // недостижимы (жалоба «не видна вся доступная озвучка»). `heightIn(max = ...)` ограничивает
+    // саму панель, `LazyColumn` внутри даёт скролл для того, что не поместилось.
+    val maxSheetHeight = LocalWindowInfo.current.containerDpSize.height * AUDIO_PICKER_MAX_HEIGHT_FRACTION
 
     Box(
         modifier =
@@ -485,6 +502,7 @@ private fun AudioPickerOverlay(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
+                    .heightIn(max = maxSheetHeight)
                     .windowInsetsPadding(WindowInsets.safeDrawing)
                     // Проглатывает тап, чтобы панель не закрывалась сквозь саму себя.
                     .clickableNoIndication {},
@@ -508,8 +526,8 @@ private fun AudioPickerOverlay(
                 if (isSwitching) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
-                    sorted.forEach { type ->
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
+                    items(sorted, key = VoiceType::id) { type ->
                         VoiceTypeRow(
                             voiceType = type,
                             selected = type.id == currentVoiceType?.id,
@@ -521,6 +539,8 @@ private fun AudioPickerOverlay(
         }
     }
 }
+
+private const val AUDIO_PICKER_MAX_HEIGHT_FRACTION = 0.6f
 
 /**
  * P8.T4 — баннер «следующая серия через Nс» с отменой.
@@ -615,9 +635,11 @@ private fun OverlayIconButton(
     }
 }
 
-/** Клик без ripple — на слое поверх видео рябь во весь экран читалась бы как дефект отрисовки. */
+/** Клик без ripple — на слое поверх видео рябь во весь экран читалась бы как дефект отрисовки.
+ *  `internal`, не `private` — переиспользуется [CompactPlayerLayout]/[PlayerPillChip] (тот же
+ *  пакет, тот же принцип: чипы плеера не должны показывать ripple поверх видео). */
 @Composable
-private fun Modifier.clickableNoIndication(onClick: () -> Unit): Modifier {
+internal fun Modifier.clickableNoIndication(onClick: () -> Unit): Modifier {
     val interactionSource = remember { MutableInteractionSource() }
     return clickable(
         interactionSource = interactionSource,
@@ -626,29 +648,32 @@ private fun Modifier.clickableNoIndication(onClick: () -> Unit): Modifier {
     )
 }
 
-/** `1.0` → `1`, `1.25` → `1.25` — без хвостового нуля в целых значениях. */
-private fun Float.formatRate(): String {
+/** `1.0` → `1`, `1.25` → `1.25` — без хвостового нуля в целых значениях. `internal`: переиспользуется
+ *  [CompactPlayerLayout]. */
+internal fun Float.formatRate(): String {
     val text = toString()
     return text.removeSuffix(".0")
 }
 
 /**
  * Скорость приходит обратно от видео как есть (`ratechange`), поэтому сравнение чипа с текущим
- * значением — приблизительное: `2.0f` из DOM может вернуться как `1.9999999`.
+ * значением — приблизительное: `2.0f` из DOM может вернуться как `1.9999999`. `internal`:
+ * переиспользуется [CompactPlayerLayout].
  */
-private fun Float.matches(rate: Float): Boolean {
+internal fun Float.matches(rate: Float): Boolean {
     val diff = this - rate
     return diff > -RATE_EPSILON && diff < RATE_EPSILON
 }
 
 /**
  * Скорость 1.0–2.0 с шагом 0.25 (P8.T5). Больше 2.0 не даём: `playbackRate` выше двух у части
- * хостов уводит звук в неразборчивую кашу, а сам шаг зафиксирован планом.
+ * хостов уводит звук в неразборчивую кашу, а сам шаг зафиксирован планом. `internal`:
+ * переиспользуется [CompactPlayerLayout].
  */
 @Suppress("MagicNumber") // Сами значения скорости и есть содержательные константы — заводить
 // под каждую именованную (`RATE_1_25` и т.п.) было бы шумом ради метрики, тот же случай, что
 // уже разобран в `AnixPalette` (shared/ui, Color.kt) для hex-литералов цвета.
-private val PLAYBACK_RATES = listOf(1f, 1.25f, 1.5f, 1.75f, 2f)
+internal val PLAYBACK_RATES = listOf(1f, 1.25f, 1.5f, 1.75f, 2f)
 
 private const val RATE_EPSILON = 0.01f
 

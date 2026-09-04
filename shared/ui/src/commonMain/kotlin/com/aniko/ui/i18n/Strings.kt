@@ -188,6 +188,11 @@ interface Strings {
     val playerAudioLabel: String
     val playerAudioChipLabel: (name: String) -> String
 
+    // Компактный (не полноэкранный) режим плеера по умолчанию (P13, сверка с мокапом) — кнопка
+    // разворота в старый полноэкранный режим ([playerEnterFullscreen]) и обратно ([playerExitFullscreen]).
+    val playerEnterFullscreen: String
+    val playerExitFullscreen: String
+
     // --- Настройки ---
     // P13.T2 (сверка с мокапом Claude Design): `settingsTitle` — новый ключ, заголовок `TopAppBar`
     // экрана настроек (раньше отдельного заголовка не было — экран был таб-рутом без `TopAppBar`,

@@ -310,7 +310,6 @@ private fun AnixAppScaffold(
         AnixSection.entries.find { section ->
             backStackEntry?.destination?.hierarchy?.any { it.hasRoute(section.destination::class) } == true
         }
-
     val strings = LocalStrings.current
     val navItems = remember(strings) { AnixSection.entries.map { it.toNavItem(strings) } }
     val dimens = AnixThemeTokens.dimens
@@ -319,6 +318,8 @@ private fun AnixAppScaffold(
         AdaptiveScaffold(
             items = navItems,
             selectedItemId = selectedSection?.name,
+            // Плеер — "поверх" каркаса, см. KDoc `AdaptiveScaffold.showNavigationChrome`.
+            showNavigationChrome = backStackEntry?.destination?.hasRoute(AnixDestination.Player::class) != true,
             onItemClick = { item ->
                 val section = AnixSection.valueOf(item.id)
                 navController.navigate(section.destination) {

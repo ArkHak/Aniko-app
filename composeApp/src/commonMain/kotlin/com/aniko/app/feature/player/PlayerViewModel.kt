@@ -34,6 +34,16 @@ import kotlinx.coroutines.launch
  * завершился или для источника не нашлось соответствия.
  * @param isAudioSwitching идёт переключение озвучки — блокирует повторный тап по строке в пикере,
  * пока не разрешится сеть (выбор источника + список серий + резолв ссылки).
+ * @param isFullscreen режим отображения плеера (P13). Живёт здесь, а не в `remember` на
+ * [PlayerScreen] — живая проверка нашла: реальный поворот экрана в альбомную ориентацию нередко
+ * пересекает границу `AnixWindowSize` (Compact/Medium/Expanded), а [com.aniko.ui.adaptive.AdaptiveScaffold]
+ * вызывает свой `content(...)` из ТРЁХ разных call site по одному на каждую ветку — при смене
+ * ветки Compose разбирает и заново строит всё поддерево `content`, включая `NavHost` с этим
+ * экраном, и любой `remember` внутри [PlayerScreen] стирается до значения по умолчанию, хотя сама
+ * `Activity` не пересоздаётся (подтверждено логами: `DisposableEffect` у
+ * `LockLandscapeOrientationEffect` диспозится без единого вызова колбэка сворачивания). ViewModel
+ * же живёт в `ViewModelStore` конкретной `NavBackStackEntry`, которая не зависит от того, через
+ * какую ветку `AdaptiveScaffold` сейчас отрисован `NavHost` — переживает эту перестройку.
  */
 data class PlayerUiState(
     val isLoading: Boolean = true,
@@ -45,6 +55,7 @@ data class PlayerUiState(
     val voiceTypes: List<VoiceType> = emptyList(),
     val currentVoiceType: VoiceType? = null,
     val isAudioSwitching: Boolean = false,
+    val isFullscreen: Boolean = false,
 )
 
 /**
@@ -121,8 +132,15 @@ class PlayerViewModel(
 
         // Озвучка нового источника ещё не известна (её выясняет `resolveCurrentVoiceType` заново
         // по новому `sourceId`) — список типов из прошлого источника переиспользуем как есть,
-        // чтобы пикер не мигал пустым списком при переключении на серию того же релиза.
-        _uiState.value = PlayerUiState(isLoading = true, voiceTypes = _uiState.value.voiceTypes)
+        // чтобы пикер не мигал пустым списком при переключении на серию того же релиза. Так же
+        // переносим `isFullscreen` — `selectVoiceType` вызывает этот же `load()` посреди
+        // воспроизведения в fullscreen, терять режим отображения при смене озвучки не должны.
+        _uiState.value =
+            PlayerUiState(
+                isLoading = true,
+                voiceTypes = _uiState.value.voiceTypes,
+                isFullscreen = _uiState.value.isFullscreen,
+            )
         observeWatched(key)
         viewModelScope.launch {
             try {
@@ -236,6 +254,12 @@ class PlayerViewModel(
             _uiState.update { it.copy(isAudioSwitching = false) }
             load(key.releaseId, newSource.id, matchedPosition, newSource.host)
         }
+    }
+
+    /** P13 — переключатель compact/fullscreen, см. KDoc [PlayerUiState.isFullscreen] про то,
+     *  почему это состояние здесь, а не `remember` на [PlayerScreen]. */
+    fun setFullscreen(value: Boolean) {
+        _uiState.update { it.copy(isFullscreen = value) }
     }
 
     fun retry() {
