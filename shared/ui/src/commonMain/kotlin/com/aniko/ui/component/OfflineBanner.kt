@@ -15,9 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CloudOff
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -84,8 +81,8 @@ fun AnixOfflineBanner(
                         liveRegion = LiveRegionMode.Polite
                     },
         ) {
-            Icon(
-                imageVector = Icons.Outlined.CloudOff,
+            AnixIcon(
+                name = "cloud_off",
                 contentDescription = null,
                 tint = colors.onWarning,
                 modifier = Modifier.size(dimens.spaceL),

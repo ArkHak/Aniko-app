@@ -1,9 +1,12 @@
 package com.aniko.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
 
 /**
  * Корневая тема приложения. Оборачивает Material3 и добавляет собственные токены:
@@ -31,8 +34,18 @@ fun AppTheme(
         MaterialTheme(
             colorScheme = if (darkTheme) AnixDarkColors else AnixLightColors,
             typography = anixTypography(),
-            content = content,
-        )
+        ) {
+            // Корневой фон приложения (Track A, Foundation) — bg-page текущей темы + два
+            // фиксированных радиальных блоба макета, см. KDoc [anixAppBackground]. Единственное
+            // место применения: всё дерево ниже (`content`) — все экраны, все платформы, а не
+            // только Home, потому что `App()` (composeApp/.../App.kt) вызывает [AppTheme] один
+            // раз на самом корне. Дочерние `Scaffold` внутри `AdaptiveScaffold` красят
+            // `containerColor = Color.Transparent`, чтобы не перекрывать этот фон своей
+            // непрозрачной заливкой.
+            Box(modifier = Modifier.fillMaxSize().anixAppBackground()) {
+                content()
+            }
+        }
     }
 }
 

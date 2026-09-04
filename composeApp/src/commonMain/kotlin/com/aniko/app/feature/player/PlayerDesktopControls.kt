@@ -5,19 +5,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.RadioButtonUnchecked
-import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 
@@ -67,10 +63,10 @@ fun PlayerDesktopControls(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedButton(onClick = onToggleWatched) {
-                Icon(
-                    imageVector =
-                        if (isWatched) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                AnixIcon(
+                    name = if (isWatched) "check_circle" else "radio_button_unchecked",
                     contentDescription = null,
+                    filled = isWatched,
                     modifier = Modifier.size(ButtonDefaults.IconSize),
                 )
                 Text(
@@ -80,8 +76,8 @@ fun PlayerDesktopControls(
             }
             if (hasNextEpisode) {
                 Button(onClick = onNextEpisode) {
-                    Icon(
-                        imageVector = Icons.Outlined.SkipNext,
+                    AnixIcon(
+                        name = "skip_next",
                         contentDescription = null,
                         modifier = Modifier.size(ButtonDefaults.IconSize),
                     )

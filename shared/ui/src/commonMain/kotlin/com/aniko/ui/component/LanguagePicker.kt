@@ -3,6 +3,7 @@ package com.aniko.ui.component
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.aniko.ui.i18n.LocalStrings
+import com.aniko.ui.theme.jetBrainsMonoFontFamily
 
 /**
  * Компактный переключатель языка (P5.T9, UI-часть) — используется в Settings и в футере
@@ -13,6 +14,8 @@ import com.aniko.ui.i18n.LocalStrings
  * и сайдбар, и Settings — не только галерея токенов.
  *
  * [currentTag] — `null` означает "следовать системному языку", `"en"`/`"ru"` — явный выбор.
+ * Подпись чипа рисуется JetBrains Mono (макет Claude Design) — единственный вызов `ChipRow` в
+ * проекте с `labelFontFamily` вместо дефолтного шрифта темы.
  */
 @Composable
 fun AnixLanguagePicker(
@@ -33,5 +36,6 @@ fun AnixLanguagePicker(
         },
         onClick = onSelect,
         modifier = modifier,
+        labelFontFamily = jetBrainsMonoFontFamily(),
     )
 }

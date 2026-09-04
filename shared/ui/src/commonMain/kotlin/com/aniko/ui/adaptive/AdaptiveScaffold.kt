@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 
 /**
  * Адаптивный каркас приложения (P5.T5): bottom bar на [AnixWindowSize.Compact], nav rail на
@@ -65,6 +66,11 @@ fun AdaptiveScaffold(
         AnixWindowSize.Compact -> {
             Scaffold(
                 modifier = modifier,
+                // Track A (Foundation): фон-градиент макета рисуется один раз на корне
+                // (`AppTheme`, `Modifier.anixAppBackground()`) — непрозрачный дефолт Scaffold
+                // (`MaterialTheme.colorScheme.background`) перекрывал бы его плашкой сплошного
+                // цвета поверх всей области контента, поэтому здесь он явно прозрачный.
+                containerColor = Color.Transparent,
                 bottomBar = { AnixNavigationBar(items, selectedItemId, onItemClick) },
                 snackbarHost = snackbarHost,
             ) { innerPadding -> movableContent(innerPadding) }
@@ -75,6 +81,7 @@ fun AdaptiveScaffold(
                 AnixNavigationRail(items, selectedItemId, onItemClick)
                 Scaffold(
                     modifier = Modifier.weight(1f),
+                    containerColor = Color.Transparent, // см. комментарий в ветке Compact выше
                     snackbarHost = snackbarHost,
                 ) { innerPadding -> movableContent(innerPadding) }
             }
@@ -91,6 +98,7 @@ fun AdaptiveScaffold(
                 )
                 Scaffold(
                     modifier = Modifier.weight(1f),
+                    containerColor = Color.Transparent, // см. комментарий в ветке Compact выше
                     snackbarHost = snackbarHost,
                 ) { innerPadding -> movableContent(innerPadding) }
             }

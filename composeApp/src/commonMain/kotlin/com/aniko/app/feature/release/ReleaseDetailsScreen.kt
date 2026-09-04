@@ -12,11 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -50,6 +46,7 @@ import com.aniko.model.ReleaseComment
 import com.aniko.model.VideoHost
 import com.aniko.ui.component.AnixAvatar
 import com.aniko.ui.component.AnixErrorState
+import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.share.ShareResult
@@ -169,7 +166,7 @@ private fun ReleaseDetailsTopBar(onBack: () -> Unit) {
                 onClick = onBack,
                 modifier = Modifier.clearAndSetSemantics { contentDescription = strings.backContentDescription },
             ) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                AnixIcon(name = "arrow_back", contentDescription = null)
             }
         },
     )
@@ -424,7 +421,7 @@ private fun CommentsLinkRow(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(text = title, style = MaterialTheme.typography.titleMedium)
-        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+        AnixIcon(name = "arrow_forward", contentDescription = null)
     }
 }
 

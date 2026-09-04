@@ -9,7 +9,6 @@ import com.aniko.model.AnixError
 import com.aniko.model.Release
 import com.aniko.model.WeekDay
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -18,10 +17,18 @@ import kotlin.time.Clock
 /**
  * ViewModel главного экрана под макет (P7.T1/T2, MVI-контракт — см. `HomeContract.kt`).
  *
- * Пять независимых секций: два [Paginator] («Продолжить смотреть»/«Рекомендации», как и раньше,
- * P5.T8) плюс три непагинированные (баннеры/«Обсуждаемое»/«Новые серии», см. [SectionState]) —
- * каждая грузится сама по себе при создании ViewModel (см. `init`), ошибка одной секции не
- * блокирует остальные.
+ * Четыре независимые секции: один [Paginator] («Продолжить смотреть», P5.T8) плюс три
+ * непагинированные (баннеры/«Обсуждаемое» он же «Top This Week»/«Новые серии», см.
+ * [SectionState]) — каждая грузится сама по себе при создании ViewModel (см. `init`), ошибка
+ * одной секции не блокирует остальные.
+ *
+ * Track C (2026-09-04): секция «Рекомендации» (`recommendationsPaginator`) убрана — grep
+ * подтвердил, что `HomeState.recommendations`/`HomeIntent.RetryRecommendations`/
+ * `LoadMoreRecommendations` нигде не читались за пределами Home, так что это мёртвый код, а не
+ * просто отключённый рендер (см. KDoc [HomeState]). `releaseRepository.recommendationsPaginator()`
+ * тоже удалён отдельным коммитом вместе с `.recommendations()`/`.observeRecommendations()`
+ * (`ReleaseRepository`, `shared/data`) — проверено, что без вызывающей стороны и не покрыт
+ * тестами.
  */
 class HomeViewModel(
     private val releaseRepository: ReleaseRepository,
@@ -29,17 +36,13 @@ class HomeViewModel(
     private val clock: Clock,
 ) : BaseViewModel<HomeState, HomeIntent, HomeEffect>(initialState = HomeState()) {
     private val watchingPaginator = releaseRepository.watchingPaginator()
-    private val recommendationsPaginator = releaseRepository.recommendationsPaginator()
 
     init {
-        combine(watchingPaginator.state, recommendationsPaginator.state) { watching, recommendations ->
-            watching to recommendations
-        }.onEach { (watching, recommendations) ->
-            updateState { copy(watching = watching, recommendations = recommendations) }
-        }.launchIn(viewModelScope)
+        watchingPaginator.state
+            .onEach { watching -> updateState { copy(watching = watching) } }
+            .launchIn(viewModelScope)
 
         dispatch(HomeIntent.LoadMoreWatching)
-        dispatch(HomeIntent.LoadMoreRecommendations)
         dispatch(HomeIntent.RetryBanners)
         dispatch(HomeIntent.RetryDiscussing)
         dispatch(HomeIntent.RetryNewEpisodes)
@@ -49,9 +52,6 @@ class HomeViewModel(
         when (intent) {
             HomeIntent.RetryWatching, HomeIntent.LoadMoreWatching ->
                 loadNextAndReportIfMoreFailed(watchingPaginator)
-
-            HomeIntent.RetryRecommendations, HomeIntent.LoadMoreRecommendations ->
-                loadNextAndReportIfMoreFailed(recommendationsPaginator)
 
             HomeIntent.RetryBanners -> loadBanners()
             HomeIntent.RetryDiscussing -> loadDiscussing()
@@ -75,7 +75,7 @@ class HomeViewModel(
     /**
      * `Paginator.loadNext()` при ошибке кладёт её в свой `PagingState.error`, ничего не удаляя
      * из уже загруженных [com.aniko.data.paging.PagingState.items]. Если список к этому моменту
-     * был пуст — ошибка и так видна через `HomeState.watching.error`/`.recommendations.error`.
+     * был пуст — ошибка и так видна через `HomeState.watching.error`.
      * Если список уже непустой — рельса это поле ошибки не показывает никак, поэтому здесь
      * дополнительно шлём [HomeEffect.ShowError] для одноразового уведомления (снекбар).
      */

@@ -122,7 +122,9 @@ private fun BannerSlide(
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
-    val shape = RoundedCornerShape(dimens.corner16)
+    // Track C (2026-09-04): макет задаёт радиус баннера 20dp — это `dimens.cornerL`, не
+    // `.corner16` (16dp), которым баннер был скруглён раньше.
+    val shape = RoundedCornerShape(dimens.cornerL)
 
     Box(
         modifier =
@@ -145,11 +147,19 @@ private fun BannerSlide(
         // Скрим — простой вертикальный градиент (не blur/платформенный эффект, чистый Compose
         // Brush), гарантирует читаемость белого текста поверх произвольного изображения баннера
         // независимо от темы приложения.
+        // Track C (2026-09-04): макет задаёт `transparent 45% → rgba(0,0,0,0.75) 100%` — верхние
+        // 45% высоты остаются полностью прозрачными (не линейная растяжка от 0 до 100%, как было
+        // раньше), затемнение растёт только в нижних 55%, где лежит текст.
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(Brush.verticalGradient(colors = listOf(Color.Transparent, BANNER_SCRIM_COLOR))),
+                    .background(
+                        Brush.verticalGradient(
+                            BANNER_SCRIM_STOP_START to Color.Transparent,
+                            BANNER_SCRIM_STOP_END to BANNER_SCRIM_COLOR,
+                        ),
+                    ),
         )
         Column(modifier = Modifier.align(Alignment.BottomStart).padding(dimens.spaceM)) {
             Text(
@@ -201,6 +211,8 @@ private fun BannerPagerIndicator(
 }
 
 private val BANNER_SCRIM_COLOR = Color.Black.copy(alpha = 0.75f)
+private const val BANNER_SCRIM_STOP_START = 0.45f
+private const val BANNER_SCRIM_STOP_END = 1f
 private const val BANNER_SUBTITLE_ALPHA = 0.85f
 private val INDICATOR_DOT_SIZE = 6.dp
 private val INDICATOR_DOT_SIZE_SELECTED = 8.dp

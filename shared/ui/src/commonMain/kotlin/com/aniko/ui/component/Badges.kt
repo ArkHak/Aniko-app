@@ -8,10 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,9 +50,10 @@ fun RatingBadge(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceXs / DIVISOR_HALF),
     ) {
-        Icon(
-            imageVector = Icons.Filled.Star,
+        AnixIcon(
+            name = "star",
             contentDescription = null,
+            filled = true,
             tint = colors.warning,
             modifier = Modifier.size(dimens.badgeIconSize),
         )
@@ -143,7 +140,7 @@ fun ComingSoonBadge(modifier: Modifier = Modifier) {
 
 /**
  * Кружок-индикатор «в избранном» поверх постера. Перенесено из `ReleaseCard.kt` (была приватная
- * `FavoriteBadge`) и переименовано, чтобы не путаться с `Icons.Filled.Favorite`.
+ * `FavoriteBadge`) и переименовано, чтобы не путаться с иконкой `AnixIcon(name = "favorite")`.
  */
 @Composable
 fun FavoriteIndicatorBadge(modifier: Modifier = Modifier) {
@@ -159,9 +156,10 @@ fun FavoriteIndicatorBadge(modifier: Modifier = Modifier) {
                 .background(colors.posterScrim),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = Icons.Filled.Favorite,
+        AnixIcon(
+            name = "favorite",
             contentDescription = strings.commonFavoriteBadge,
+            filled = true,
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(dimens.badgeIconSize),
         )

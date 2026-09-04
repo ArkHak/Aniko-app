@@ -10,15 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -44,6 +41,7 @@ import com.aniko.model.ProfilePrivacy
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.component.AnixAvatar
 import com.aniko.ui.component.AnixErrorState
+import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.component.AnixThemePicker
 import com.aniko.ui.component.ChipRow
@@ -116,7 +114,7 @@ fun ProfileScreen(
                         onClick = onSettingsClick,
                         modifier = Modifier.clearAndSetSemantics { contentDescription = strings.settingsTitle },
                     ) {
-                        Icon(imageVector = Icons.Filled.Settings, contentDescription = null)
+                        AnixIcon(name = "settings", contentDescription = null, filled = true)
                     }
                 },
             )

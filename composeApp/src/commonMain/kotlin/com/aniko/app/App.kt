@@ -10,17 +10,6 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.outlined.Bookmark
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -244,7 +233,8 @@ private fun AnixSessionGate(
 }
 
 /**
- * [AnixSection] → [AdaptiveNavItem] — лейблы из [LocalStrings], иконки из material-icons-extended.
+ * [AnixSection] → [AdaptiveNavItem] — лейблы из [LocalStrings], иконки — имена Material Symbols
+ * Rounded для [com.aniko.ui.component.AnixIcon] (P13/Track B, было material-icons-extended).
  *
  * P13.T1 (сверка с мокапом Claude Design): иконки и лейблы трёх вкладок сменились —
  * `Search`→`grid_view`/«Каталог» (было `search`/«Поиск», сама Kotlin-константа не переименована,
@@ -254,12 +244,11 @@ private fun AnixSessionGate(
  */
 private fun AnixSection.toNavItem(strings: Strings): AdaptiveNavItem =
     when (this) {
-        AnixSection.Home -> AdaptiveNavItem(name, strings.navHome, Icons.Outlined.Home, Icons.Filled.Home)
-        AnixSection.Search -> AdaptiveNavItem(name, strings.navCatalog, Icons.Outlined.GridView, Icons.Filled.GridView)
-        AnixSection.Library -> AdaptiveNavItem(name, strings.navLibrary, Icons.Outlined.Bookmark, Icons.Filled.Bookmark)
-        AnixSection.Schedule ->
-            AdaptiveNavItem(name, strings.navSchedule, Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth)
-        AnixSection.Profile -> AdaptiveNavItem(name, strings.navProfile, Icons.Outlined.Person, Icons.Filled.Person)
+        AnixSection.Home -> AdaptiveNavItem(name, strings.navHome, "home")
+        AnixSection.Search -> AdaptiveNavItem(name, strings.navCatalog, "grid_view")
+        AnixSection.Library -> AdaptiveNavItem(name, strings.navLibrary, "bookmark")
+        AnixSection.Schedule -> AdaptiveNavItem(name, strings.navSchedule, "calendar_month")
+        AnixSection.Profile -> AdaptiveNavItem(name, strings.navProfile, "person")
     }
 
 /**
@@ -461,7 +450,11 @@ private fun NavGraphBuilder.listSectionRoutes(
                 onReleaseClick = titleNavigator::openTitle,
                 onCatalogClick = { navController.navigateToTabRoot(AnixDestination.Search) },
                 onScheduleClick = { navController.navigateToTabRoot(AnixDestination.Schedule) },
-                onLibraryClick = { navController.navigateToTabRoot(AnixDestination.Library) },
+                // Track C (2026-09-04): в макете плитка "Filters" (была "Library") ведёт в тот же
+                // Catalog, что и "Popular" — не в `AnixDestination.Library` (он остаётся доступен
+                // через нижнюю навигацию, вкладка "Мои списки", просто эта конкретная плитка Home
+                // больше туда не ведёт, см. KDoc `HomeQuickActions`).
+                onFilterClick = { navController.navigateToTabRoot(AnixDestination.Search) },
             )
         }
     }

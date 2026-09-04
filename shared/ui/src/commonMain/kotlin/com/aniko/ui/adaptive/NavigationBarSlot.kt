@@ -1,6 +1,5 @@
 package com.aniko.ui.adaptive
 
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -14,6 +13,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextOverflow
+import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.testing.AnixTestTags
 
 /** Bottom bar на [AnixWindowSize.Compact] — обёртка над M3 `NavigationBar`. */
@@ -30,9 +30,10 @@ internal fun AnixNavigationBar(
                 selected = selected,
                 onClick = { onItemClick(item) },
                 icon = {
-                    Icon(
-                        imageVector = if (selected) item.selectedIcon else item.icon,
+                    AnixIcon(
+                        name = item.icon,
                         contentDescription = item.label,
+                        filled = selected,
                     )
                 },
                 label = {

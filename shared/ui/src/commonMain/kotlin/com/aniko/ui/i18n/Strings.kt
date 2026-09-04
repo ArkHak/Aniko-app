@@ -74,7 +74,6 @@ interface Strings {
 
     // --- Главная ---
     val homeContinueWatching: String
-    val homeRecommendations: String
     val homeSectionLoadError: String
 
     // --- Мои списки ---
@@ -278,21 +277,25 @@ interface Strings {
     // Заведено разом для всех 5 параллельных треков (P7.T1-T13), чтобы не было конфликтов
     // ключей при одновременной работе. Часть строк из мокапа сознательно переиспользует уже
     // существующие ключи выше (не дублируется здесь): "Продолжить смотреть" — [homeContinueWatching]
-    // "Рекомендации"/раздел рекомендаций главного экрана — [homeRecommendations], статус-чипы
-    // каталога (анонс/онгоинг/завершён) — [releaseStatusAnnounce]/[releaseStatusOngoing]/
+    // статус-чипы каталога (анонс/онгоинг/завершён) — [releaseStatusAnnounce]/[releaseStatusOngoing]/
     // [releaseStatusFinished], "Ваша оценка" — [ratingYourScore], 5 подписей списков сообщества
     // на экране Rating ("Смотрят"/"В планах"/"Просмотрено"/"Отложено"/"Брошено") —
     // [listStatusWatching]/[listStatusPlanned]/[listStatusCompleted]/[listStatusOnHold]/
     // [listStatusDropped] (см. `ListStatusStrings.kt` — 4 из 5 совпадают дословно, у Watching
     // русский текст в форме 1-го лица "Смотрю"; так как английский текст "Watching" совпадает
     // 1:1 в обоих контекстах, реюз принят без нового ключа).
-    // Home (P7.T1-T2)
+    // Home (P7.T1-T2). Track C (2026-09-04, точное соответствие макету): [homeQuickActionCatalog]
+    // переименован в [homeQuickActionPopular] ("Popular"/"Популярное"), [homeQuickActionLibrary] —
+    // в [homeQuickActionFilter] ("Filters"/"Фильтры"); [homeSectionDiscussing] переименован в
+    // [homeTopWeek] ("Top This Week"/"Топ недели") — те же данные (`discussing`), новый заголовок
+    // рельсы под макет; [homeRecommendations] (была своя рельса-паджинатор) удалён вместе с
+    // рендером самой рельсы — мёртвый ключ нигде больше не использовался.
     val homeBannerTitle: String
-    val homeQuickActionCatalog: String
+    val homeQuickActionPopular: String
     val homeQuickActionSchedule: String
-    val homeQuickActionLibrary: String
+    val homeQuickActionFilter: String
     val homeQuickActionRandom: String
-    val homeSectionDiscussing: String
+    val homeTopWeek: String
     val homeSectionNewEpisodes: String
 
     // Catalog (P7.T3-T6)

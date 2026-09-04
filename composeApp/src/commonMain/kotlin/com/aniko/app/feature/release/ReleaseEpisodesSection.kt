@@ -3,9 +3,6 @@ package com.aniko.app.feature.release
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
-import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -15,7 +12,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import com.aniko.model.Episode
 import com.aniko.model.EpisodeSource
@@ -221,7 +217,7 @@ private fun sourceLabel(
  * (ассетов логотипов хостов в проекте нет). [VideoHost.UNKNOWN] честно деградирует до нейтральной
  * иконки-вопроса, а не показывает случайный/неверный значок (см. задание про баг `fromKey`).
  */
-private fun sourceIcon(source: EpisodeSource): ImageVector =
-    if (source.host == VideoHost.UNKNOWN) Icons.AutoMirrored.Outlined.HelpOutline else Icons.Outlined.PlayCircleOutline
+private fun sourceIcon(source: EpisodeSource): String =
+    if (source.host == VideoHost.UNKNOWN) "help" else "play_circle"
 
 private const val SECTION_LABEL_ALPHA = 0.6f

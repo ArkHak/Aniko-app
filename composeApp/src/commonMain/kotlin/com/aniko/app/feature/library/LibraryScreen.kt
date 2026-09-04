@@ -14,12 +14,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +45,7 @@ import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.component.AnixEmptyBox
 import com.aniko.ui.component.AnixErrorBox
+import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.component.ListStatusChip
 import com.aniko.ui.component.ListStatusChipStyle
@@ -390,9 +387,10 @@ private fun LibraryToolbar(
             enabled = itemCount > 1,
             modifier = Modifier.clearAndSetSemantics { contentDescription = strings.libraryShuffle },
         ) {
-            Icon(
-                imageVector = Icons.Filled.Shuffle,
+            AnixIcon(
+                name = "shuffle",
                 contentDescription = null,
+                filled = true,
                 tint = if (isShuffled) MaterialTheme.colorScheme.primary else LocalContentColor.current,
             )
         }
@@ -401,9 +399,10 @@ private fun LibraryToolbar(
                 onClick = onReverseClick,
                 modifier = Modifier.clearAndSetSemantics { contentDescription = strings.libraryReverseSort },
             ) {
-                Icon(
-                    imageVector = Icons.Filled.SwapVert,
+                AnixIcon(
+                    name = "swap_vert",
                     contentDescription = null,
+                    filled = true,
                     tint = if (isReversed) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                 )
             }

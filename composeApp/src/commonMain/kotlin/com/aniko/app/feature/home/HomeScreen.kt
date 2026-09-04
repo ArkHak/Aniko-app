@@ -1,5 +1,8 @@
 package com.aniko.app.feature.home
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,20 +10,26 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.mvi.CollectEffects
 import com.aniko.app.ui.toContentState
 import com.aniko.model.AnixError
 import com.aniko.model.InterestingBanner
+import com.aniko.model.Release
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.component.AnixContentState
@@ -34,12 +43,17 @@ import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * Главный экран под макет (P7.T1/T2): баннер-карусель топ-тайтлов, 4 плитки быстрых действий,
- * «Продолжить смотреть» (список прогресса, [ContinueWatchingSection]), «Рекомендации»,
- * «Обсуждаемое» (замена CUT «Top This Week», см. P0.T3), «Новые серии» (LOC-секция из
- * расписания). Единый скроллящийся `LazyColumn`, контент ограничен
- * [com.aniko.ui.theme.AnixDimens.contentMaxWidth] и центрирован на wide-экранах (P7.T2).
+ * «Продолжить смотреть» (список прогресса, [ContinueWatchingSection]), «Top This Week» (Track C,
+ * 2026-09-04: секция «Обсуждаемое»/`discussing`, заменившая CUT «Top This Week» ещё в P0.T3,
+ * теперь получила и заголовок макета — данные те же, `POST discover/discussing`), «Новые серии»
+ * (LOC-секция из расписания). «Рекомендации» (`recommendations`-рельса) с Home убрана — в макете
+ * между «Продолжить смотреть» и «Новые серии» только ОДИН рельс, не два. Инфраструктура
+ * `recommendations` в контракте/ViewModel удалена целиком, не только рендер (см. KDoc
+ * `HomeContract.HomeState`/`HomeViewModel`). Единый скроллящийся
+ * `LazyColumn`, контент ограничен [com.aniko.ui.theme.AnixDimens.contentMaxWidth] и центрирован
+ * на wide-экранах (P7.T2).
  *
- * Навигационные колбэки на плитки быстрых действий Catalog/Schedule/Library — опциональные
+ * Навигационные колбэки на плитки быстрых действий Catalog/Schedule/Filters — опциональные
  * (дефолт `{}`): координатор фазы подключает реальную навигацию в `App.kt` без правки этой
  * сигнатуры (вне территории трека A этой фазы). «Случайный тайтл» — исключение: загрузка и
  * переход обрабатываются самой ViewModel (`HomeIntent.OpenRandomRelease` ->
@@ -53,7 +67,7 @@ fun HomeScreen(
     onReleaseClick: (Int) -> Unit = {},
     onCatalogClick: () -> Unit = {},
     onScheduleClick: () -> Unit = {},
-    onLibraryClick: () -> Unit = {},
+    onFilterClick: () -> Unit = {},
     viewModel: HomeViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -79,7 +93,7 @@ fun HomeScreen(
         onReleaseClick = onReleaseClick,
         onCatalogClick = onCatalogClick,
         onScheduleClick = onScheduleClick,
-        onLibraryClick = onLibraryClick,
+        onFilterClick = onFilterClick,
     )
 }
 
@@ -93,13 +107,20 @@ private fun HomeContent(
     onReleaseClick: (Int) -> Unit,
     onCatalogClick: () -> Unit,
     onScheduleClick: () -> Unit,
-    onLibraryClick: () -> Unit,
+    onFilterClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
 
-    Surface(modifier = modifier.fillMaxSize().testTag(AnixTestTags.HOME_SCREEN_ROOT)) {
+    // Track C (2026-09-04): Home больше не рисует свой непрозрачный фон — фоновый радиальный
+    // градиент уже применён на корне приложения (`AppTheme.kt`, Track A), непрозрачный `Surface`
+    // здесь перекрыл бы его. `containerColor` по умолчанию у `Surface` — `MaterialTheme.
+    // colorScheme.surface` (непрозрачный), поэтому явно задаём `Color.Transparent`.
+    Surface(
+        color = Color.Transparent,
+        modifier = modifier.fillMaxSize().testTag(AnixTestTags.HOME_SCREEN_ROOT),
+    ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().widthIn(max = dimens.contentMaxWidth),
@@ -114,7 +135,7 @@ private fun HomeContent(
                         onBannerRetry = { viewModel.dispatch(HomeIntent.RetryBanners) },
                         onCatalogClick = onCatalogClick,
                         onScheduleClick = onScheduleClick,
-                        onLibraryClick = onLibraryClick,
+                        onFilterClick = onFilterClick,
                         onRandomClick = { viewModel.dispatch(HomeIntent.OpenRandomRelease) },
                     )
                 }
@@ -135,11 +156,21 @@ private fun HomeContent(
 }
 
 /**
- * «Рекомендации»/«Обсуждаемое»/«Новые серии» — вынесено из [HomeContent] отдельной
- * `LazyListScope`-функцией (detekt `LongMethod`), не `@Composable`: `item { }` сам несёт
- * composable-лямбду, обёртка над ним им быть не обязана.
+ * «Top This Week»/«Новые серии» — вынесено из [HomeContent] отдельной `LazyListScope`-функцией
+ * (detekt `LongMethod`), не `@Composable`: `item { }` сам несёт composable-лямбду, обёртка над
+ * ним им быть не обязана.
+ *
+ * Track C (2026-09-04): рельса «Рекомендации» (`state.recommendations`) здесь больше не
+ * рендерится — макет показывает между «Продолжить смотреть» и «Новые серии» только ОДИН рельс.
+ * `HomeState.recommendations`/`HomeIntent.RetryRecommendations`/`LoadMoreRecommendations` и сам
+ * `recommendationsPaginator` в `HomeViewModel` удалены целиком (мёртвый код — grep подтвердил,
+ * что ничего за пределами Home их не читало, см. `HomeContract.kt`/`HomeViewModel.kt`).
+ * `ReleaseRepository.recommendationsPaginator()`/`.recommendations()`/`.observeRecommendations()`
+ * в `shared/data` тоже удалены отдельным коммитом после проверки (без вызывающей стороны, не
+ * покрыты тестами) — `ReleaseApi.discoverRecommendations()` оставлен, документирует реальный
+ * эндпоинт API, не привязан к конкретному экрану.
  */
-@Suppress("LongParameterList") // Координирующий блок: 3 секции × (состояние + retry) + общие зависимости.
+@Suppress("LongParameterList") // Координирующий блок: 2 секции × (состояние + retry) + общие зависимости.
 private fun LazyListScope.homeRailItems(
     state: HomeState,
     windowSize: AnixWindowSize,
@@ -147,23 +178,11 @@ private fun LazyListScope.homeRailItems(
     viewModel: HomeViewModel,
     onReleaseClick: (Int) -> Unit,
 ) {
-    item(key = "home_recommendations") {
+    item(key = "home_top_week") {
         HorizontalPosterRail(
-            title = strings.homeRecommendations,
-            state = state.recommendations.toContentState { it.toHomeMessage(strings) },
-            key = { it.id },
-            onRetry = { viewModel.dispatch(HomeIntent.RetryRecommendations) },
-            onLoadMore = { viewModel.dispatch(HomeIntent.LoadMoreRecommendations) },
-            windowSize = windowSize,
-            // P13.T7: на Expanded — сетка вместо горизонтального скролла (мокап Claude Design
-            // рисует Home на десктопе сетками, не рельсами), см. KDoc [HorizontalPosterRail].
-            gridOnExpanded = true,
-        ) { release -> TitleCard(release = release, onClick = { onReleaseClick(release.id) }) }
-    }
-
-    item(key = "home_discussing") {
-        HorizontalPosterRail(
-            title = strings.homeSectionDiscussing,
+            // Данные не изменились — тот же `discussing` (`POST discover/discussing`, замена CUT
+            // «Top This Week» из аудита P0.T3), меняется только заголовок под текст макета.
+            title = strings.homeTopWeek,
             state = state.discussing.toContentState { it.toHomeMessage(strings) },
             key = { it.id },
             onRetry = { viewModel.dispatch(HomeIntent.RetryDiscussing) },
@@ -180,11 +199,44 @@ private fun LazyListScope.homeRailItems(
             onRetry = { viewModel.dispatch(HomeIntent.RetryNewEpisodes) },
             windowSize = windowSize,
             gridOnExpanded = true,
-        ) { release ->
-            TitleCard(release = release, onClick = { onReleaseClick(release.id) }, isNewEpisode = true)
-        }
+        ) { release -> NewEpisodeCard(release = release, onClick = { onReleaseClick(release.id) }) }
     }
 }
+
+/**
+ * Карточка «Новые серии» (Track C, 2026-09-04) — та же [TitleCard], что и у остальных рельс Home,
+ * но с собственным контейнером под макет: `background: var(--w045)` + `border: 1px solid
+ * var(--w07)` (`AnixColors.overlay045`/`.overlay07`, Track A) вместо прежней плоской заливки
+ * `surfaceVariant`, которой тут вообще не было — рельса «Новые серии» рисовала голые
+ * [TitleCard] без контейнера. `TitleCard.kt` (shared/ui) вне файлов Трека C этой фазы, поэтому
+ * контейнер оборачивает карточку здесь, а не меняет сам компонент — статус-лейбл "новая серия"
+ * (`NewEpisodeBadge`, `colors.newEpisode` = secondary/accent2) не тронут по той же причине: смена
+ * его цвета на accent/primary затронула бы все остальные экраны, использующие `TitleCard`
+ * (Library/Catalog/Schedule), а не только Home.
+ */
+@Composable
+private fun NewEpisodeCard(
+    release: Release,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
+    val shape = RoundedCornerShape(dimens.cornerM)
+
+    Box(
+        modifier =
+            modifier
+                .clip(shape)
+                .background(colors.overlay045, shape)
+                .border(BorderStroke(NEW_EPISODE_BORDER_WIDTH, colors.overlay07), shape)
+                .padding(dimens.spaceXs),
+    ) {
+        TitleCard(release = release, onClick = onClick, isNewEpisode = true)
+    }
+}
+
+private val NEW_EPISODE_BORDER_WIDTH = 1.dp
 
 /**
  * Верх экрана — баннер + плитки быстрых действий. Раскладка по [windowSize] (P7.T2):
@@ -201,7 +253,7 @@ private fun HomeHeroSection(
     onBannerRetry: () -> Unit,
     onCatalogClick: () -> Unit,
     onScheduleClick: () -> Unit,
-    onLibraryClick: () -> Unit,
+    onFilterClick: () -> Unit,
     onRandomClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -222,7 +274,7 @@ private fun HomeHeroSection(
                 windowSize = windowSize,
                 onCatalogClick = onCatalogClick,
                 onScheduleClick = onScheduleClick,
-                onLibraryClick = onLibraryClick,
+                onFilterClick = onFilterClick,
                 onRandomClick = onRandomClick,
                 modifier = Modifier.weight(EXPANDED_TILES_WEIGHT),
             )
@@ -234,7 +286,7 @@ private fun HomeHeroSection(
                 windowSize = windowSize,
                 onCatalogClick = onCatalogClick,
                 onScheduleClick = onScheduleClick,
-                onLibraryClick = onLibraryClick,
+                onFilterClick = onFilterClick,
                 onRandomClick = onRandomClick,
             )
         }

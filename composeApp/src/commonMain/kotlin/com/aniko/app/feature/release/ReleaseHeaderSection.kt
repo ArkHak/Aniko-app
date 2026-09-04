@@ -18,15 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -46,6 +40,7 @@ import com.aniko.model.Release
 import com.aniko.model.ReleaseDetails
 import com.aniko.model.ReleaseStatus
 import com.aniko.ui.component.AnixErrorState
+import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixPoster
 import com.aniko.ui.component.ChipRow
 import com.aniko.ui.i18n.LocalStrings
@@ -198,7 +193,7 @@ private fun WatchAndFavoriteRow(
                     strokeWidth = PLAY_SPINNER_STROKE,
                 )
             } else {
-                Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null)
+                AnixIcon(name = "play_arrow", contentDescription = null, filled = true)
             }
             Text(
                 text = strings.titleDetailWatch,
@@ -218,9 +213,10 @@ private fun WatchAndFavoriteRow(
                 onClick = onToggleFavorite,
                 modifier = Modifier.clearAndSetSemantics { contentDescription = favoriteDescription },
             ) {
-                Icon(
-                    imageVector = if (release.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                AnixIcon(
+                    name = "favorite",
                     contentDescription = null,
+                    filled = release.isFavorite,
                     tint =
                         if (release.isFavorite) {
                             MaterialTheme.colorScheme.error
@@ -233,9 +229,10 @@ private fun WatchAndFavoriteRow(
                 onClick = onShareClick,
                 modifier = Modifier.clearAndSetSemantics { contentDescription = strings.shareButtonContentDescription },
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Share,
+                AnixIcon(
+                    name = "share",
                     contentDescription = null,
+                    filled = true,
                 )
             }
             ChipRow(

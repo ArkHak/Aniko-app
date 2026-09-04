@@ -12,8 +12,6 @@ package com.aniko.database.cache
 object CacheKeys {
     fun watching(page: Int): String = "watching:$page"
 
-    fun recommendations(page: Int): String = "recommendations:$page"
-
     fun myList(
         statusApiValue: Int,
         page: Int,

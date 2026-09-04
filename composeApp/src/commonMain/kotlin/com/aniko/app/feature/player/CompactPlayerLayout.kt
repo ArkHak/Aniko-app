@@ -18,12 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.Dp
@@ -40,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.aniko.model.VoiceType
 import com.aniko.player.EmbedVideoController
 import com.aniko.player.EmbedVideoState
+import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 
@@ -130,13 +124,14 @@ private fun BoxScope.CompactVideoOverlay(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CompactOverlayIconButton(
-                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                iconName = "arrow_back",
                 contentDescription = strings.backContentDescription,
                 onClick = onBack,
             )
             Spacer(modifier = Modifier.weight(1f))
             CompactOverlayIconButton(
-                icon = Icons.Filled.Fullscreen,
+                iconName = "fullscreen",
+                filled = true,
                 contentDescription = strings.playerEnterFullscreen,
                 onClick = onEnterFullscreen,
             )
@@ -146,8 +141,9 @@ private fun BoxScope.CompactVideoOverlay(
             onClick = { controller.togglePlayPause() },
             modifier = Modifier.align(Alignment.Center).size(dimens.minTouchTarget * PLAY_BUTTON_SCALE),
         ) {
-            Icon(
-                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+            AnixIcon(
+                name = if (isPlaying) "pause" else "play_arrow",
+                filled = true,
                 contentDescription = if (isPlaying) strings.playerPause else strings.playerPlay,
                 tint = Color.White,
                 modifier = Modifier.size(dimens.minTouchTarget),
@@ -256,9 +252,10 @@ internal fun PlayerPillChip(
 
 @Composable
 private fun CompactOverlayIconButton(
-    icon: ImageVector,
+    iconName: String,
     contentDescription: String,
     onClick: () -> Unit,
+    filled: Boolean = false,
 ) {
     val dimens = AnixThemeTokens.dimens
     IconButton(
@@ -268,7 +265,7 @@ private fun CompactOverlayIconButton(
                 .size(dimens.minTouchTarget)
                 .clearAndSetSemantics { this.contentDescription = contentDescription },
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = Color.White)
+        AnixIcon(name = iconName, contentDescription = null, filled = filled, tint = Color.White)
     }
 }
 

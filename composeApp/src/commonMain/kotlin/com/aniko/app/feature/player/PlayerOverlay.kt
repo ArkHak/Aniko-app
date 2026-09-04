@@ -28,18 +28,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -56,7 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -69,6 +58,7 @@ import com.aniko.player.EmbedVideoState
 import com.aniko.player.isEpisodeFinished
 import com.aniko.player.isNearEnd
 import com.aniko.player.secondsToEpisodeEnd
+import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.VoiceTypeRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
@@ -239,7 +229,7 @@ private fun PlayerTopBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         OverlayIconButton(
-            icon = Icons.AutoMirrored.Filled.ArrowBack,
+            iconName = "arrow_back",
             contentDescription = strings.backContentDescription,
             onClick = {
                 onInteraction()
@@ -248,7 +238,8 @@ private fun PlayerTopBar(
         )
         Spacer(modifier = Modifier.weight(1f))
         OverlayIconButton(
-            icon = Icons.Filled.FullscreenExit,
+            iconName = "fullscreen_exit",
+            filled = true,
             contentDescription = strings.playerExitFullscreen,
             onClick = {
                 onInteraction()
@@ -256,7 +247,7 @@ private fun PlayerTopBar(
             },
         )
         OverlayIconButton(
-            icon = Icons.Outlined.PictureInPictureAlt,
+            iconName = "picture_in_picture_alt",
             contentDescription = strings.playerPictureInPicture,
             // P8.T3 просит только разместить кнопку; сам режим «картинка в картинке» — это
             // P10.T8 (Фаза 10), где он и делается платформенно (Android PiP / iOS AVPictureIn-
@@ -315,7 +306,8 @@ private fun PlayerCenterControls(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         OverlayIconButton(
-            icon = Icons.Filled.Replay10,
+            iconName = "replay_10",
+            filled = true,
             contentDescription = strings.playerSeekBackward,
             onClick = {
                 onInteraction()
@@ -323,7 +315,8 @@ private fun PlayerCenterControls(
             },
         )
         OverlayIconButton(
-            icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+            iconName = if (isPlaying) "pause" else "play_arrow",
+            filled = true,
             contentDescription = if (isPlaying) strings.playerPause else strings.playerPlay,
             iconSize = PLAY_BUTTON_ICON_SIZE,
             onClick = {
@@ -332,7 +325,8 @@ private fun PlayerCenterControls(
             },
         )
         OverlayIconButton(
-            icon = Icons.Filled.Forward10,
+            iconName = "forward_10",
+            filled = true,
             contentDescription = strings.playerSeekForward,
             onClick = {
                 onInteraction()
@@ -520,7 +514,7 @@ internal fun AudioPickerOverlay(
                         modifier = Modifier.weight(1f),
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Filled.Close, contentDescription = strings.closeContentDescription)
+                        AnixIcon(name = "close", contentDescription = strings.closeContentDescription, filled = true)
                     }
                 }
                 if (isSwitching) {
@@ -607,9 +601,10 @@ private fun NextEpisodeBanner(
 /** Кнопка-иконка оверлея: белая на кадре видео (см. [OVERLAY_CONTENT_COLOR]). */
 @Composable
 private fun OverlayIconButton(
-    icon: ImageVector,
+    iconName: String,
     contentDescription: String,
     onClick: () -> Unit,
+    filled: Boolean = false,
     iconSize: Dp = DEFAULT_ICON_SIZE,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -626,9 +621,10 @@ private fun OverlayIconButton(
                 .size(maxOf(dimens.minTouchTarget, iconSize + dimens.spaceM))
                 .clearAndSetSemantics { this.contentDescription = buttonDescription },
     ) {
-        Icon(
-            imageVector = icon,
+        AnixIcon(
+            name = iconName,
             contentDescription = null,
+            filled = filled,
             tint = OVERLAY_CONTENT_COLOR,
             modifier = Modifier.size(iconSize),
         )

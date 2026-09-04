@@ -7,10 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -21,6 +17,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 
@@ -69,8 +66,8 @@ fun RatingHistogram(
 
 /**
  * Ряд из 5 кликабельных звёзд для ввода личной оценки (Фаза 6, P6.T11). Каждая звезда —
- * `Icons.Filled.Star` (закрашена, если её порядковый номер не больше [myRating]) либо
- * `Icons.Outlined.Star` (не закрашена, включая случай `myRating == null`).
+ * `AnixIcon(name = "star", filled = true)` (закрашена, если её порядковый номер не больше
+ * [myRating]) либо `filled = false` (не закрашена, включая случай `myRating == null`).
  *
  * Каждая звезда обёрнута в `Modifier.defaultMinSize(minTouchTarget, minTouchTarget)` — сама
  * иконка визуально меньше токена, но интерактивная область — не меньше минимального тач-таргета
@@ -115,9 +112,10 @@ fun RatingInput(
                             },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = if (filled) Icons.Filled.Star else Icons.Outlined.Star,
+                    AnixIcon(
+                        name = "star",
                         contentDescription = null,
+                        filled = filled,
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }

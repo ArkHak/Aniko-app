@@ -11,8 +11,10 @@ import aniko.shared.ui.generated.resources.inter_bold
 import aniko.shared.ui.generated.resources.inter_medium
 import aniko.shared.ui.generated.resources.inter_regular
 import aniko.shared.ui.generated.resources.inter_semibold
+import aniko.shared.ui.generated.resources.jetbrains_mono_medium
 import aniko.shared.ui.generated.resources.manrope_bold
 import aniko.shared.ui.generated.resources.manrope_extrabold
+import aniko.shared.ui.generated.resources.manrope_medium
 import aniko.shared.ui.generated.resources.manrope_semibold
 import org.jetbrains.compose.resources.Font
 
@@ -21,13 +23,13 @@ import org.jetbrains.compose.resources.Font
  * Оба семейства — открытые шрифты Google Fonts (лицензия OFL), с полной поддержкой кириллицы
  * (см. `shared/ui/licenses/OFL-Manrope.txt` / `OFL-Inter.txt`).
  *
- * Веса, для которых нет отдельного статического файла (например, Manrope Medium/Regular),
- * сознательно не подключены — используем только те веса, что перечислены в плане
- * (Manrope 600/700/800, Inter 400–700).
+ * Manrope Medium (500) — статический инстанс, извлечённый из переменного шрифта под точное
+ * соответствие макету Claude Design (Track A, финал).
  */
 @Composable
 internal fun manropeFontFamily(): FontFamily =
     FontFamily(
+        Font(Res.font.manrope_medium, weight = FontWeight.Medium),
         Font(Res.font.manrope_semibold, weight = FontWeight.SemiBold),
         Font(Res.font.manrope_bold, weight = FontWeight.Bold),
         Font(Res.font.manrope_extrabold, weight = FontWeight.ExtraBold),
@@ -41,6 +43,24 @@ internal fun interFontFamily(): FontFamily =
         Font(Res.font.inter_semibold, weight = FontWeight.SemiBold),
         Font(Res.font.inter_bold, weight = FontWeight.Bold),
     )
+
+/**
+ * JetBrains Mono Medium (500) — используется точечно там, где макет Claude Design требует
+ * моноширинный текст, сейчас это подпись выбранного языка в [com.aniko.ui.component.
+ * AnixLanguagePicker] (`shared/ui/src/commonMain/kotlin/com/aniko/ui/component/ChipRow.kt`,
+ * параметр `labelFontFamily`).
+ *
+ * Подсказка клавиш плеера на desktop, упомянутая в более раннем варианте этого KDoc
+ * (`space · pause — ←/→ · seek — ↑/↓ · volume`), в текущем коде не существует: `PlayerScreen.kt`/
+ * `PlayerDesktopControls.kt` такого текста не рисуют — на Desktop видео играет в системном
+ * браузере (см. KDoc [com.aniko.app.feature.player.PlayerDesktopControls], P8.T1), у приложения
+ * нет обработчика клавиатуры для плеера вовсе (`onKeyEvent`/`onPreviewKeyEvent` нигде не
+ * используется). Подключать сюда эту подсказку не стали — это отдельная фича (обработка клавиш +
+ * новый UI-элемент), а не подключение уже существующего шрифта.
+ */
+@Composable
+internal fun jetBrainsMonoFontFamily(): FontFamily =
+    FontFamily(Font(Res.font.jetbrains_mono_medium, weight = FontWeight.Medium))
 
 /**
  * Один стиль текста: пара (fontSize, lineHeight) в sp + вес + межбуквенный интервал.

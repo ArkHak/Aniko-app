@@ -60,11 +60,6 @@ class ReleaseRepository(
 
     suspend fun watching(page: Int): Paged<Release> = releaseApi.discoverWatching(page).toDomain { it.toDomain() }
 
-    suspend fun recommendations(
-        page: Int,
-        previousPage: Int = 0,
-    ): Paged<Release> = releaseApi.discoverRecommendations(page, previousPage).toDomain { it.toDomain() }
-
     /** `search/releases/{page}` — см. `SearchApi` про сверенную вживую форму ответа. */
     suspend fun search(
         query: String,
@@ -82,22 +77,6 @@ class ReleaseRepository(
 
     /** Готовый пагинатор для экрана «Продолжить смотреть». */
     fun watchingPaginator(): Paginator<Release> = Paginator { page -> watching(page) }
-
-    /**
-     * Готовый пагинатор для секции рекомендаций на главном экране.
-     *
-     * Раньше всегда слал `previous_page = 0` независимо от того, какая страница была загружена
-     * предыдущей — `Paginator` не знает про параметр `previousPage`, специфичный только для
-     * этого эндпоинта, поэтому счётчик ведётся здесь, в замыкании, а не в общем классе.
-     */
-    fun recommendationsPaginator(): Paginator<Release> {
-        var lastPage = 0
-        return Paginator { page ->
-            val result = recommendations(page, previousPage = lastPage)
-            lastPage = page
-            result
-        }
-    }
 
     /** Готовый пагинатор для экрана поиска — новый на каждый поисковый запрос. */
     fun searchPaginator(query: String): Paginator<Release> = Paginator { page -> search(query, page) }
@@ -167,20 +146,6 @@ class ReleaseRepository(
             stampAt = { releaseListStore.fetchedAt(key) },
             policy = CachePolicy.CatalogListing,
             refresh = { persistPagedReleases(key, watching(page), stores, clock.now()) },
-            clock = clock,
-        )
-    }
-
-    fun observeRecommendations(
-        page: Int,
-        previousPage: Int = 0,
-    ): Flow<Cached<Paged<Release>>> {
-        val key = CacheKeys.recommendations(page)
-        return cacheFirstFlow(
-            local = hydratePagedIds(releaseListStore.observePage(key), releaseCacheStore),
-            stampAt = { releaseListStore.fetchedAt(key) },
-            policy = CachePolicy.CatalogListing,
-            refresh = { persistPagedReleases(key, recommendations(page, previousPage), stores, clock.now()) },
             clock = clock,
         )
     }

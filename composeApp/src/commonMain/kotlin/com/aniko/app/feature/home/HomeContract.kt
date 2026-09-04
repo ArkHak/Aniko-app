@@ -21,17 +21,28 @@ data class SectionState<T>(
 )
 
 /**
- * Состояние главного экрана под макет (P7.T1/T2): пагинированные секции («Продолжить смотреть»,
- * «Рекомендации») хранятся как есть в [PagingState] соответствующего `Paginator`, непагинированные
- * — в [SectionState].
+ * Состояние главного экрана под макет (P7.T1/T2): пагинированная секция «Продолжить смотреть»
+ * хранится как есть в [PagingState] соответствующего `Paginator`, непагинированные — в
+ * [SectionState].
+ *
+ * Track C (2026-09-04): секция «Рекомендации» (была тоже [PagingState], `recommendationsPaginator`)
+ * убрана целиком — макет показывает между «Продолжить смотреть» и «Новые серии» только ОДИН
+ * рельс («Top This Week», см. [discussing]), а grep по репозиторию подтвердил: `HomeState.
+ * recommendations`/`HomeIntent.RetryRecommendations`/`LoadMoreRecommendations` не читались нигде
+ * за пределами `feature/home` — мёртвый код, безопасно удалить, а не просто перестать рендерить.
+ * `ReleaseRepository.recommendations()`/`.recommendationsPaginator()`/`.observeRecommendations()`
+ * (`shared/data`) и `CacheKeys.recommendations()` (`shared/database`) — тоже удалены отдельным
+ * коммитом после проверки: без вызывающей стороны в приложении, не покрыты тестами, не часть
+ * внешнего API (модуль `shared/data` используется только этим приложением). Низкоуровневый
+ * `ReleaseApi.discoverRecommendations()` (`shared/data/api`) оставлен — документирует реальный
+ * эндпоинт Anixart API, не привязан к конкретному экрану.
  */
 data class HomeState(
     val watching: PagingState<Release> = PagingState(),
-    val recommendations: PagingState<Release> = PagingState(),
     /** Баннер-карусель топ-тайтлов — `discover/interesting`, без пагинации. */
     val banners: SectionState<InterestingBanner> = SectionState(),
-    /** «Обсуждаемое» (замена CUT «Top This Week», см. P0.T3) — `discover/discussing`,
-     *  фиксированный набор без пагинации. */
+    /** «Top This Week» (заголовок макета; данные — `discussing`, замена CUT «Top This Week»,
+     *  см. P0.T3) — `discover/discussing`, фиксированный набор без пагинации. */
     val discussing: SectionState<Release> = SectionState(),
     /**
      * «Новые серии» — LOC-секция (глобального фида новых серий в API нет, см. аудит P0.T3):
@@ -52,11 +63,7 @@ data class HomeState(
 sealed interface HomeIntent : UiIntent {
     data object RetryWatching : HomeIntent
 
-    data object RetryRecommendations : HomeIntent
-
     data object LoadMoreWatching : HomeIntent
-
-    data object LoadMoreRecommendations : HomeIntent
 
     data object RetryBanners : HomeIntent
 
@@ -71,7 +78,7 @@ sealed interface HomeIntent : UiIntent {
 
 /**
  * Ошибка первой/повторной загрузки секции (список ещё пуст) уже видна через
- * `state.watching.error`/`state.recommendations.error`/`state.banners.error`/... — экран рисует
+ * `state.watching.error`/`state.banners.error`/`state.discussing.error`/... — экран рисует
  * по этому полю состояние ошибки на месте всей секции, эффект тут не нужен.
  *
  * [ShowError] — про другой случай: неудачная подгрузка СЛЕДУЮЩЕЙ страницы пагинированной секции,
