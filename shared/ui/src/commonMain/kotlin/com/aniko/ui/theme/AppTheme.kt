@@ -2,6 +2,7 @@ package com.aniko.ui.theme
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -42,8 +43,16 @@ fun AppTheme(
             // раз на самом корне. Дочерние `Scaffold` внутри `AdaptiveScaffold` красят
             // `containerColor = Color.Transparent`, чтобы не перекрывать этот фон своей
             // непрозрачной заливкой.
-            Box(modifier = Modifier.fillMaxSize().anixAppBackground()) {
-                content()
+            // 2026-09-08 (баг тёмной темы «не видно текст тайтлов»): где-то в контенте
+            // LocalContentColor деградировал в тёмный (вероятно, contentColorFor(Transparent) у
+            // Scaffold-обёрток) — текст по умолчанию (заголовки карточек/строк без явного color)
+            // рисовался тёмным на тёмном. Явно пиним контентный цвет на onSurface текущей схемы
+            // для всего дерева приложения (проверено пиксельно: до — 0 белых пикселей в зоне
+            // тайтлов, после — белые глифы на месте).
+            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                Box(modifier = Modifier.fillMaxSize().anixAppBackground()) {
+                    content()
+                }
             }
         }
     }
