@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.mvi.CollectEffects
 import com.aniko.app.ui.toContentState
@@ -312,9 +313,10 @@ private fun HomeHeroSection(
 private fun <T> SectionState<T>.toContentState(errorMessage: (AnixError) -> String): AnixContentState<T> =
     AnixContentState(items = items, isLoading = isLoading, errorMessage = error?.let(errorMessage))
 
-/** Бренд + приветствие по времени суток (мобильный макет Claude Design, phone-артборд 2026-09-08:
- * Home открывается строкой «Aniko» и крупным «Good evening»). Только Compact — см. HomeContent.
- * Время — через expect/actual [currentHour] (без kotlinx-datetime, см. KDoc [HomeClock.kt]). */
+/** Бренд + приветствие по времени суток (мобильный макет Claude Design, phone-артборд 2026-09-08,
+ * размеры/цвета сверены по CSS обеих тем): бренд — крупная строка 19px/800 цвета текста, под ним
+ * мелкое (13px/400) серое приветствие. Только Compact — см. HomeContent. Время — через
+ * expect/actual [currentHour] (без kotlinx-datetime, см. KDoc [HomeClock.kt]). */
 @Composable
 private fun HomeGreetingHeader() {
     val dimens = AnixThemeTokens.dimens
@@ -332,21 +334,27 @@ private fun HomeGreetingHeader() {
         Text(
             text = "Aniko", // бренд, не переводится (как notificationGenericTitle)
             style =
-                MaterialTheme.typography.labelLarge.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                ),
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            text = greeting,
-            style =
-                MaterialTheme.typography.headlineMedium.copy(
+                MaterialTheme.typography.titleLarge.copy(
+                    fontSize = HOME_HEADER_BRAND_FONT_SIZE,
                     fontWeight = FontWeight.ExtraBold,
                 ),
             color = MaterialTheme.colorScheme.onSurface,
         )
+        Text(
+            text = greeting,
+            style =
+                MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = HOME_HEADER_GREETING_FONT_SIZE,
+                    fontWeight = FontWeight.Normal,
+                ),
+            color = AnixThemeTokens.colors.textSecondary60,
+        )
     }
 }
+
+// Размеры заголовка Home из CSS макета (light и dark одинаковы): бренд 19px/800, greeting 13px/400.
+private val HOME_HEADER_BRAND_FONT_SIZE = 19.sp
+private val HOME_HEADER_GREETING_FONT_SIZE = 13.sp
 
 /** См. KDoc `AnixError` — только `Network`/`Unauthorized` получают специфичный текст, остальное
  *  падает на общий `homeSectionLoadError` (как и раньше вело себя `HomeScreen`, до P7.T1). */

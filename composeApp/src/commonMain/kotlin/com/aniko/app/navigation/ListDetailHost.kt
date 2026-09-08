@@ -21,8 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.aniko.app.feature.comments.ReleaseCommentsScreen
 import com.aniko.app.feature.release.ReleaseDetailsScreen
-import com.aniko.ui.adaptive.AnixWindowSize
-import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.adaptive.rememberListPanePreferredWidth
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
@@ -77,13 +75,11 @@ fun ListDetailHost(
 ) {
     val top = paneStack.top
 
-    // 2026-09-08 (сверка с макетом Claude Design): панели list-detail теперь только на Medium.
-    // Desktop (Expanded) в макете полноширинный — списки на всю ширину контента, тайтл открывается
-    // полноэкранным маршрутом (sidebar остаётся), постоянной пустой правой панели нет. Поэтому
-    // на Expanded (и Compact) хост рендерит только listPane без ListDetailPaneScaffold; сам
-    // TitleNavigator на Expanded тоже ходит маршрутом (см. AnixAppScaffold в App.kt), так что
-    // `top` здесь всегда null вне Medium.
-    val panesEnabled = LocalAnixWindowSize.current == AnixWindowSize.Medium
+    // 2026-09-08 (макет Claude Design, tablet-артборд): панелей list-detail нет ни на одном
+    // размере окна (Medium/Expanded — контент на всю ширину, тайтл — полноэкранный маршрут;
+    // Compact — маршрут всегда). Хост рендерит только listPane; pane-код ниже остаётся
+    // скомпилированным (неактивен) — удаление отдельной чисткой, см. журнал плана.
+    val panesEnabled = false
     if (!panesEnabled) {
         listPane()
         return

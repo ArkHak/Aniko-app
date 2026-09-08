@@ -61,7 +61,6 @@ import com.aniko.data.sync.SyncCoordinator
 import com.aniko.data.theme.ThemeStore
 import com.aniko.ui.adaptive.AdaptiveNavItem
 import com.aniko.ui.adaptive.AdaptiveScaffold
-import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.adaptive.rememberAnixWindowSize
 import com.aniko.ui.component.AnixLoadingBox
@@ -265,11 +264,13 @@ private fun AnixAppScaffold(
 ) {
     val navController = rememberNavController()
     val paneStack = rememberDetailPaneStack()
-    val windowSize = LocalAnixWindowSize.current
-    // 2026-09-08 (макет Claude Design): панели list-detail живут только на Medium. На Expanded
-    // (Desktop) списки полноширинные, открытие тайтла — полноэкранный маршрут (см. ListDetailHost);
-    // на Compact — всегда маршрут. Та же граница используется для миграции открытых тайтлов ниже.
-    val panesEnabled = windowSize == AnixWindowSize.Medium
+    // 2026-09-08 (макет Claude Design, tablet-артборд): панелей list-detail нет ни на одном
+    // размере — и на планшете контент занимает всю ширину, тайтл открывается полноэкранным
+    // маршрутом. pane-механика (DetailPaneStack/migrate) остаётся в коде неактивной
+    // (компилируется, ранний возврат в ListDetailHost), удаление — отдельной чисткой
+    // (см. журнал плана). Окна Medium/Expanded при этом сохраняют «таблетные» раскладки экранов
+    // (isTwoPane остаётся true на Medium — колонки Schedule/грид Library и т.п.).
+    val panesEnabled = false
     val titleNavigator = rememberTitleNavigator(navController, paneStack, isTwoPane = { panesEnabled })
 
     LaunchedEffect(titleNavigator, onBackHandlerReady) {
@@ -279,9 +280,9 @@ private fun AnixAppScaffold(
     // Миграция открытого тайтла между маршрутом (compact) и панелью (wide) при смене размера окна
     // (P5.T3 — найдено ревью: без этого шага пользователь "терял" бы открытую карточку релиза при
     // изменении размера окна, т.к. NavController и DetailPaneStack — два независимых источника
-    // состояния без моста между ними). Реализация — см. [migratePaneRoutes] ниже. Граница —
-    // panesEnabled (Medium), см. выше: ресайз Compact↔Medium↔Expanded мигрирует открытый тайтл
-    // между панелью и полноэкранным маршрутом на каждом пересечении.
+    // состояния без моста между ними). Реализация — см. [migratePaneRoutes] ниже. С 2026-09-08
+    // panesEnabled = false на всех размерах (макет: панелей нет) — вызов остаётся no-op для
+    // сохранения контракта, удаляется вместе с pane-кодом отдельной чисткой.
     LaunchedEffect(panesEnabled) {
         migratePaneRoutes(navController, paneStack, isTwoPane = panesEnabled)
     }
