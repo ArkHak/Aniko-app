@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,14 +14,19 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.mvi.CollectEffects
@@ -127,9 +131,17 @@ private fun HomeContent(
                 contentPadding = PaddingValues(vertical = dimens.spaceM),
                 verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
             ) {
+                // Мобильный макет Claude Design (2026-09-08): на телефоне Home открывается
+                // брендом + приветствием по времени суток; на Medium/Expanded заголовка нет
+                // (десктопный/планшетный артборд начинается сразу с баннера).
+                if (windowSize == AnixWindowSize.Compact) {
+                    item(key = "home_greeting_header") {
+                        HomeGreetingHeader()
+                    }
+                }
+
                 item(key = "home_hero") {
                     HomeHeroSection(
-                        windowSize = windowSize,
                         bannerState = state.banners.toContentState { it.toHomeMessage(strings) },
                         onBannerClick = onReleaseClick,
                         onBannerRetry = { viewModel.dispatch(HomeIntent.RetryBanners) },
@@ -149,7 +161,15 @@ private fun HomeContent(
                     )
                 }
 
-                homeRailItems(state, windowSize, strings, viewModel, onReleaseClick)
+                val railPosterWidth = if (windowSize.isTwoPane) dimens.posterWidthL else dimens.posterWidth
+                homeRailItems(
+                    state = state,
+                    windowSize = windowSize,
+                    strings = strings,
+                    viewModel = viewModel,
+                    onReleaseClick = onReleaseClick,
+                    posterWidth = railPosterWidth,
+                )
             }
         }
     }
@@ -177,6 +197,7 @@ private fun LazyListScope.homeRailItems(
     strings: Strings,
     viewModel: HomeViewModel,
     onReleaseClick: (Int) -> Unit,
+    posterWidth: Dp,
 ) {
     item(key = "home_top_week") {
         HorizontalPosterRail(
@@ -188,7 +209,13 @@ private fun LazyListScope.homeRailItems(
             onRetry = { viewModel.dispatch(HomeIntent.RetryDiscussing) },
             windowSize = windowSize,
             gridOnExpanded = true,
-        ) { release -> TitleCard(release = release, onClick = { onReleaseClick(release.id) }) }
+        ) { release ->
+            TitleCard(
+                release = release,
+                onClick = { onReleaseClick(release.id) },
+                posterWidth = posterWidth,
+            )
+        }
     }
 
     item(key = "home_new_episodes") {
@@ -199,7 +226,13 @@ private fun LazyListScope.homeRailItems(
             onRetry = { viewModel.dispatch(HomeIntent.RetryNewEpisodes) },
             windowSize = windowSize,
             gridOnExpanded = true,
-        ) { release -> NewEpisodeCard(release = release, onClick = { onReleaseClick(release.id) }) }
+        ) { release ->
+            NewEpisodeCard(
+                release = release,
+                onClick = { onReleaseClick(release.id) },
+                posterWidth = posterWidth,
+            )
+        }
     }
 }
 
@@ -219,6 +252,7 @@ private fun NewEpisodeCard(
     release: Release,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    posterWidth: Dp? = null,
 ) {
     val dimens = AnixThemeTokens.dimens
     val colors = AnixThemeTokens.colors
@@ -232,22 +266,22 @@ private fun NewEpisodeCard(
                 .border(BorderStroke(NEW_EPISODE_BORDER_WIDTH, colors.overlay07), shape)
                 .padding(dimens.spaceXs),
     ) {
-        TitleCard(release = release, onClick = onClick, isNewEpisode = true)
+        TitleCard(release = release, onClick = onClick, isNewEpisode = true, posterWidth = posterWidth)
     }
 }
 
 private val NEW_EPISODE_BORDER_WIDTH = 1.dp
 
 /**
- * Верх экрана — баннер + плитки быстрых действий. Раскладка по [windowSize] (P7.T2):
- * Compact/Medium — колонкой (баннер во всю ширину, плитки под ним), Expanded — один `Row`
- * (баннер : плитки ≈ 2:1) — весь блок уже ограничен [AnixDimens.contentMaxWidth] родительским
- * `LazyColumn`, см. [HomeScreen].
+ * Верх экрана — баннер + плитки быстрых действий. Раскладка по size class:
+ * Compact/Medium — колонкой (баннер во всю ширину, плитки под ним); Expanded (Desktop) — только
+ * баннер на всю ширину, плитки скрыты: в макете Claude Design desktop-артборд Home не содержит
+ * quick actions (сверка 2026-09-08, «убрать» по решению пользователя) — секции идут сразу за
+ * баннером. Плитки остаются на Compact/Medium (мобильный/таблетный макет их показывает).
  */
 @Suppress("LongParameterList") // Координирующий блок: состояние баннера + 4 колбэка плиток + 2 колбэка баннера.
 @Composable
 private fun HomeHeroSection(
-    windowSize: AnixWindowSize,
     bannerState: AnixContentState<InterestingBanner>,
     onBannerClick: (Int) -> Unit,
     onBannerRetry: () -> Unit,
@@ -258,32 +292,12 @@ private fun HomeHeroSection(
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val windowSize = LocalAnixWindowSize.current
 
-    if (windowSize == AnixWindowSize.Expanded) {
-        Row(
-            modifier = modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(dimens.spaceM),
-        ) {
-            HomeBanner(
-                state = bannerState,
-                onBannerClick = onBannerClick,
-                onRetry = onBannerRetry,
-                modifier = Modifier.weight(EXPANDED_BANNER_WEIGHT),
-            )
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceM)) {
+        HomeBanner(state = bannerState, onBannerClick = onBannerClick, onRetry = onBannerRetry)
+        if (windowSize != AnixWindowSize.Expanded) {
             HomeQuickActions(
-                windowSize = windowSize,
-                onCatalogClick = onCatalogClick,
-                onScheduleClick = onScheduleClick,
-                onFilterClick = onFilterClick,
-                onRandomClick = onRandomClick,
-                modifier = Modifier.weight(EXPANDED_TILES_WEIGHT),
-            )
-        }
-    } else {
-        Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceM)) {
-            HomeBanner(state = bannerState, onBannerClick = onBannerClick, onRetry = onBannerRetry)
-            HomeQuickActions(
-                windowSize = windowSize,
                 onCatalogClick = onCatalogClick,
                 onScheduleClick = onScheduleClick,
                 onFilterClick = onFilterClick,
@@ -298,6 +312,42 @@ private fun HomeHeroSection(
 private fun <T> SectionState<T>.toContentState(errorMessage: (AnixError) -> String): AnixContentState<T> =
     AnixContentState(items = items, isLoading = isLoading, errorMessage = error?.let(errorMessage))
 
+/** Бренд + приветствие по времени суток (мобильный макет Claude Design, phone-артборд 2026-09-08:
+ * Home открывается строкой «Aniko» и крупным «Good evening»). Только Compact — см. HomeContent.
+ * Время — через expect/actual [currentHour] (без kotlinx-datetime, см. KDoc [HomeClock.kt]). */
+@Composable
+private fun HomeGreetingHeader() {
+    val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
+    val hour = remember { currentHour() }
+    val greeting =
+        when {
+            hour >= GREETING_EVENING_START_HOUR -> strings.homeGreetingEvening
+            hour >= GREETING_DAY_START_HOUR -> strings.homeGreetingDay
+            hour >= GREETING_MORNING_START_HOUR -> strings.homeGreetingMorning
+            else -> strings.homeGreetingNight
+        }
+
+    Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
+        Text(
+            text = "Aniko", // бренд, не переводится (как notificationGenericTitle)
+            style =
+                MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                ),
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = greeting,
+            style =
+                MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                ),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
 /** См. KDoc `AnixError` — только `Network`/`Unauthorized` получают специфичный текст, остальное
  *  падает на общий `homeSectionLoadError` (как и раньше вело себя `HomeScreen`, до P7.T1). */
 internal fun AnixError.toHomeMessage(strings: Strings): String =
@@ -307,5 +357,7 @@ internal fun AnixError.toHomeMessage(strings: Strings): String =
         else -> strings.homeSectionLoadError
     }
 
-private const val EXPANDED_BANNER_WEIGHT = 2f
-private const val EXPANDED_TILES_WEIGHT = 1f
+/** Границы часовых интервалов приветствия Home по времени суток. */
+private const val GREETING_MORNING_START_HOUR = 5
+private const val GREETING_DAY_START_HOUR = 12
+private const val GREETING_EVENING_START_HOUR = 17

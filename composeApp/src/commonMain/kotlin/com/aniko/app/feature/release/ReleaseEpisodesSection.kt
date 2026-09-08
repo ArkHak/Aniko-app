@@ -125,7 +125,7 @@ private fun SectionLabel(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = SECTION_LABEL_ALPHA),
+        color = AnixThemeTokens.colors.textSecondary60,
     )
 }
 
@@ -222,8 +222,6 @@ private fun sourceLabel(
  * (ассетов логотипов хостов в проекте нет). [VideoHost.UNKNOWN] честно деградирует до нейтральной
  * иконки-вопроса, а не показывает случайный/неверный значок (см. задание про баг `fromKey`).
  */
-private fun sourceIcon(source: EpisodeSource): String =
-    if (source.host == VideoHost.UNKNOWN) "help" else "play_circle"
+private fun sourceIcon(source: EpisodeSource): String = if (source.host == VideoHost.UNKNOWN) "help" else "play_circle"
 
-private const val SECTION_LABEL_ALPHA = 0.6f
 private val SECTION_TITLE_SIZE = 14.sp

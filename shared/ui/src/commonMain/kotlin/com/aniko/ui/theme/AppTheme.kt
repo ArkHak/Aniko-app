@@ -1,6 +1,5 @@
 package com.aniko.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -17,13 +16,14 @@ import androidx.compose.ui.Modifier
  * переносе на полный набор токенов; переименование было дешёвым: единственный вызов был в
  * `composeApp/.../App.kt`, он обновлён вместе с этим файлом.
  *
- * По умолчанию [darkTheme] берётся из системной настройки через [isSystemInDarkTheme] — явный
- * override (например, ручной переключатель темы в настройках приложения) остаётся возможным,
- * это по-прежнему обычный параметр функции, а не жёстко зашитое поведение.
+ * По умолчанию светлая ([darkTheme] = false) — макет Home в Claude Design светлый (сверка
+ * 2026-09-08 по скриншоту пользователя); системная тема macOS не учитывается. `App` передаёт
+ * выбор явно из `ThemeStore` ("light"/"dark"/null → светлая); [TokenGalleryScreen] использует
+ * собственный локальный переключатель.
  */
 @Composable
 fun AppTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val extraColors = if (darkTheme) AnixDarkExtraColors else AnixLightExtraColors

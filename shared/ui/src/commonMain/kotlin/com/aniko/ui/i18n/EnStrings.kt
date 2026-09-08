@@ -44,6 +44,13 @@ val EnStrings: Strings =
         override val loginInvalidPassword = "Invalid password"
         override val homeContinueWatching = "Continue Watching"
         override val homeSectionLoadError = "Couldn't load"
+
+        override val homeGreetingMorning = "Good morning"
+        override val homeGreetingDay = "Good afternoon"
+        override val homeGreetingEvening = "Good evening"
+        override val homeGreetingNight = "Good night"
+
+        override val catalogMetaFormat: (episodes: Int, rating: String) -> String = { ep, r -> "$ep ep · ★ $r" }
         override val libraryTabFavorites = "Favorites"
         override val libraryTabHistory = "History"
         override val libraryEmptyStatus = "List is empty"
@@ -131,7 +138,6 @@ val EnStrings: Strings =
         override val settingsTheme = "Theme"
         override val themeLight = "Light"
         override val themeDark = "Dark"
-        override val themeSystem = "System"
         override val galleryTitle = "Design tokens"
         override val galleryColorsSection = "Colors"
         override val galleryTypographySection = "Typography"

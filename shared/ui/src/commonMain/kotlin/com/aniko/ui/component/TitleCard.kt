@@ -54,12 +54,14 @@ fun TitleCard(
     isNewEpisode: Boolean = false,
     subtitle: String? = null,
     posterWidth: Dp? = null,
+    meta: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     when (layout) {
         TitleCardLayout.Grid ->
             GridTitleCard(release, onClick, modifier, onLongClick, isNewEpisode, subtitle, posterWidth)
         TitleCardLayout.List ->
-            ListTitleCard(release, onClick, modifier, onLongClick, isNewEpisode, subtitle, posterWidth)
+            ListTitleCard(release, onClick, modifier, onLongClick, isNewEpisode, subtitle, posterWidth, meta, trailing)
     }
 }
 
@@ -120,7 +122,9 @@ private fun GridTitleCard(
     }
 }
 
-@Suppress("LongParameterList") // Проброс параметров TitleCard в конкретную раскладку, см. выше.
+@Suppress("LongParameterList", "LongMethod") // Проброс параметров TitleCard в конкретную раскладку
+// + meta/trailing-слот (сверка Catalog 2026-09-08): тело — линейная колонка текста + опциональный
+// trailing, разбиение добавило бы косвенность ради счётчика строк.
 @Composable
 private fun ListTitleCard(
     release: Release,
@@ -130,12 +134,15 @@ private fun ListTitleCard(
     isNewEpisode: Boolean,
     subtitle: String?,
     posterWidth: Dp?,
+    meta: String?,
+    trailing: (@Composable () -> Unit)?,
 ) {
     val dimens = AnixThemeTokens.dimens
 
     Row(
         modifier = modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box {
             AnixPoster(
@@ -168,6 +175,16 @@ private fun ListTitleCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (meta != null) {
+                // Сверка Catalog (2026-09-08): мета-строка «24 ep · ★ 8.7» под заголовком.
+                Text(
+                    text = meta,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AnixThemeTokens.colors.textSecondary60,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             if (subtitle != null) {
                 Text(
                     text = subtitle,
@@ -188,6 +205,8 @@ private fun ListTitleCard(
                 chipStyle = ListStatusChipStyle.Full,
             )
         }
+
+        trailing?.invoke()
     }
 }
 

@@ -57,6 +57,9 @@ import com.aniko.ui.theme.AnixThemeTokens
  * "выбрано" по макету. По умолчанию `false` — единственный существовавший вызывающий
  * (`ReleaseEpisodesSection`) не меняет вид.
  */
+@Suppress("LongParameterList", "CyclomaticComplexMethod") // 6 параметров зафиксированы контрактом
+// компонента (см. KDoc выше); сложность — линейные `when` по (selected, accentSelected) для
+// container/contentColor, разбиение добавило бы косвенность ради счётчиков линта.
 @Composable
 fun VoiceTypeRow(
     voiceType: VoiceType,
@@ -105,8 +108,7 @@ fun VoiceTypeRow(
                     } else {
                         it
                     }
-                }
-                .padding(horizontal = dimens.spaceM, vertical = dimens.space12)
+                }.padding(horizontal = dimens.spaceM, vertical = dimens.space12)
                 // Подтверждено на устройстве (Фаза 11, T9): подписи/счётчики строки не сливаются
                 // с кликабельным Row сами по себе — TalkBack фокусировал строку без имени.
                 .clearAndSetSemantics {

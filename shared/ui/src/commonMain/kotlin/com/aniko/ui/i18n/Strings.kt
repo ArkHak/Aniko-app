@@ -76,6 +76,17 @@ interface Strings {
     val homeContinueWatching: String
     val homeSectionLoadError: String
 
+    /** Сверка с макетом Claude Design (phone, 2026-09-08): приветствие под брендом на Home
+     *  ("Good evening"/«Добрый вечер») — по времени суток текущей локали, см. HomeScreen. */
+    val homeGreetingMorning: String
+    val homeGreetingDay: String
+    val homeGreetingEvening: String
+    val homeGreetingNight: String
+
+    /** Catalog (2026-09-08): мета-строка результата «N ep · ★ R» — ep и рейтинг форматирует
+     *  вызывающая сторона (как [libraryItemsCountFormat]). */
+    val catalogMetaFormat: (episodes: Int, rating: String) -> String
+
     // --- Мои списки ---
     val libraryTabFavorites: String
     val libraryTabHistory: String
@@ -212,7 +223,6 @@ interface Strings {
     val settingsTheme: String
     val themeLight: String
     val themeDark: String
-    val themeSystem: String
 
     // --- Экран-галерея токенов (P2.T12) ---
     val galleryTitle: String
@@ -315,9 +325,11 @@ interface Strings {
 
     // Title Detail (P7.T7-T13)
     val titleDetailWatch: String
+
     // Track A (design-match-remaining-screens, 2026-09-04): заголовок блока синопсиса на
     // phone Compact — раньше текст описания рисовался вообще без подписи (см. журнал ветки).
     val titleDetailSynopsis: String
+
     // Track A: подпись кнопки "Add to list" на phone Compact-шапке, когда релиз ещё не в
     // списке пользователя ([com.aniko.model.Release.myListStatus] == null) — кнопка открывает то
     // же самое меню статусов, что раньше рисовалось всегда видимым [ChipRow] (см. KDoc

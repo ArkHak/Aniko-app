@@ -11,9 +11,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * Тот же паттерн, что [com.aniko.data.locale.LocaleStore] использует для `languageTag` —
  * значение не секретное, поэтому обычный [Settings] (plaintext), без secure storage.
  *
- * [themeMode] — `null` означает «нет явного выбора, следовать системной теме». Разрешение
- * `null` в реальную тему (чтение `isSystemInDarkTheme()`) — забота вызывающего кода в
- * `composeApp`, не этого класса: `shared/data` намеренно не зависит от Compose, чтобы не тащить
+ * [themeMode] — `null` означает «явный выбор не сделан»: приложение по умолчанию показывает
+ * светлую тему (макет Home в Claude Design светлый, сверка 2026-09-08; системная тема не
+ * учитывается). Разрешение `null` в конкретную тему — забота вызывающего кода в `composeApp`,
+ * не этого класса: `shared/data` намеренно не зависит от Compose, чтобы не тащить
  * UI-фреймворк в слой данных.
  */
 class ThemeStore(

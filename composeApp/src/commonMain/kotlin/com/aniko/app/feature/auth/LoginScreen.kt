@@ -1,11 +1,14 @@
 package com.aniko.app.feature.auth
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -53,83 +56,91 @@ fun LoginScreen(
         modifier = modifier.fillMaxSize().testTag(AnixTestTags.LOGIN_SCREEN_ROOT),
         color = Color.Transparent,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(dimens.spaceL),
-            verticalArrangement = Arrangement.spacedBy(dimens.spaceM, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
+        // Дизайн-leftovers (фазы 14/15): на desktop форма без ограничения растягивалась на всю
+        // ширину окна — повторяем паттерн ProfileScreen: Box + Column(widthIn(max=contentMaxWidth)).
+        // Высота формы остаётся по максимуму, содержимое центрируется вертикально.
+        Box(
+            modifier = Modifier.fillMaxSize().padding(dimens.spaceL),
+            contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = strings.loginTitle,
-                style = MaterialTheme.typography.headlineMedium,
-                textAlign = TextAlign.Center,
-            )
-
-            OutlinedTextField(
-                value = state.login,
-                onValueChange = viewModel::onLoginChange,
-                label = { Text(strings.loginLoginLabel) },
-                singleLine = true,
-                enabled = !state.isLoading,
-                keyboardOptions =
-                    KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        capitalization = KeyboardCapitalization.None,
-                    ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            var passwordVisible by remember { mutableStateOf(false) }
-            OutlinedTextField(
-                value = state.password,
-                onValueChange = viewModel::onPasswordChange,
-                label = { Text(strings.loginPasswordLabel) },
-                singleLine = true,
-                enabled = !state.isLoading,
-                visualTransformation =
-                    if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions =
-                    KeyboardOptions(
-                        keyboardType = if (passwordVisible) KeyboardType.Text else KeyboardType.Password,
-                    ),
-                trailingIcon = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        AnixIcon(
-                            name = if (passwordVisible) "visibility_off" else "visibility",
-                            contentDescription =
-                                if (passwordVisible) strings.loginHidePassword else strings.loginShowPassword,
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Button(
-                onClick = viewModel::submit,
-                enabled = !state.isLoading && state.login.isNotBlank() && state.password.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxHeight()
+                        .widthIn(max = dimens.contentMaxWidth),
+                verticalArrangement = Arrangement.spacedBy(dimens.spaceM, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                if (state.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
-                } else {
-                    Text(strings.loginSubmit)
-                }
-            }
-
-            val error = state.error
-            if (error != null) {
                 Text(
-                    text = error.toMessage(strings),
-                    color = AnixThemeTokens.colors.errorText,
-                    style = MaterialTheme.typography.bodySmall,
+                    text = strings.loginTitle,
+                    style = MaterialTheme.typography.headlineMedium,
                     textAlign = TextAlign.Center,
                 )
+
+                OutlinedTextField(
+                    value = state.login,
+                    onValueChange = viewModel::onLoginChange,
+                    label = { Text(strings.loginLoginLabel) },
+                    singleLine = true,
+                    enabled = !state.isLoading,
+                    keyboardOptions =
+                        KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            capitalization = KeyboardCapitalization.None,
+                        ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                var passwordVisible by remember { mutableStateOf(false) }
+                OutlinedTextField(
+                    value = state.password,
+                    onValueChange = viewModel::onPasswordChange,
+                    label = { Text(strings.loginPasswordLabel) },
+                    singleLine = true,
+                    enabled = !state.isLoading,
+                    visualTransformation =
+                        if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions =
+                        KeyboardOptions(
+                            keyboardType = if (passwordVisible) KeyboardType.Text else KeyboardType.Password,
+                        ),
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            AnixIcon(
+                                name = if (passwordVisible) "visibility_off" else "visibility",
+                                contentDescription =
+                                    if (passwordVisible) strings.loginHidePassword else strings.loginShowPassword,
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Button(
+                    onClick = viewModel::submit,
+                    enabled = !state.isLoading && state.login.isNotBlank() && state.password.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (state.isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        Text(strings.loginSubmit)
+                    }
+                }
+
+                val error = state.error
+                if (error != null) {
+                    Text(
+                        text = error.toMessage(strings),
+                        color = AnixThemeTokens.colors.errorText,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
         }
     }

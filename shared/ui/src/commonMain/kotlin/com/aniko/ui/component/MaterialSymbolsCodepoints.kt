@@ -9,8 +9,8 @@ package com.aniko.ui.component
  * (пересобрать subset через `fonttools subset`), иначе [AnixIcon] упадёт с `error(...)`.
  */
 internal object MaterialSymbolsCodepoints {
-    @Suppress("MagicNumber") // Unicode-codepoint'ы из Material Symbols, не произвольные числа —
     // именовать каждый константой ради detekt только затемнило бы таблицу "имя → codepoint".
+    @Suppress("MagicNumber") // Unicode-codepoint'ы из Material Symbols, не произвольные числа —
     val map: Map<String, Int> =
         mapOf(
             "home" to 0xe9b2,

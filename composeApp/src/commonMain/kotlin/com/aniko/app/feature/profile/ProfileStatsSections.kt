@@ -12,9 +12,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,6 +53,7 @@ import com.aniko.ui.component.chart.DonutChart
 import com.aniko.ui.component.chart.WeeklyBarChart
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
+import kotlin.math.ceil
 
 /**
  * Акцентированные метрики: часы просмотра и число просмотренных серий.
@@ -222,9 +225,10 @@ private val ACHIEVEMENT_BADGE_WIDTH = 72.dp
  * 2×2 (`padding 14/radius 14/фон w045/бордер w07`, значение 20px/800 Manrope + лейбл 11px t2-60).
  * Реальных полей у профиля восемь (watching/plan/completed/hold_on/dropped/favorite/friend/
  * comment) — ни одно не CUT-ано и не спрятано: убрать 4 из 8 значило бы решать судьбу данных
- * (продуктовое решение), а не только визуальную сверку, которую просит эта фаза. Вместо этого
- * сохранены все 8 плиток, но раскладка переведена на 2 колонки (ближе к "2×2" мокапа, чем прежние
- * 4) и получила точный стиль карточки/типографику мокапа.
+ * (продуктовое решение), а не только визуальную сверку, которой просит эта фаза. Вместо этого
+ * сохранены все 8 плиток, но раскладка адаптируется: на телефоне остаётся 2 колонки (как в мокапе),
+ * а на широком хром-маршруте количество колонок растёт, чтобы плитки не растягивались
+ * до непропорционально больших карточек. Карточки получили точный стиль/типографику мокапа.
  *
  * Не через [StatTileRow]/[StatTile][com.aniko.ui.component.StatTile]: у того нет слотов под
  * кастомный контейнер (фон/бордер/radius) и типографику значения/лейбла из мокапа — расширять
@@ -250,10 +254,19 @@ internal fun StatsGrid(
             StatTileData(profile.commentCount.toString(), strings.profileCommentsLabel),
         )
 
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
-        tiles.chunked(STATS_GRID_COLUMNS).forEach { rowTiles ->
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
-                rowTiles.forEach { tile -> ProfileStatCard(tile = tile, modifier = Modifier.weight(1f)) }
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val gap = dimens.spaceS
+        val columns = maxOf(MIN_STAT_GRID_COLUMNS, ceil((maxWidth + gap) / (STAT_CARD_MAX_WIDTH + gap)).toInt())
+
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(gap)) {
+            tiles.chunked(columns).forEach { rowTiles ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    rowTiles.forEach { tile -> ProfileStatCard(tile = tile, modifier = Modifier.weight(1f)) }
+                    // Последний ряд короче остальных (8 плиток не делится на 3/5 колонок) —
+                    // заполняем пустыми весами, чтобы карточки не растягивались на всю ширину ряда
+                    // (тот же приём, что в HomeQuickActions).
+                    repeat(columns - rowTiles.size) { Spacer(modifier = Modifier.weight(1f)) }
+                }
             }
         }
     }
@@ -341,6 +354,9 @@ internal fun ProfileChartsSection(
  * его цвет ОТЛИЧАЕТСЯ от полупрозрачного фона самой карточки (`overlay045`), как в макете, а не
  * просвечивает его.
  */
+@Suppress("LongMethod") // Карточка макета целиком (заголовок + Row кольцо/легенда + centerContent
+// кольца) живёт одной функцией — разбиение на под-функции добавило бы косвенность ради счётчика
+// строк (тот же приём, что и в остальных Track-A секциях этого файла).
 @Composable
 private fun ListsDonutSection(
     profile: ProfileDetails,
@@ -404,7 +420,7 @@ private fun ListsDonutSection(
                             Text(
                                 text = strings.profileListsChartTotalLabel,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = colors.textSecondary60,
                             )
                         }
                     }
@@ -499,6 +515,7 @@ internal fun RecentlyWatchedSection(
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
     val strings = LocalStrings.current
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
@@ -512,7 +529,7 @@ internal fun RecentlyWatchedSection(
             Text(
                 text = strings.profileRecentlyWatchedEmpty,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = colors.textSecondary60,
                 modifier = Modifier.padding(horizontal = dimens.spaceM),
             )
         } else {
@@ -533,11 +550,14 @@ internal fun RecentlyWatchedSection(
 // выше/`AVATAR_SIZE` в `ProfileScreen.kt`).
 
 /** [StatsGrid] — сетка карточек. */
-private const val STATS_GRID_COLUMNS = 2
+private const val MIN_STAT_GRID_COLUMNS = 2
 private val PROFILE_CARD_RADIUS = 14.dp
 private val PROFILE_CARD_PADDING = 14.dp
 private val PROFILE_CARD_BORDER_WIDTH = 1.dp
 private val STAT_VALUE_FONT_SIZE = 20.sp
+
+/** Максимальная комфортная ширина плитки статистики; при превышении добавляются колонки. */
+private val STAT_CARD_MAX_WIDTH = 240.dp
 
 /** [ListsDonutSection] — кольцо 88dp/13dp-обводка + легенда справа с gap 18dp. */
 private val DONUT_RING_SIZE = 88.dp

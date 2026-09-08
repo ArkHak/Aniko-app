@@ -7,7 +7,9 @@ import com.aniko.data.paging.PagingState
 import com.aniko.model.AnixError
 import com.aniko.model.CatalogFilter
 import com.aniko.model.CatalogSort
+import com.aniko.model.ListStatus
 import com.aniko.model.Release
+import com.aniko.model.ReleaseId
 
 /**
  * Вкладки каталога (P7.T3) — маппятся на [CatalogSort], который реально едет в
@@ -48,7 +50,7 @@ data class SearchState(
     val query: String = "",
     val tab: CatalogTab = CatalogTab.All,
     val filter: CatalogFilter = CatalogFilter(),
-    val viewMode: CatalogViewMode = CatalogViewMode.Grid,
+    val viewMode: CatalogViewMode = CatalogViewMode.List,
     val pagingState: PagingState<Release> = PagingState(),
 ) : UiState {
     /**
@@ -84,6 +86,17 @@ sealed interface SearchIntent : UiIntent {
 
     data class ViewModeChanged(
         val viewMode: CatalogViewMode,
+    ) : SearchIntent
+
+    /** Catalog-меню «⋮» (сверка 2026-09-08): поставить релиз в список/сменить статус. */
+    data class SetListStatus(
+        val releaseId: ReleaseId,
+        val status: ListStatus,
+    ) : SearchIntent
+
+    /** Catalog-меню «⋮»: убрать релиз из списка. */
+    data class RemoveFromList(
+        val releaseId: ReleaseId,
     ) : SearchIntent
 
     data object LoadMore : SearchIntent

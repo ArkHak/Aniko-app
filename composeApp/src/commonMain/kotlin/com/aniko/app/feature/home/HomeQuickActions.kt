@@ -3,6 +3,7 @@ package com.aniko.app.feature.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,8 +23,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.aniko.ui.adaptive.AnixWindowSize
-import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 
@@ -32,9 +31,15 @@ import com.aniko.ui.theme.AnixThemeTokens
  * все колбэки опциональны (дефолт `{}`) — координатор Фазы 7 подключит реальные переходы на
  * Catalog/Schedule/Filters/случайный тайтл в `App.kt` без правки этой сигнатуры.
  *
- * Раскладка по [windowSize] (P7.T2): Medium — один ряд из всех 4 плиток, Compact и Expanded —
- * сетка 2×2 (на Expanded этот блок уже делит ширину с баннером в общем `Row`, см.
- * `HomeScreen.HomeHeroSection`, поэтому там нужна узкая колонка, а не широкий ряд).
+ * Раскладка теперь измеряет СВОЮ ширину через [BoxWithConstraints], а не опирается на
+ * полноэкранный window size class: в узкой Medium-панели ListDetailHost (~360dp) 4 колонки
+ * давали плитку ~76dp, что гарантированно обрезало RU-лейбл ([TextOverflow.Ellipsis],
+ * titleMedium 16sp). Теперь 4 плитки в ряд используются только когда измеренная ширина
+ * позволяет дать каждой плитке не менее [QUICK_ACTION_MIN_USABLE_WIDTH] — иначе падаем к
+ * 2×2, как на Compact. Хост плиток (колонка под баннером либо правый столбец hero-`Row`
+ * на широком контенте, см. `HomeScreen.HomeHeroSection` — сплит `Row` включается только от
+ * ширины контента ≥ 880dp) тоже передаёт сюда фактическую ширину, поэтому измерение
+ * собственной ширины даёт правильный выбор в обоих случаях.
  *
  * Track C (2026-09-04, точное соответствие макету Claude Design): плитки без иконок — только
  * цветной скруглённый прямоугольник (свой полупрозрачный оттенок на плитку, см.
@@ -50,7 +55,6 @@ import com.aniko.ui.theme.AnixThemeTokens
 @Composable
 fun HomeQuickActions(
     modifier: Modifier = Modifier,
-    windowSize: AnixWindowSize = LocalAnixWindowSize.current,
     onCatalogClick: () -> Unit = {},
     onScheduleClick: () -> Unit = {},
     onFilterClick: () -> Unit = {},
@@ -66,22 +70,31 @@ fun HomeQuickActions(
             QuickActionTile(strings.homeQuickActionFilter, FILTERS_TILE_COLOR, onFilterClick),
             QuickActionTile(strings.homeQuickActionRandom, RANDOM_TILE_COLOR, onRandomClick),
         )
-    val columns = if (windowSize == AnixWindowSize.Medium) MEDIUM_COLUMNS else COMPACT_COLUMNS
 
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
-    ) {
-        tiles.chunked(columns).forEach { rowTiles ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-            ) {
-                rowTiles.forEach { tile -> QuickActionTileView(tile = tile, modifier = Modifier.weight(1f)) }
-                // Последний ряд может быть короче остальных (4 плитки, 4 колонки на Medium —
-                // не короче, но при других значениях columns это защищает от растягивания
-                // последней плитки на всю ширину ряда).
-                repeat(columns - rowTiles.size) { Spacer(modifier = Modifier.weight(1f)) }
+    // Измеряем именно ту ширину, которую займёт блок плиток в текущем контейнере:
+    // на Medium ListDetailHost-панель ~360dp, на широком hero-`Row` (≥ 880dp контента)
+    // правый столбец ~290dp.
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        // 4 плитки в ряд нужны, чтобы каждая получила не менее QUICK_ACTION_MIN_USABLE_WIDTH;
+        // иначе RU-лейбл titleMedium обрезается эллипсисом.
+        val fourColumnThreshold =
+            QUICK_ACTION_MIN_USABLE_WIDTH * FOUR_COLUMN_LAYOUT +
+                dimens.spaceS * (FOUR_COLUMN_LAYOUT - 1)
+        val columns = if (maxWidth >= fourColumnThreshold) FOUR_COLUMN_LAYOUT else TWO_COLUMN_LAYOUT
+
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
+            tiles.chunked(columns).forEach { rowTiles ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+                ) {
+                    rowTiles.forEach { tile ->
+                        QuickActionTileView(tile = tile, modifier = Modifier.weight(1f))
+                    }
+                    // Последний ряд может быть короче остальных — заполняем пустыми
+                    // весами, чтобы последняя плитка не растягивалась на всю ширину ряда.
+                    repeat(columns - rowTiles.size) { Spacer(modifier = Modifier.weight(1f)) }
+                }
             }
         }
     }
@@ -141,8 +154,15 @@ private fun QuickActionTileView(
     }
 }
 
-private const val COMPACT_COLUMNS = 2
-private const val MEDIUM_COLUMNS = 4
+private const val TWO_COLUMN_LAYOUT = 2
+private const val FOUR_COLUMN_LAYOUT = 4
+
+/**
+ * Минимальная ширина плитки, при которой RU-лейбл titleMedium (16sp) не уходит в
+ * TextOverflow.Ellipsis. Medium-панель ListDetailHost (~360dp) при 4 колонках давала
+ * ~76dp, что гарантированно обрезало подписи — отсюда порог для 4-колоночного режима.
+ */
+private val QUICK_ACTION_MIN_USABLE_WIDTH = 120.dp
 
 /** Радиус скругления плитки — макет задаёт ~14dp, между уже существующими шагами токенов
  *  [com.aniko.ui.theme.AnixDimens.cornerM] (12dp) и `.corner16` (16dp) — локальная константа,

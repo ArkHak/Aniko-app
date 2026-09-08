@@ -23,9 +23,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,11 +35,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.data.paging.PagingState
@@ -72,9 +68,9 @@ import androidx.compose.foundation.lazy.itemsIndexed as itemsIndexedColumn
  * своя сетка [ReleaseCard] поверх независимого пагинатора вкладки (см. [LibraryViewModel]).
  *
  * Смена статуса/избранного/удаление сделаны через долгое нажатие на карточке (см.
- * [ReleaseCard.onLongClick]) и контекстное меню — сознательно не свайп, так решено в плане:
- * свайп на сетке (в отличие от списка) неоднозначен и конфликтует с горизонтальным скроллом
- * `ScrollableTabRow` выше.
+ * [ReleaseCard.onLongClick]) и контекстное меню — сознательно не свайп, так решено в плане.
+ * Переключатель вкладок нарисован горизонтальным рядом чипов ([LibraryTabChips]),
+ * а не M3 таб-баром, поэтому конфликта с горизонтальным скроллом нет.
  *
  * P9.T1: заголовки вкладок статусов/избранного дополнены счётчиком из `ProfileDetails`
  * (см. [LibraryTab.title]) — у истории отдельного счётчика в `ProfileDetails` нет, вкладка
@@ -95,10 +91,10 @@ import androidx.compose.foundation.lazy.itemsIndexed as itemsIndexedColumn
  * P13.T4: на [com.aniko.ui.adaptive.AnixWindowSize.Compact] грид постеров ([LibraryGrid]) заменён
  * на компактные горизонтальные строки ([LibraryRows]) — под мокап Claude Design, тот же паттерн
  * "48×48 арт + название + прогресс + чип справа", что уже даёт [ProgressRow] на Home (Continue
- * Watching). Medium/Expanded ([LibraryGrid]) не тронуты — аудит сверки с макетом пометил их как
- * "unaffected, works fine". Долгое нажатие/контекстное меню (смена статуса/избранное/удаление)
- * работает одинаково в обоих вариантах — [ProgressRow] получил тот же `onLongClick`, что уже
- * был у [ReleaseCard].
+ * Watching). Ячейки Medium/Expanded ([LibraryGrid]) обёрнуты в тот же overlay-контейнер
+ * (`overlay045`/`overlay07`/`cornerM`), что и строки Compact. Долгое нажатие/контекстное меню
+ * (смена статуса/избранное/удаление) работает одинаково в обоих вариантах — [ProgressRow]
+ * получил тот же `onLongClick`, что уже был у [ReleaseCard].
  */
 @Composable
 fun LibraryScreen(
@@ -124,41 +120,29 @@ fun LibraryScreen(
         color = Color.Transparent,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Track A: макет (`listsGroups`) рисует переключатель вкладок как ряд чипов
-            // (тот же паттерн, что жанр-чипы Catalog), а не M3 таб-бар с подчёркиванием — только
-            // на Compact. isTwoPane (Medium/Expanded) сохраняет прежний ScrollableTabRow дословно
-            // (см. LibraryGrid/LibraryRows ниже — тот же уже существующий в файле паттерн
-            // ветвления по windowSize.isTwoPane).
-            if (windowSize.isTwoPane) {
-                ScrollableTabRow(selectedTabIndex = LibraryTab.all.indexOf(selectedTab).coerceAtLeast(0)) {
-                    LibraryTab.all.forEach { tab ->
-                        val tabTitle = tab.title(strings, uiState.profile)
-                        val tabSelected = tab == selectedTab
-                        Tab(
-                            selected = tabSelected,
-                            onClick = { viewModel.selectTab(tab) },
-                            text = { Text(tabTitle) },
-                            // Подтверждено на устройстве (Фаза 11, T9): M3 Tab не сливает text{} в
-                            // свой озвучиваемый узел (тот же паттерн, что и FilterChip/
-                            // NavigationBarItem — см. ChipRow.kt/AnixNavigationBar.kt).
-                            modifier =
-                                Modifier.clearAndSetSemantics {
-                                    contentDescription = tabTitle
-                                    role = Role.Tab
-                                    selected = tabSelected
-                                },
-                        )
-                    }
-                }
-            } else {
-                LibraryTabChips(
-                    selectedTab = selectedTab,
-                    onTabSelected = { tab -> viewModel.selectTab(tab) },
-                    strings = strings,
-                    profile = uiState.profile,
-                    modifier = Modifier.padding(horizontal = dimens.spaceM),
+            // Сверка My Lists (phone-макет, 2026-09-08): заголовок страницы над вкладками —
+            // только Compact (тот же паттерн, что заголовок Catalog).
+            if (windowSize == AnixWindowSize.Compact) {
+                Text(
+                    text = strings.navLibrary,
+                    style =
+                        MaterialTheme.typography.headlineSmall.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                        ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = dimens.spaceM).padding(top = dimens.spaceM),
                 )
             }
+            // Track A: макет (`listsGroups`) рисует переключатель вкладок как ряд чипов
+            // (тот же паттерн, что жанр-чипы Catalog) — на всех ширинах окна, см.
+            // [LibraryTabChips].
+            LibraryTabChips(
+                selectedTab = selectedTab,
+                onTabSelected = { tab -> viewModel.selectTab(tab) },
+                strings = strings,
+                profile = uiState.profile,
+                modifier = Modifier.padding(horizontal = dimens.spaceM),
+            )
 
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                 Column(modifier = Modifier.fillMaxSize().widthIn(max = dimens.contentMaxWidth)) {
@@ -227,9 +211,8 @@ fun LibraryScreen(
 
 /**
  * Track A (сверка Compact-раскладки, 2026-09-04): ряд чипов-групп статусов списков (макет
- * `listsGroups`) — Compact-замена [ScrollableTabRow] выше (тот же визуальный паттерн, что и
- * жанр-чипы Catalog, см. [ChipRow.selectedColor]). Medium/Expanded ([windowSize.isTwoPane])
- * продолжают использовать M3 таб-бар с подчёркиванием, эта функция для них не вызывается.
+ * `listsGroups`) — замена `ScrollableTabRow` на всех ширинах окна (тот же визуальный паттерн,
+ * что и жанр-чипы Catalog, см. [ChipRow.selectedColor] = [MaterialTheme.colorScheme.primary]).
  */
 @Composable
 private fun LibraryTabChips(
@@ -250,12 +233,15 @@ private fun LibraryTabChips(
 }
 
 /**
- * Сетка [ReleaseCard] — Medium/Expanded (P9.T3, layout не менялся в P13.T4: аудит сверки с
- * макетом пометил его "unaffected, works fine"). На Compact вместо неё — [LibraryRows].
+ * Сетка [ReleaseCard] — Medium/Expanded (P9.T3). Каждая ячейка обёрнута в overlay-контейнер
+ * (`overlay045`/`overlay07`/`cornerM` + `spaceXs` padding) — тот же паттерн, что и строки
+ * [LibraryRows] на Compact и [NewEpisodeCard] на Home. На Compact вместо неё — [LibraryRows].
  */
-@Suppress("LongParameterList") // Координирующий блок: пагинация + ширина экрана + вкладка + меню-стейт +
-// колбэк клика + viewModel (тот же паттерн передачи viewModel во внутренний composable, что уже
-// у HomeScreen/SearchScreen).
+@Suppress("LongParameterList", "LongMethod") // Координирующий блок: пагинация + ширина экрана +
+// вкладка + меню-стейт + колбэк клика + viewModel (тот же паттерн передачи viewModel во внутренний
+// composable, что уже у HomeScreen/SearchScreen). LongMethod: ячейки с overlay-контейнером и
+// контекстное меню остаются линейным телом сетки — вынос ячейки в отдельный composable добавил бы
+// косвенность ради счётчика строк (тот же приём, что WatchAndFavoriteRow/ReleaseHeaderSection).
 @Composable
 private fun LibraryGrid(
     pagingState: PagingState<Release>,
@@ -267,6 +253,8 @@ private fun LibraryGrid(
     viewModel: LibraryViewModel,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
+    val cardShape = RoundedCornerShape(dimens.cornerM)
 
     LazyVerticalGrid(
         columns =
@@ -283,11 +271,20 @@ private fun LibraryGrid(
                 viewModel.loadMore(selectedTab)
             }
             Box {
-                ReleaseCard(
-                    release = release,
-                    onClick = { onReleaseClick(release.id) },
-                    onLongClick = { onMenuReleaseIdChange(release.id) },
-                )
+                Box(
+                    modifier =
+                        Modifier
+                            .clip(cardShape)
+                            .background(colors.overlay045, cardShape)
+                            .border(LIBRARY_GRID_CARD_BORDER_WIDTH, colors.overlay07, cardShape)
+                            .padding(dimens.spaceXs),
+                ) {
+                    ReleaseCard(
+                        release = release,
+                        onClick = { onReleaseClick(release.id) },
+                        onLongClick = { onMenuReleaseIdChange(release.id) },
+                    )
+                }
                 LibraryContextMenu(
                     expanded = menuReleaseId == release.id,
                     release = release,
@@ -499,6 +496,9 @@ private fun LibraryToolbar(
  *  (см. [LibraryToolbar]) — точное значение макета, не токен [AnixThemeTokens.dimens] (единственный
  *  потребитель — этот тулбар). */
 private val SHUFFLE_BUTTON_SIZE = 28.dp
+
+/** Толщина бордера overlay-контейнера ячейки [LibraryGrid] (тот же 1dp, что у [LibraryRows]). */
+private val LIBRARY_GRID_CARD_BORDER_WIDTH = 1.dp
 
 /**
  * Меню долгого нажатия: смена статуса (кроме текущего), тоггл избранного и удаление,

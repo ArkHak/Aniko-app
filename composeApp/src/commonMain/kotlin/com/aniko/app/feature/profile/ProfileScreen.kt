@@ -348,6 +348,9 @@ private fun ProfileThemeSection(
  * `Library` (см. [com.aniko.app.navigation.AnixSection.Library]) — колбэк подключает координатор
  * (`App.kt`), как и остальные навигационные колбэки этого экрана ([onSettingsClick]-подобные).
  */
+@Suppress("LongMethod") // Шапка целиком повторяет структуру макета (аватар/имя/ссылка/бейджи/
+// бан-баннер) одной функцией; вынос опциональных блоков добавил бы косвенность ради счётчика строк
+// (тот же приём, что и в остальных Track-A секциях этого файла).
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProfileHeader(

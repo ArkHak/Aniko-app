@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -27,8 +26,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -65,7 +62,6 @@ import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixPoster
-import com.aniko.ui.component.ChipRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.i18n.displayName
@@ -136,8 +132,8 @@ fun ReleaseHeaderSection(
 }
 
 // ============================================================================================
-// Medium/Expanded (P13.T13/P5.T3 — раскладка зафиксирована, не трогаем) — прежняя реализация,
-// без изменений содержания (перенесена из тела [ReleaseHeaderSection] без правок логики).
+// Medium/Expanded (P13.T13/P5.T3 — раскладка зафиксирована, не трогаем): прежняя структура,
+// но цвета/типографика/кнопки/чипы ретокенизированы под те же конвенции, что и phone Compact.
 // ============================================================================================
 
 @Suppress("LongParameterList") // См. обоснование в [ReleaseHeaderSection] — тот же набор данных
@@ -187,14 +183,14 @@ private fun WideHeaderLayout(
         val screenshots = details?.screenshotUrls.orEmpty()
         if (screenshots.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
-                Text(text = strings.titleDetailScreenshots, style = MaterialTheme.typography.titleMedium)
+                HeroSectionTitle(text = strings.titleDetailScreenshots)
                 ScreenshotRail(urls = screenshots)
             }
         }
 
         val description = release.description
         if (!description.isNullOrBlank()) {
-            Text(text = description, style = MaterialTheme.typography.bodyMedium)
+            HeroSynopsis(text = description, strings = strings)
         }
     }
 }
@@ -222,7 +218,7 @@ private fun PosterAndInfoRow(
                 Text(
                     text = originalTitle,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = SECONDARY_TEXT_ALPHA),
+                    color = AnixThemeTokens.colors.textSecondary60,
                 )
             }
             val titleAlt = details?.titleAlt
@@ -230,7 +226,7 @@ private fun PosterAndInfoRow(
                 Text(
                     text = titleAlt,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = SECONDARY_TEXT_ALPHA),
+                    color = AnixThemeTokens.colors.textSecondary60,
                 )
             }
 
@@ -242,13 +238,14 @@ private fun PosterAndInfoRow(
     }
 }
 
-/** Кнопка "Смотреть" + тоггл избранного/статуса списка/поделиться в одном ряду верхних действий. */
-@Suppress("LongParameterList", "LongMethod")
-// LongParameterList: 6 параметров ровно по числу независимых интерактивных зон
+/**
+ * Кнопка "Смотреть" + тоггл избранного/статуса списка/поделиться.
+ * Раскладка остаётся прежней (кнопка "Смотреть" над рядом избранное/поделиться/статус),
+ * но каждый элемент ретокенизирован под те же конвенции, что и [CompactHeroHeader]
+ * ([HeroPlayButton], [HeroAddToListButton], избранное/поделиться с теми же tint/filled).
+ */
+@Suppress("LongParameterList") // 6 параметров ровно по числу независимых интерактивных зон
 // (плей/статус/избранное/поделиться), та же причина, что у `WideHeaderLayout` выше.
-// LongMethod: за порог (60) вывели `clearAndSetSemantics{}`-модификаторы на Watch/избранное/
-// поделиться (Фаза 11, T9 — IconButton/Button не сливают contentDescription сами по себе, см.
-// их KDoc) — тело осталось линейным, разбиение добавило бы косвенность ради счётчика строк.
 @Composable
 private fun WatchAndFavoriteRow(
     release: Release,
@@ -262,26 +259,11 @@ private fun WatchAndFavoriteRow(
     val strings = LocalStrings.current
 
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
-        // Подтверждено на устройстве (Фаза 11, T9): M3 Button не сливает свой Text{} в
-        // озвучиваемый узел (тот же паттерн, что и остальные M3-компоненты этой фазы).
-        Button(
+        HeroPlayButton(
+            isResolvingPlay = isResolvingPlay,
             onClick = onWatchClick,
-            enabled = !isResolvingPlay,
-            modifier = Modifier.clearAndSetSemantics { contentDescription = strings.titleDetailWatch },
-        ) {
-            if (isResolvingPlay) {
-                CircularProgressIndicator(
-                    modifier = Modifier.width(ButtonDefaults.IconSize),
-                    strokeWidth = PLAY_SPINNER_STROKE,
-                )
-            } else {
-                AnixIcon(name = "play_arrow", contentDescription = null, filled = true)
-            }
-            Text(
-                text = strings.titleDetailWatch,
-                modifier = Modifier.padding(start = dimens.spaceXs),
-            )
-        }
+            modifier = Modifier.fillMaxWidth(),
+        )
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -311,39 +293,45 @@ private fun WatchAndFavoriteRow(
                 onClick = onShareClick,
                 modifier = Modifier.clearAndSetSemantics { contentDescription = strings.shareButtonContentDescription },
             ) {
-                AnixIcon(
-                    name = "share",
-                    contentDescription = null,
-                    filled = true,
-                )
+                AnixIcon(name = "share", contentDescription = null, filled = true)
             }
-            ChipRow(
-                items = ListStatus.entries,
-                isSelected = { it == release.myListStatus },
-                label = { it.displayName(strings) },
-                onClick = { status -> onChangeListStatus(if (status == release.myListStatus) null else status) },
-            )
+            HeroAddToListButton(release = release, onChangeListStatus = onChangeListStatus)
         }
     }
 }
 
-/** Жанры отдельными нередактируемыми чипами (не строка через запятую) — `Release.genres` уже
- * распарсен в список маппером (`ReleaseMapper.toDomain`), здесь только отрисовка. */
+/**
+ * Жанры отдельными нередактируемыми чипами (не строка через запятую) — `Release.genres` уже
+ * распарсен в список маппером (`ReleaseMapper.toDomain`), здесь только отрисовка.
+ *
+ * Phase-15 accent split: жанровые чипы — primary-акцент (`AnixFilterChipRow` с `selectedColor =
+ * primary` в Catalog), статусные — secondary. Чипы read-only, поэтому рисуются как неинтерактивные
+ * Surface-пилюли с той же заливкой/бордером, что у выбранного чипа `AnixFilterChipRow`.
+ */
 @Composable
 private fun GenreChipRow(genres: List<String>) {
     val dimens = AnixThemeTokens.dimens
     val shape = RoundedCornerShape(dimens.cornerPill)
+    val accent = MaterialTheme.colorScheme.primary
 
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceXs),
         verticalArrangement = Arrangement.spacedBy(dimens.spaceXs),
     ) {
         genres.forEach { genre ->
-            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = shape) {
+            Surface(
+                color = accent.copy(alpha = GENRE_CHIP_CONTAINER_ALPHA),
+                shape = shape,
+                border = BorderStroke(GENRE_CHIP_BORDER_WIDTH, accent.copy(alpha = GENRE_CHIP_BORDER_ALPHA)),
+            ) {
                 Text(
                     text = genre,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style =
+                        MaterialTheme.typography.labelMedium.copy(
+                            fontSize = GENRE_CHIP_FONT_SIZE,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(horizontal = dimens.spaceS, vertical = dimens.spaceXs),
                 )
             }
@@ -406,7 +394,7 @@ private fun InfoRow(
         Text(
             text = "$label:",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = SECONDARY_TEXT_ALPHA),
+            color = AnixThemeTokens.colors.textSecondary60,
         )
         Text(text = value, style = MaterialTheme.typography.bodySmall)
     }
@@ -639,12 +627,15 @@ private fun HeroRatingGenresRow(release: Release) {
  * Play (flex 1, accent, 46dp/radius12) + "Add to list" (см. [HeroAddToListButton]) в одном ряду,
  * избранное/поделиться — отдельным рядом ниже. Мокап рисует ровно ДВЕ кнопки в этом ряду
  * ("Play"/"Add to list"), но существующий функционал экрана богаче — раздельные избранное/
- * поделиться/выбор ТОЧНОГО статуса из 5 вариантов (`ChipRow` в [WatchAndFavoriteRow]) — сознательно
- * не срезан до одной кнопки ради пиксель-точности ("НЕ переписывай data-flow" в брифе): вместо
- * этого та же функциональность выбора статуса переехала под ту же самую "Add to list"-кнопку
- * (выпадающее меню, [HeroAddToListButton]) — визуально совпадает с макетом, семантика колбэков не
- * поменялась. Избранное/поделиться остались отдельными иконками — макет их на этом экране вовсе
- * не показывает, но убирать реальную функциональность не входит в задачу "визуальной сверки".
+ * поделиться/выбор ТОЧНОГО статуса из 5 вариантов — сознательно не срезан до одной кнопки ради
+ * пиксель-точности ("НЕ переписывай data-flow" в брифе): вместо этого та же функциональность
+ * выбора статуса переехала под ту же самую "Add to list"-кнопку (выпадающее меню,
+ * [HeroAddToListButton]) — визуально совпадает с макетом, семантика колбэков не поменялась.
+ * На Medium/Expanded [WatchAndFavoriteRow] сохраняет прежнюю структуру (кнопка "Смотреть" над
+ * рядом избранное/поделиться/статус), но использует те же [HeroPlayButton]/[HeroAddToListButton]
+ * и tint иконок, что и Compact-hero. Избранное/поделиться остались отдельными иконками — макет
+ * их на этом экране вовсе не показывает, но убирать реальную функциональность не входит в задачу
+ * "визуальной сверки".
  */
 @Suppress("LongParameterList") // Координирующий блок: [release] + 5 колбэков, ровно по числу
 // независимых интерактивных зон (плей/статус/избранное/поделиться) — тот же паттерн и то же
@@ -773,7 +764,7 @@ private fun HeroPlayButton(
  * "Add to list": высота 46dp, padding 0/16, radius 12dp, фон `overlay07`, бордер `overlay10`,
  * текст 13px/600 — точно под макет. Подпись — текущий статус ([Release.myListStatus]) или
  * [Strings.titleDetailAddToList], если релиз ещё не в списке; тап открывает [DropdownMenu] со
- * всеми [ListStatus] (тот же toggle-колбэк, что был у [ChipRow] в [WatchAndFavoriteRow] — повторный
+ * всеми [ListStatus] (тот же toggle-колбэк, что был у `ChipRow` в `WatchAndFavoriteRow` — повторный
  * выбор уже активного статуса снимает его).
  */
 @Composable
@@ -907,11 +898,17 @@ private fun formatGrade(grade: Double): String {
     return rounded.toString()
 }
 
-private const val SECONDARY_TEXT_ALPHA = 0.7f
 private const val GRADE_ROUNDING_FACTOR = 100.0
 private val SCREENSHOT_WIDTH = 200.dp
 private const val SCREENSHOT_ASPECT_RATIO = 16f / 9f
 private val PLAY_SPINNER_STROKE = 2.dp
+
+// ---- Wide header genre chips: тот же визуальный язык, что у выбранного чипа
+// `AnixFilterChipRow` (primary-акцент, cornerPill, 12sp/600) — read-only, неинтерактивная копия.
+private const val GENRE_CHIP_CONTAINER_ALPHA = 0.22f
+private const val GENRE_CHIP_BORDER_ALPHA = 0.55f
+private val GENRE_CHIP_BORDER_WIDTH = 1.dp
+private val GENRE_CHIP_FONT_SIZE = 12.sp
 
 // ---- Hero (phone Compact) — литеральные px-значения макета, не сведены к общим токенам
 // AnixDimens/AnixThemeTokens намеренно: это точные пиксельные величины ОДНОГО конкретного места

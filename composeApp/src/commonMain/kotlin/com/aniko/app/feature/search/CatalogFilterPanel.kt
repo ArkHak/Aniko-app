@@ -71,12 +71,16 @@ fun CatalogFilterPanel(
             }
         }
 
+        // Track A (сверка Compact-раскладки, 2026-09-04): статус-чипы и жанр-чипы разведены на
+        // РАЗНЫЕ акценты (статус — secondary, жанр — primary) в [CatalogInlineFilterChips] ниже;
+        // зеркалим то же правило в боковую панель Expanded (Фаза 15, leftovers).
         AnixFilterChipRow(
             items = STATUS_OPTIONS.map { it.id },
             selected = setOfNotNull(filter.statusId),
             label = { id -> STATUS_OPTIONS.first { it.id == id }.label(strings) },
             onToggle = onStatusToggle,
             wrap = true,
+            selectedColor = MaterialTheme.colorScheme.secondary,
         )
 
         AnixFilterChipRow(
@@ -85,6 +89,7 @@ fun CatalogFilterPanel(
             label = { genre -> genre },
             onToggle = onGenreToggle,
             wrap = true,
+            selectedColor = MaterialTheme.colorScheme.primary,
         )
     }
 }

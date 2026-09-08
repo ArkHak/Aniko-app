@@ -40,6 +40,13 @@ val RuStrings: Strings =
         override val loginInvalidPassword = "Неверный пароль"
         override val homeContinueWatching = "Продолжить смотреть"
         override val homeSectionLoadError = "Не удалось загрузить"
+
+        override val homeGreetingMorning = "Доброе утро"
+        override val homeGreetingDay = "Добрый день"
+        override val homeGreetingEvening = "Добрый вечер"
+        override val homeGreetingNight = "Доброй ночи"
+
+        override val catalogMetaFormat: (episodes: Int, rating: String) -> String = { ep, r -> "$ep сер. · ★ $r" }
         override val libraryTabFavorites = "Избранное"
         override val libraryTabHistory = "История"
         override val libraryEmptyStatus = "Список пуст"
@@ -132,7 +139,6 @@ val RuStrings: Strings =
         override val settingsTheme = "Тема"
         override val themeLight = "Светлая"
         override val themeDark = "Тёмная"
-        override val themeSystem = "Системная"
         override val galleryTitle = "Дизайн-токены"
         override val galleryColorsSection = "Цвета"
         override val galleryTypographySection = "Типографика"

@@ -1,5 +1,7 @@
 package com.aniko.app.feature.schedule
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,8 +17,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -40,12 +40,10 @@ import com.aniko.model.Schedule
 import com.aniko.model.WeekDay
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
-import com.aniko.ui.component.AnixEmptyState
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.component.ChipRow
 import com.aniko.ui.component.ProgressRow
-import com.aniko.ui.component.ReleaseCard
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.i18n.displayName
@@ -67,11 +65,11 @@ import org.koin.compose.viewmodel.koinViewModel
  * мокапом не подтвердилось: там список действительно длинный, но это осознанный выбор дизайна,
  * не бага. Day-селектор (чипы) остаётся только на Medium/Expanded, см. ниже.
  *
- * ## Пустое состояние (P9.T5)
- * День без релизов не пропускается, а показывает [AnixEmptyState] (тот же компонент, что и
- * `LibraryScreen` для пустой вкладки) — пользователь видит, что расписание точно загружено, а
- * не думает, что экран завис или день ещё не пришёл с сервера. Работает одинаково что в
- * [ScheduleDaysList] на Compact, что в [DayColumn] на Medium/Expanded.
+ * ## Пустое состояние (P9.T5, доработан Track A 2026-09-08)
+ * День без релизов не пропускается: вместо тяжёлого `AnixEmptyState` (компонент для пустого
+ * экрана целиком, см. `LibraryScreen`) внутри списка из 7 секций показывается лёгкая
+ * надпись `bodySmall 12sp textSecondary45` — без контейнера и центрирования. Работает
+ * одинаково что в [ScheduleDaysList] на Compact, что в [DayColumn] на Medium/Expanded.
  *
  * ## Навигация по дням + подсветка "сегодня" (P9.T5, сужено до Medium/Expanded в P13.T5)
  * На Medium/Expanded чипы [ChipRow] — способ прокрутить колонки к нужному дню (см. ниже); на
@@ -179,6 +177,7 @@ private fun ScheduleContent(
                 schedule = schedule,
                 strings = strings,
                 listState = columnsListState,
+                today = today,
                 onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
             )
         } else {
@@ -252,8 +251,8 @@ private fun ScheduleDaysList(
                     // Track A (сверка Compact-раскладки, 2026-09-04): AnixEmptyState — тяжёлый
                     // центрированный компонент с крупным паддингом, задуманный под пустой ЭКРАН
                     // целиком (см. LibraryScreen). Внутри списка из 7 секций макет хочет простую
-                    // надпись без контейнера/центрирования — AnixEmptyState/её импорт не убраны,
-                    // используются ниже в DayColumn (Medium/Expanded, вне периметра этой правки).
+                    // надпись без контейнера/центрирования — тот же лёгкий Text используется и в
+                    // DayColumn на Medium/Expanded.
                     Text(
                         text = strings.scheduleEmptyDayMessage,
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
@@ -324,6 +323,7 @@ private fun ScheduleColumns(
     schedule: Schedule,
     strings: Strings,
     listState: LazyListState,
+    today: WeekDay,
     onReleaseClick: (Int) -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -340,6 +340,7 @@ private fun ScheduleColumns(
                     day = day,
                     releases = schedule.releasesOn(day),
                     strings = strings,
+                    today = today,
                     onReleaseClick = onReleaseClick,
                 )
             }
@@ -352,25 +353,42 @@ private fun DayColumn(
     day: WeekDay,
     releases: List<Release>,
     strings: Strings,
+    today: WeekDay,
     onReleaseClick: (Int) -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
 
     Column(
         modifier = Modifier.width(dayColumnWidth).fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
     ) {
-        Text(text = day.displayName(strings), style = MaterialTheme.typography.titleMedium)
+        DaySectionHeader(day = day, today = today, strings = strings)
 
         if (releases.isEmpty()) {
-            AnixEmptyState(message = strings.scheduleEmptyDayMessage, modifier = Modifier.fillMaxWidth())
+            Text(
+                text = strings.scheduleEmptyDayMessage,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = colors.textSecondary45,
+            )
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
                 modifier = Modifier.fillMaxSize(),
             ) {
                 items(releases, key = { it.id }) { release ->
-                    ReleaseCard(release = release, onClick = { onReleaseClick(release.id) })
+                    ProgressRow(
+                        posterUrl = release.posterUrl,
+                        title = release.title,
+                        watchedEpisodes = release.episodesReleased,
+                        totalEpisodes = release.episodesTotal,
+                        onClick = { onReleaseClick(release.id) },
+                        modifier =
+                            Modifier
+                                .clip(RoundedCornerShape(dimens.cornerM))
+                                .background(colors.overlay045)
+                                .border(1.dp, colors.overlay07, RoundedCornerShape(dimens.cornerM)),
+                    )
                 }
             }
         }

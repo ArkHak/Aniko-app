@@ -150,10 +150,11 @@ fun CommentMessage(
     }
 }
 
-/** Плашка вместо текста спойлера — см. D10 в KDoc [CommentMessage]. Высота — `defaultMinSize`, а
- *  не жёсткий `.height()`: должна расти вместе с текстом при масштабе шрифта (тот же баг класс,
- *  что нашёл аудит P6.T12 у `ListStatusChip`, см. журнал Фазы 6 плана). */
 /**
+ * Плашка вместо текста спойлера — см. D10 в KDoc [CommentMessage]. Высота — `defaultMinSize`, а
+ * не жёсткий `.height()`: должна расти вместе с текстом при масштабе шрифта (тот же баг класс,
+ * что нашёл аудит P6.T12 у `ListStatusChip`, см. журнал Фазы 6 плана).
+ *
  * Track A (design-match-remaining-screens, 2026-09-04): подпись плашки перекрашена в accent
  * (`MaterialTheme.colorScheme.primary`, см. KDoc [EpisodeGrid][com.aniko.ui.component.EpisodeGrid]
  * про то же самое равенство primary/accent после Track A) и выведена жирным — раньше была

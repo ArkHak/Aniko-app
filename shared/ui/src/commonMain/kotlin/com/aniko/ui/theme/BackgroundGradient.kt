@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
  * fade-to-transparent градиенте (полностью прозрачном на границе) визуально несущественна —
  * сознательное упрощение, не баг.
  */
+
+@Suppress("MagicNumber") // hex-литерал токена макета — исключение как у AnixPalette (см. KDoc).
 private val BlobABase = Color(0xFF3D2C61)
 private const val BLOB_A_ALPHA = 0.35f
 private const val BLOB_A_CENTER_FRACTION_X = 0.18f
@@ -33,6 +35,7 @@ private const val BLOB_A_CENTER_FRACTION_Y = -0.10f
 // (1200/2 + 800/2) / 2 = 500dp — среднее полуосей эллипса блоба A (1200×800px в макете).
 private val BlobARadius = 500.dp
 
+@Suppress("MagicNumber") // hex-литерал: см. то же исключение у BlobABase выше.
 private val BlobBBase = Color(0xFF5B161A)
 private const val BLOB_B_ALPHA = 0.25f
 private const val BLOB_B_CENTER_FRACTION_X = 1.0f

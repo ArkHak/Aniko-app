@@ -60,7 +60,9 @@ internal fun interFontFamily(): FontFamily =
  */
 @Composable
 internal fun jetBrainsMonoFontFamily(): FontFamily =
-    FontFamily(Font(Res.font.jetbrains_mono_medium, weight = FontWeight.Medium))
+    FontFamily(
+        Font(Res.font.jetbrains_mono_medium, weight = FontWeight.Medium),
+    )
 
 /**
  * Один стиль текста: пара (fontSize, lineHeight) в sp + вес + межбуквенный интервал.

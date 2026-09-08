@@ -1,8 +1,10 @@
 package com.aniko.app.feature.settings
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -15,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -98,54 +101,69 @@ private fun NotificationSettingsContent(
 ) {
     val dimens = AnixThemeTokens.dimens
 
-    Column(modifier = modifier) {
-        if (permission != null && !permission.isGranted) {
-            ListItem(
-                headlineContent = { Text(strings.settingsNotificationsPermissionRequired) },
-                trailingContent = {
-                    // Подтверждено на устройстве (Фаза 11, T9): M3 Button не сливает свой Text{}
-                    // в озвучиваемый узел (тот же паттерн, что и остальные M3-компоненты фазы).
-                    Button(
-                        onClick = permission::request,
-                        modifier =
-                            Modifier.clearAndSetSemantics {
-                                contentDescription = strings.settingsNotificationsPermissionGrant
-                            },
-                    ) {
-                        Text(strings.settingsNotificationsPermissionGrant)
-                    }
-                },
-            )
-            HorizontalDivider()
-        }
-
-        Text(
-            text = strings.settingsNotificationsPollingNote,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(dimens.spaceM),
-        )
-
-        when {
-            uiState.isLoading && uiState.preferences == null ->
-                AnixLoadingBox(modifier = Modifier.fillMaxSize())
-
-            uiState.error != null && uiState.preferences == null ->
-                AnixErrorBox(
-                    message = strings.settingsNotificationsLoadError,
-                    onRetry = viewModel::load,
-                    modifier = Modifier.fillMaxSize(),
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        // Дизайн-leftovers (фазы 14/15): chrome-роут на desktop — ограничиваем ширину контента
+        // по аналогии с ProfileScreen/SettingsScreen.
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .widthIn(max = dimens.contentMaxWidth),
+        ) {
+            if (permission != null && !permission.isGranted) {
+                ListItem(
+                    headlineContent = { Text(strings.settingsNotificationsPermissionRequired) },
+                    trailingContent = {
+                        // Подтверждено на устройстве (Фаза 11, T9): M3 Button не сливает свой Text{}
+                        // в озвучиваемый узел (тот же паттерн, что и остальные M3-компоненты фазы).
+                        Button(
+                            onClick = permission::request,
+                            modifier =
+                                Modifier.clearAndSetSemantics {
+                                    contentDescription = strings.settingsNotificationsPermissionGrant
+                                },
+                        ) {
+                            Text(strings.settingsNotificationsPermissionGrant)
+                        }
+                    },
                 )
+                HorizontalDivider()
+            }
 
-            else -> {
-                val preferences = uiState.preferences
-                if (preferences != null) {
-                    PreferenceToggles(
-                        preferences = preferences,
-                        enabled = !uiState.isLoading,
-                        onToggle = viewModel::toggle,
-                        strings = strings,
+            Text(
+                text = strings.settingsNotificationsPollingNote,
+                style = MaterialTheme.typography.bodySmall,
+                // Track A leftovers: вторичный текст chrome-роутов → точный t2-токен вместо
+                // дефолтного onSurfaceVariant (полный on-surface), чтобы совпадать с остальными
+                // экранами (hero-meta, section labels и т.д.).
+                color = AnixThemeTokens.colors.textSecondary60,
+                modifier = Modifier.padding(dimens.spaceM),
+            )
+
+            when {
+                uiState.isLoading && uiState.preferences == null ->
+                    AnixLoadingBox(modifier = Modifier.fillMaxSize())
+
+                uiState.error != null && uiState.preferences == null ->
+                    AnixErrorBox(
+                        message = strings.settingsNotificationsLoadError,
+                        onRetry = viewModel::load,
+                        modifier = Modifier.fillMaxSize(),
                     )
+
+                else -> {
+                    val preferences = uiState.preferences
+                    if (preferences != null) {
+                        PreferenceToggles(
+                            preferences = preferences,
+                            enabled = !uiState.isLoading,
+                            onToggle = viewModel::toggle,
+                            strings = strings,
+                        )
+                    }
                 }
             }
         }

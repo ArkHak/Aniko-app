@@ -3,6 +3,7 @@ package com.aniko.app.feature.search
 import androidx.lifecycle.viewModelScope
 import com.aniko.app.mvi.BaseViewModel
 import com.aniko.data.paging.Paginator
+import com.aniko.data.repository.LibraryRepository
 import com.aniko.data.repository.ReleaseRepository
 import com.aniko.model.CatalogFilter
 import com.aniko.model.Release
@@ -49,6 +50,7 @@ import kotlinx.coroutines.launch
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class SearchViewModel(
     private val releaseRepository: ReleaseRepository,
+    private val libraryRepository: LibraryRepository,
 ) : BaseViewModel<SearchState, SearchIntent, SearchEffect>(initialState = SearchState()) {
     private val queryState = MutableStateFlow("")
     private val tabState = MutableStateFlow(CatalogTab.All)
@@ -105,6 +107,24 @@ class SearchViewModel(
             SearchIntent.FiltersReset -> updateFilter { CatalogFilter() }
 
             is SearchIntent.ViewModeChanged -> updateState { copy(viewMode = intent.viewMode) }
+
+            // Catalog «⋮» (2026-09-08): оптимистичная запись в список через тот же механизм, что
+            // Library (offline-очередь), результат не отражается в стейте каталога (фильтры и
+            // список релизов не зависят от списков пользователя).
+            is SearchIntent.SetListStatus -> {
+                val id = intent.releaseId
+                val status = intent.status
+                viewModelScope.launch {
+                    runCatching { libraryRepository.addToList(status, id) }
+                }
+            }
+
+            is SearchIntent.RemoveFromList -> {
+                val id = intent.releaseId
+                viewModelScope.launch {
+                    runCatching { libraryRepository.removeFromList(id) }
+                }
+            }
 
             SearchIntent.LoadMore, SearchIntent.Retry -> loadNextAndReportIfMoreFailed()
         }

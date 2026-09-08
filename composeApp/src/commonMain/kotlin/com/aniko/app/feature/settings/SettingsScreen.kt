@@ -1,9 +1,11 @@
 package com.aniko.app.feature.settings
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -14,6 +16,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -27,8 +30,9 @@ import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * Экран настроек: галерея дизайн-токенов, уведомления, переключатель языка (P5.T9 — канонический
- * дом переключателя на мобильных/таблетах; на Desktop он же дублируется в `sidebarFooter`
- * `AdaptiveScaffold`) и выход из аккаунта.
+ * дом переключателя языка; с 2026-09-08 единственный — desktop-дубль в `sidebarFooter`
+ * `AdaptiveScaffold` удалён по запросу пользователя: обрезался на малой высоте сайдбара) и
+ * выход из аккаунта.
  *
  * P13.T2 (сверка с мокапом Claude Design) убрала отсюда два пункта:
  * - «Мой профиль» — раньше этот экран был вкладкой таб-бара и открывал профиль сам, теперь
@@ -38,8 +42,7 @@ import org.koin.compose.viewmodel.koinViewModel
  * - переключатель темы (`AnixThemePicker`) — физически переехал в `ProfileScreen.kt`
  *   (`ProfileContent`), мокап рисует его прямо под шапкой профиля. Переключатель языка НЕ
  *   переехал вместе с ним — решение принято по умолчанию (план оставлял выбор): мокап явно требует
- *   переноса только Theme, а перенос языка добавил бы асимметрию с уже существующим дублем в
- *   `sidebarFooter` без видимой пользы.
+ *   переноса только Theme, а язык остаётся здесь как единственная точка переключения.
  *
  * Из-за первого пункта экран больше не таб-рут — теперь это дочерний маршрут со своим `TopAppBar`
  * (заголовок + кнопка «назад» на [onBack]), тем же паттерном, что [NotificationSettingsScreen]/
@@ -49,9 +52,11 @@ import org.koin.compose.viewmodel.koinViewModel
  * `LocaleStore` внутри `SettingsViewModel` — экран остаётся тонким прокси без собственного стейта
  * (см. критерий миграции на MVI-контракт в журнале Фазы 5: `SettingsViewModel` НЕ мигрирует).
  */
-@Suppress("LongParameterList") // 7 опциональных колбэков/параметров одного плоского экрана без
-// собственного стейта (см. KDoc выше про критерий немиграции на MVI) — группировка в data class
-// ради обхода линта добавила бы косвенность без пользы для читаемости.
+@Suppress("LongParameterList", "LongMethod") // 7 опциональных колбэков/параметров одного плоского
+// экрана без собственного стейта (см. KDoc выше про критерий немиграции на MVI) — группировка
+// в data class ради обхода линта добавила бы косвенность без пользы для читаемости; тело —
+// линейный плоский список пунктов (ListItem), разбиение на приватную функцию-прокси добавило бы
+// косвенность ради счётчика строк (тот же случай, что WatchAndFavoriteRow в ReleaseHeaderSection).
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -74,40 +79,60 @@ fun SettingsScreen(
         // clearAndSetSemantics на каждом пункте, кроме языка (у него нет своего onClick — переключение
         // происходит через AnixLanguagePicker внутри, уже озвученный отдельно).
         Surface(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                ListItem(
-                    headlineContent = { Text(text = strings.settingsDesignGallery) },
+            // Дизайн-leftovers (фазы 14/15): chrome-роуты на desktop не должны растягивать строки
+            // на всю ширину окна — повторяем паттерн ProfileScreen: Box(TopCenter) +
+            // Column(widthIn(max = contentMaxWidth)).
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                Column(
                     modifier =
                         Modifier
-                            .clickable(onClick = onDesignGalleryClick)
-                            .clearAndSetSemantics { contentDescription = strings.settingsDesignGallery },
-                )
-                ListItem(
-                    headlineContent = { Text(text = strings.settingsNotificationsSection) },
-                    modifier =
-                        Modifier
-                            .clickable(onClick = onNotificationsClick)
-                            .clearAndSetSemantics { contentDescription = strings.settingsNotificationsSection },
-                )
-                SettingsPickerListItem(headline = strings.settingsLanguage) {
-                    AnixLanguagePicker(
-                        currentTag = languageTag,
-                        onSelect = onLanguageTagChange,
-                        modifier = Modifier.padding(top = dimens.spaceXs),
+                            .fillMaxSize()
+                            .widthIn(max = dimens.contentMaxWidth)
+                            .verticalScroll(rememberScrollState()),
+                ) {
+                    ListItem(
+                        headlineContent = { Text(text = strings.settingsDesignGallery) },
+                        modifier =
+                            Modifier
+                                .clickable(onClick = onDesignGalleryClick)
+                                .clearAndSetSemantics {
+                                    contentDescription = strings.settingsDesignGallery
+                                },
+                    )
+                    ListItem(
+                        headlineContent = { Text(text = strings.settingsNotificationsSection) },
+                        modifier =
+                            Modifier
+                                .clickable(onClick = onNotificationsClick)
+                                .clearAndSetSemantics {
+                                    contentDescription = strings.settingsNotificationsSection
+                                },
+                    )
+                    SettingsPickerListItem(headline = strings.settingsLanguage) {
+                        AnixLanguagePicker(
+                            currentTag = languageTag,
+                            onSelect = onLanguageTagChange,
+                            modifier = Modifier.padding(top = dimens.spaceXs),
+                        )
+                    }
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                text = strings.settingsSignOut,
+                                color = AnixThemeTokens.colors.errorText,
+                            )
+                        },
+                        modifier =
+                            Modifier
+                                .clickable { viewModel.signOut() }
+                                .clearAndSetSemantics {
+                                    contentDescription = strings.settingsSignOut
+                                },
                     )
                 }
-                ListItem(
-                    headlineContent = {
-                        Text(
-                            text = strings.settingsSignOut,
-                            color = AnixThemeTokens.colors.errorText,
-                        )
-                    },
-                    modifier =
-                        Modifier
-                            .clickable { viewModel.signOut() }
-                            .clearAndSetSemantics { contentDescription = strings.settingsSignOut },
-                )
             }
         }
     }

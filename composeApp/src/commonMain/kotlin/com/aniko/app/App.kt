@@ -2,7 +2,6 @@ package com.aniko.app
 
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -62,16 +61,15 @@ import com.aniko.data.sync.SyncCoordinator
 import com.aniko.data.theme.ThemeStore
 import com.aniko.ui.adaptive.AdaptiveNavItem
 import com.aniko.ui.adaptive.AdaptiveScaffold
+import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.adaptive.rememberAnixWindowSize
-import com.aniko.ui.component.AnixLanguagePicker
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.component.AnixOfflineBanner
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.ProvideAppStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.image.createAnixImageLoader
-import com.aniko.ui.theme.AnixThemeTokens
 import com.aniko.ui.theme.AppTheme
 import io.ktor.client.HttpClient
 import org.koin.compose.KoinContext
@@ -128,9 +126,10 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
         // Lyricist (см. KDoc ProvideAppStrings). null — «следовать системной локали».
         val languageTag by localeStore.languageTag.collectAsStateWithLifecycle()
 
-        // Тема — читается из ThemeStore тем же способом, что и язык выше. null — «следовать
-        // системной теме» (тогда используется isSystemInDarkTheme(), как и раньше до появления
-        // ручного переключателя).
+        // Тема — читается из ThemeStore тем же способом, что и язык выше. null — «не выбран
+        // явно»: первый запуск/сброс → светлая тема (макет Home в Claude Design светлый,
+        // сверка 2026-09-08 по скриншоту пользователя; системная тема macOS не учитывается).
+        // Явный выбор — "light"/"dark".
         val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
 
         // Единственный авторитет размера окна (P5.T4) — вычисляется один раз на корневом уровне и
@@ -143,7 +142,7 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
                 when (themeMode) {
                     "light" -> false
                     "dark" -> true
-                    else -> isSystemInDarkTheme()
+                    else -> false
                 },
         ) {
             ProvideAppStrings(languageTag = languageTag) {
@@ -158,7 +157,6 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
                         AnixSessionGate(
                             authRepository = authRepository,
                             localeStore = localeStore,
-                            languageTag = languageTag,
                             themeStore = themeStore,
                             onBackHandlerReady = onBackHandlerReady,
                             // Пока баннер виден, зону статус-бара занимает он — об этом надо
@@ -198,12 +196,11 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
  */
 @Composable
 @Suppress("LongParameterList") // themeStore добавлен аддитивно к уже существовавшему набору
-// параметров (localeStore/languageTag threading, тот же паттерн, что и у SettingsScreen) —
-// группировка сторов в отдельный объект ради обхода линта добавила бы косвенность без пользы.
+// параметров (localeStore threading, тот же паттерн, что и у SettingsScreen) — группировка
+// сторов в отдельный объект ради обхода линта добавила бы косвенность без пользы.
 private fun AnixSessionGate(
     authRepository: AuthRepository,
     localeStore: LocaleStore,
-    languageTag: String?,
     themeStore: ThemeStore,
     onBackHandlerReady: (() -> Boolean) -> Unit,
     modifier: Modifier = Modifier,
@@ -222,7 +219,7 @@ private fun AnixSessionGate(
         when (sessionState) {
             SessionState.Loading -> AnixLoadingBox()
             SessionState.Unauthorized -> LoginScreen()
-            is SessionState.Authorized -> AnixAppScaffold(localeStore, languageTag, themeStore, onBackHandlerReady)
+            is SessionState.Authorized -> AnixAppScaffold(localeStore, themeStore, onBackHandlerReady)
         }
 
         SnackbarHost(
@@ -263,14 +260,17 @@ private fun AnixSection.toNavItem(strings: Strings): AdaptiveNavItem =
 @Composable
 private fun AnixAppScaffold(
     localeStore: LocaleStore,
-    languageTag: String?,
     themeStore: ThemeStore,
     onBackHandlerReady: (() -> Boolean) -> Unit,
 ) {
     val navController = rememberNavController()
     val paneStack = rememberDetailPaneStack()
     val windowSize = LocalAnixWindowSize.current
-    val titleNavigator = rememberTitleNavigator(navController, paneStack, isTwoPane = { windowSize.isTwoPane })
+    // 2026-09-08 (макет Claude Design): панели list-detail живут только на Medium. На Expanded
+    // (Desktop) списки полноширинные, открытие тайтла — полноэкранный маршрут (см. ListDetailHost);
+    // на Compact — всегда маршрут. Та же граница используется для миграции открытых тайтлов ниже.
+    val panesEnabled = windowSize == AnixWindowSize.Medium
+    val titleNavigator = rememberTitleNavigator(navController, paneStack, isTwoPane = { panesEnabled })
 
     LaunchedEffect(titleNavigator, onBackHandlerReady) {
         onBackHandlerReady(titleNavigator::back)
@@ -279,9 +279,11 @@ private fun AnixAppScaffold(
     // Миграция открытого тайтла между маршрутом (compact) и панелью (wide) при смене размера окна
     // (P5.T3 — найдено ревью: без этого шага пользователь "терял" бы открытую карточку релиза при
     // изменении размера окна, т.к. NavController и DetailPaneStack — два независимых источника
-    // состояния без моста между ними). Реализация — см. [migratePaneRoutes] ниже.
-    LaunchedEffect(windowSize.isTwoPane) {
-        migratePaneRoutes(navController, paneStack, isTwoPane = windowSize.isTwoPane)
+    // состояния без моста между ними). Реализация — см. [migratePaneRoutes] ниже. Граница —
+    // panesEnabled (Medium), см. выше: ресайз Compact↔Medium↔Expanded мигрирует открытый тайтл
+    // между панелью и полноэкранным маршрутом на каждом пересечении.
+    LaunchedEffect(panesEnabled) {
+        migratePaneRoutes(navController, paneStack, isTwoPane = panesEnabled)
     }
 
     // Deep links (P10.T7): DeepLinkDispatcher.pending — StateFlow, а не одноразовый callback,
@@ -303,7 +305,6 @@ private fun AnixAppScaffold(
         }
     val strings = LocalStrings.current
     val navItems = remember(strings) { AnixSection.entries.map { it.toNavItem(strings) } }
-    val dimens = AnixThemeTokens.dimens
 
     CompositionLocalProvider(LocalTitleNavigator provides titleNavigator) {
         AdaptiveScaffold(
@@ -313,13 +314,6 @@ private fun AnixAppScaffold(
             showNavigationChrome = backStackEntry?.destination?.hasRoute(AnixDestination.Player::class) != true,
             onItemClick = { item ->
                 navController.navigateToTabRoot(AnixSection.valueOf(item.id).destination)
-            },
-            sidebarFooter = {
-                AnixLanguagePicker(
-                    currentTag = languageTag,
-                    onSelect = localeStore::setLanguageTag,
-                    modifier = Modifier.padding(dimens.spaceM),
-                )
             },
         ) { innerPadding ->
             AnixNavGraph(
@@ -479,9 +473,10 @@ private fun NavGraphBuilder.listSectionRoutes(
 }
 
 /**
- * Полноэкранные маршруты карточки релиза/комментариев/плеера (compact-размер) — на wide-экранах
- * тот же контент рисуется внутри [ListDetailHost] (см. `DetailPaneContent` в `ListDetailHost.kt`),
- * сюда попадают только когда [TitleNavigator] решил, что панели нет места (см. `AdaptiveTitleNavigator`).
+ * Полноэкранные маршруты карточки релиза/комментариев/плеера. На Medium тот же контент рисуется
+ * внутри [ListDetailHost] (detail-панель рядом со списком, см. `DetailPaneContent`), на Compact и
+ * Expanded (Desktop) сюда ведёт [TitleNavigator] всегда — Expanded полноширинный, как в макете
+ * Claude Design (2026-09-08): список заменяется экраном тайтла, sidebar остаётся.
  */
 private fun NavGraphBuilder.titleDetailRoutes(
     navController: NavHostController,
@@ -526,9 +521,9 @@ private fun NavGraphBuilder.titleDetailRoutes(
  * переехала на `ProfileScreen` вместе с `AchievementsSection` (мокап рисует переключатель темы
  * прямо под шапкой профиля) — поэтому здесь `themeStore` читается уже для `AnixDestination.Profile`,
  * а не для `Settings`. Язык (`AnixLanguagePicker`) остался в `Settings` — решение по умолчанию:
- * мокап явно требует переноса только Theme, а на Desktop переключатель языка и так уже дублируется
- * в `sidebarFooter` `AdaptiveScaffold` (см. `AnixAppScaffold`), так что дополнительного переезда на
- * Profile не требуется для консистентности.
+ * мокап явно требует переноса только Theme. Desktop-дубль переключателя языка в футере сайдбара
+ * (`sidebarFooter` `AdaptiveScaffold`) удалён 2026-09-08 по запросу пользователя: он обрезался
+ * на малой высоте сайдбара и дублировал пункт «Язык» из Settings — язык теперь только в Settings.
  */
 private fun NavGraphBuilder.chromeRoutes(
     navController: NavHostController,

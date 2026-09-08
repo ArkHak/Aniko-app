@@ -38,9 +38,9 @@ import androidx.compose.ui.graphics.Color
  * call site физически менялся. `movableContentOf` сохраняет идентичность поддерева при переносе
  * между этими местами вызова вместо разбора/пересборки.
  */
-@Suppress("LongParameterList") // Публичная сигнатура зафиксирована брифом P5.T5: два слота
-// сайдбара (header/footer), snackbarHost и content — все опциональны с дефолтами, кроме первых
-// трёх (items/selectedItemId/onItemClick) и content. Дробить дальше (например, отдельный
+@Suppress("LongParameterList") // Публичная сигнатура зафиксирована брифом P5.T5: слот сайдбара
+// (header), snackbarHost и content — все опциональны с дефолтами, кроме первых трёх
+// (items/selectedItemId/onItemClick) и content. Дробить дальше (например, отдельный
 // data class для сайдбар-слотов) добавило бы косвенность ради обхода линта, а не ради читаемости.
 @Composable
 fun AdaptiveScaffold(
@@ -51,7 +51,6 @@ fun AdaptiveScaffold(
     windowSize: AnixWindowSize = LocalAnixWindowSize.current,
     showNavigationChrome: Boolean = true,
     sidebarHeader: @Composable ColumnScope.() -> Unit = {},
-    sidebarFooter: @Composable ColumnScope.() -> Unit = {},
     snackbarHost: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
@@ -94,7 +93,6 @@ fun AdaptiveScaffold(
                     selectedItemId = selectedItemId,
                     onItemClick = onItemClick,
                     header = sidebarHeader,
-                    footer = sidebarFooter,
                 )
                 Scaffold(
                     modifier = Modifier.weight(1f),

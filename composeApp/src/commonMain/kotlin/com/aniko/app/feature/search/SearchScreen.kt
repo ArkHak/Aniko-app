@@ -25,9 +25,11 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.mvi.CollectEffects
+import com.aniko.model.ListStatus
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.component.AnixIcon
@@ -68,6 +70,15 @@ fun SearchScreen(
     val strings = LocalStrings.current
     val isExpanded = LocalAnixWindowSize.current == AnixWindowSize.Expanded
 
+    // Catalog-меню «⋮» (сверка 2026-09-08): статусы списка через LibraryRepository, тот же
+    // оптимистичный механизм, что в Library (см. SearchViewModel).
+    val onSetListStatus: (Int, ListStatus) -> Unit = { id, status ->
+        viewModel.dispatch(SearchIntent.SetListStatus(id, status))
+    }
+    val onRemoveFromList: (Int) -> Unit = { id ->
+        viewModel.dispatch(SearchIntent.RemoveFromList(id))
+    }
+
     // P2.T10/см. HomeScreen (тот же паттерн и причина): эффект несёт только доменную AnixError,
     // локализованный снекбар — TODO, когда SnackbarHostState станет доступен экрану (вне
     // территории трека B — не трогаем App.kt).
@@ -85,14 +96,15 @@ fun SearchScreen(
         color = Color.Transparent,
     ) {
         if (isExpanded) {
-            ExpandedCatalogLayout(state, strings, dimens, viewModel, onReleaseClick)
+            ExpandedCatalogLayout(state, strings, dimens, viewModel, onReleaseClick, onSetListStatus, onRemoveFromList)
         } else {
-            CompactCatalogLayout(state, strings, dimens, viewModel, onReleaseClick)
+            CompactCatalogLayout(state, strings, dimens, viewModel, onReleaseClick, onSetListStatus, onRemoveFromList)
         }
     }
 }
 
 /** Expanded: постоянная боковая панель фильтров + сетка (см. KDoc [SearchScreen]). */
+@Suppress("LongParameterList") // Состояние + VM + 5 колбэков, см. SearchScreen KDoc.
 @Composable
 private fun ExpandedCatalogLayout(
     state: SearchState,
@@ -100,6 +112,8 @@ private fun ExpandedCatalogLayout(
     dimens: AnixDimens,
     viewModel: SearchViewModel,
     onReleaseClick: (Int) -> Unit,
+    onSetListStatus: (Int, ListStatus) -> Unit,
+    onRemoveFromList: (Int) -> Unit,
 ) {
     // P13.T7 [FIX]: сайдбар раньше держал фиксированные dimens.filterSidebarWidth (280dp)
     // независимо от реальной доступной ширины — на Desktop `ExpandedCatalogLayout` живёт внутри
@@ -138,6 +152,8 @@ private fun ExpandedCatalogLayout(
             onTabSelected = { tab -> viewModel.dispatch(SearchIntent.TabSelected(tab)) },
             onViewModeChanged = { mode -> viewModel.dispatch(SearchIntent.ViewModeChanged(mode)) },
             onReleaseClick = onReleaseClick,
+            onSetListStatus = onSetListStatus,
+            onRemoveFromList = onRemoveFromList,
             onLoadMore = { viewModel.dispatch(SearchIntent.LoadMore) },
             onRetry = { viewModel.dispatch(SearchIntent.Retry) },
             modifier = Modifier.weight(CATALOG_BODY_WEIGHT).fillMaxHeight(),
@@ -157,6 +173,7 @@ private val FILTER_SIDEBAR_MIN_WIDTH = 200.dp
  * [SearchScreen]).
  */
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList") // Состояние + VM + 5 колбэков, см. SearchScreen KDoc.
 @Composable
 private fun CompactCatalogLayout(
     state: SearchState,
@@ -164,26 +181,45 @@ private fun CompactCatalogLayout(
     dimens: AnixDimens,
     viewModel: SearchViewModel,
     onReleaseClick: (Int) -> Unit,
+    onSetListStatus: (Int, ListStatus) -> Unit,
+    onRemoveFromList: (Int) -> Unit,
 ) {
-    CatalogBody(
-        state = state,
-        strings = strings,
-        dimens = dimens,
-        onQueryChange = { q -> viewModel.dispatch(SearchIntent.QueryChanged(q)) },
-        onTabSelected = { tab -> viewModel.dispatch(SearchIntent.TabSelected(tab)) },
-        onViewModeChanged = { mode -> viewModel.dispatch(SearchIntent.ViewModeChanged(mode)) },
-        onReleaseClick = onReleaseClick,
-        onLoadMore = { viewModel.dispatch(SearchIntent.LoadMore) },
-        onRetry = { viewModel.dispatch(SearchIntent.Retry) },
-        modifier = Modifier.fillMaxSize(),
-        filtersContent = {
-            CatalogInlineFilterChips(
-                filter = state.filter,
-                onStatusToggle = { id -> viewModel.dispatch(SearchIntent.StatusToggled(id)) },
-                onGenreToggle = { genre -> viewModel.dispatch(SearchIntent.GenreToggled(genre)) },
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Сверка Catalog (phone-макет, 2026-09-08): заголовок экрана над поиском — только
+        // Compact (на Medium/Expanded чипы/сайдбар идут без шапки).
+        if (LocalAnixWindowSize.current == AnixWindowSize.Compact) {
+            Text(
+                text = strings.navCatalog,
+                style =
+                    MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                    ),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = dimens.spaceM).padding(top = dimens.spaceM),
             )
-        },
-    )
+        }
+        CatalogBody(
+            state = state,
+            strings = strings,
+            dimens = dimens,
+            onQueryChange = { q -> viewModel.dispatch(SearchIntent.QueryChanged(q)) },
+            onTabSelected = { tab -> viewModel.dispatch(SearchIntent.TabSelected(tab)) },
+            onViewModeChanged = { mode -> viewModel.dispatch(SearchIntent.ViewModeChanged(mode)) },
+            onReleaseClick = onReleaseClick,
+            onSetListStatus = onSetListStatus,
+            onRemoveFromList = onRemoveFromList,
+            onLoadMore = { viewModel.dispatch(SearchIntent.LoadMore) },
+            onRetry = { viewModel.dispatch(SearchIntent.Retry) },
+            modifier = Modifier.fillMaxSize(),
+            filtersContent = {
+                CatalogInlineFilterChips(
+                    filter = state.filter,
+                    onStatusToggle = { id -> viewModel.dispatch(SearchIntent.StatusToggled(id)) },
+                    onGenreToggle = { genre -> viewModel.dispatch(SearchIntent.GenreToggled(genre)) },
+                )
+            },
+        )
+    }
 }
 
 /**
@@ -209,6 +245,8 @@ private fun CatalogBody(
     onTabSelected: (CatalogTab) -> Unit,
     onViewModeChanged: (CatalogViewMode) -> Unit,
     onReleaseClick: (Int) -> Unit,
+    onSetListStatus: (Int, ListStatus) -> Unit,
+    onRemoveFromList: (Int) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
@@ -306,6 +344,8 @@ private fun CatalogBody(
             pagingState = state.pagingState,
             viewMode = state.viewMode,
             onReleaseClick = onReleaseClick,
+            onSetListStatus = onSetListStatus,
+            onRemoveFromList = onRemoveFromList,
             onLoadMore = onLoadMore,
             onRetry = onRetry,
             modifier = Modifier.weight(1f),
