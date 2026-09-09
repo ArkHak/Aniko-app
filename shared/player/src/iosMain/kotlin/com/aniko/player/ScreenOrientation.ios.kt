@@ -5,6 +5,10 @@ import androidx.compose.runtime.Composable
 /**
  * **CUT на iOS** — программная блокировка ориентации на landscape не реализована.
  *
+ * Общая политика и кросс-ссылка на Android-реализацию — см. KDoc expect-функции
+ * [LockLandscapeOrientationEffect] в `ScreenOrientation.kt`. Там же описан детерминированный
+ * возврат ориентации на Android (capture-effective → force-match-entry → settle → release).
+ *
  * Единственный работающий без полноценной Swift-интеграции способ — приватный (недокументированный)
  * KVC-приём `UIDevice.currentDevice.setValue(_:forKey:"orientation")`: `NSKeyValueCoding.setValue
  * (forKey:)` не резолвится в доступном на этой машине наборе Kotlin/Native cinterop-биндингов

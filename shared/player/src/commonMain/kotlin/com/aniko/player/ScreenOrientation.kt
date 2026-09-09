@@ -8,19 +8,20 @@ import androidx.compose.runtime.Composable
  * Снимается сама при выходе из композиции (`DisposableEffect` в платформенных реализациях) —
  * вызывающая сторона не обязана помнить восстановить исходную ориентацию вручную.
  *
- * - Android: реальная блокировка через `Activity.requestedOrientation` (см. `.android.kt`) —
- *   протестирована живьём на эмуляторе.
+ * - Android: реальная блокировка через `Activity.requestedOrientation` (см. `ScreenOrientation.android.kt`).
+ *   Политика восстановления: при захвате фиксируется эффективная ориентация устройства до записи
+ *   лока; при освобождении, если приложение жило на `UNSPECIFIED`, форсируется "входная"
+ *   ориентация (`SENSOR_PORTRAIT`/`SENSOR_LANDSCAPE`) на ~400ms settle-окно, после чего возвращается
+ *   `UNSPECIFIED`. Это детерминированно возвращает экран к той ориентации, в которой пользователь
+ *   зашёл в плеер, и не оставляет его в landscape из-за датчика. Cancel-safe: повторный вход
+ *   внутри settle-окна отменяет отложенное восстановление и не захватывает установленный
+ *   самим модулем settle-force (`SENSOR_PORTRAIT`/`SENSOR_LANDSCAPE`) как базу.
  *   `android:configChanges="orientation|..."` уже стоит на `MainActivity` в манифесте, поэтому
  *   Activity не пересоздаётся при повороте и `requestedOrientation` можно менять на лету.
- * - iOS: `UIDevice.setValue(_:forKey:"orientation")` (см. `.ios.kt`) — устоявшийся в комьюнити
- *   Kotlin/Native приём (Apple не публикует официальный imperative API для программного поворота
- *   без полноценного `UIWindowScene`-геометрического запроса iOS 16+, а поддерживать обе ветки
- *   ради этого излишне). `UISupportedInterfaceOrientations` в `Info.plist` уже разрешает
- *   landscape/portrait на уровне приложения — без этого ключа поворот не сработал бы никаким
- *   способом. **Не проверено живьём** (WebDriverAgent не смог тапать по Compose-дереву на этой
- *   сборке в течение всей сессии верификации Фазы 13 — см. `docs/REELWAVE_PLAN.md`), но код
- *   компилируется под iOS-таргет; App Store здесь не при чём (P12.T1 — публикация в сторы не
- *   планируется), так что рисков ревью нет.
+ * - iOS: программная блокировка не реализована (CUT, см. `ScreenOrientation.ios.kt`) —
+ *   `UISupportedInterfaceOrientations` в `Info.plist` разрешает landscape/portrait на уровне
+ *   приложения, поэтому при физическом повороте устройства интерфейс сам перейдёт в landscape.
+ *   Автоматический поворот по тапу без физического поворота отсутствует.
  * - Desktop: no-op — у окна нет "ориентации" в этом смысле, а Desktop-плеер и так остаётся
  *   стабом (системный браузер, `project_reelwave_desktop_player_backlog` п.2), кнопки
  *   fullscreen там не будет вовсе.

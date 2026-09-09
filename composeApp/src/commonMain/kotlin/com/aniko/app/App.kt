@@ -496,7 +496,18 @@ private fun NavGraphBuilder.titleDetailRoutes(
         val route: AnixDestination.ReleaseComments = entry.toRoute()
         ReleaseCommentsScreen(releaseId = route.releaseId)
     }
-    composable<AnixDestination.Player> { entry ->
+    // Без анимаций (как и четыре таб-рута выше, см. KDoc `listSectionRoutes`): дефолтный
+    // 700ms fade NavHost при входе/выходе плеера держал в композиции ДВА экрана плеера
+    // одновременно (старый entry жив, пока не завершится exit-переход) — два живых WebView с
+    // видео поверх друг друга («два плеера дублируются и накладываются», жалоба 2026-09-08,
+    // см. журнал). Видео-поверхности переключаются мгновенно, без кросс-фейда — как у всех
+    // нормальных видеоплееров.
+    composable<AnixDestination.Player>(
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None },
+        popEnterTransition = { EnterTransition.None },
+        popExitTransition = { ExitTransition.None },
+    ) { entry ->
         val route: AnixDestination.Player = entry.toRoute()
         PlayerScreen(
             releaseId = route.releaseId,

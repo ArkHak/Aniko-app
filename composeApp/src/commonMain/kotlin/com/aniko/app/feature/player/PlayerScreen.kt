@@ -55,6 +55,12 @@ import org.koin.compose.viewmodel.koinViewModel
  * `isFullscreen == true` (см. комментарий у вызова ниже) — принудительно поворачивает устройство
  * в альбомную ориентацию на Android, на iOS остаётся честным CUT (см. KDoc самой функции).
  *
+ * **Двухшаговый системный back (player-triple-design, §2.2).** При открытом пикере озвучки
+ * back закрывает пикер; при `isFullscreen && videoState.isVideoFound` — сворачивает плеер
+ * в компактный режим. Гейт `isVideoFound` обязателен: без моста compact-режим запирает
+ * embed-страницу за жестовым слоем `CompactVideoGestureLayer`, поэтому back в no-bridge
+ * fullscreen должен оставаться выходом из экрана, а не collapse.
+ *
  * **Единственная развилка платформ на этом экране** — обычный `if` по `controller.isSupported`,
  * без `expect/actual`: сам флаг уже разруливает платформу за нас (см. его KDoc).
  * - `isSupported == true` (Android/iOS) → компактный режим по умолчанию + [PlayerOverlay] по
@@ -143,10 +149,24 @@ fun PlayerScreen(
                     // no-op (P8.T1).
                     val controller = rememberEmbedVideoController(source.url)
                     val videoState by controller.state.collectAsStateWithLifecycle()
-                    // Переход на следующую серию — обычная навигация на тот же маршрут с
-                    // `position + 1`: экран пересоздастся, `PlayerViewModel.load` увидит новый
-                    // `LoadKey` и перезапустит цепочку. Отдельного «перезагрузить внутри экрана»
-                    // не заводим — иначе back вернул бы не на предыдущую серию, а мимо неё.
+
+                    // Back в fullscreen работает в два шага: сначала закрыть пикер озвучки,
+                    // потом — свернуть в compact. Пикер добавлен позже в композиции, поэтому
+                    // его BackHandler побеждает при `showAudioPicker == true`.
+                    BackHandler(enabled = !showAudioPicker && isFullscreen && videoState.isVideoFound) {
+                        viewModel.setFullscreen(false)
+                    }
+                    BackHandler(enabled = showAudioPicker) {
+                        showAudioPicker = false
+                    }
+
+                    // Переход на следующую серию — навигация на тот же маршрут с `position + 1`.
+                    // `TitleNavigator.openPlayer` теперь ЗАМЕНЯЕТ текущий Player-маршрут
+                    // (`popUpTo<Player> { inclusive = true }`, фикс 2026-09-08 «два плеера
+                    // дублируются»): экран пересоздастся, `PlayerViewModel.load` увидит новый
+                    // `LoadKey` и перезапустит цепочку. В back stack всегда ровно один Player —
+                    // «назад» из любой серии возвращает на экран, откуда открыли плеер
+                    // (детали/список), а не копится стек из серий.
                     val openNextEpisode = { navigator.openPlayer(releaseId, sourceId, position + 1, host) }
 
                     if (controller.isSupported) {

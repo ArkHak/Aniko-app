@@ -10,6 +10,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,11 +28,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -92,12 +93,21 @@ import kotlinx.coroutines.delay
  * вместо чужих. Как только мост видео НЕ нашёл (хост с нестандартной вёрсткой, ещё не
  * загрузившаяся страница), слой снимается целиком и страница снова управляется своими средствами
  * — оверлей не имеет права запереть пользователя в кадре, которым не умеет управлять. В этом
- * состоянии из оверлея остаётся только кнопка «назад», причём постоянно видимая: на iOS другого
- * способа уйти с экрана нет.
+ * состоянии из оверлея остаётся только стрелка «назад», причём постоянно видимая: на iOS без
+ * системного edge-swipe единственный гарантированный выход — два тапа по стрелке
+ * (fullscreen→compact→exit).
  *
- * @param onCollapseFullscreen сворачивает обратно в [CompactPlayerLayout] (P13) — отдельная от
- * [onBack] кнопка в топбаре: `onBack` всегда покидает экран плеера целиком (единственный выход на
- * iOS без edge-swipe, см. абзац выше), а это — просто смена раскладки без навигации.
+ * Скрытие chrome хоста — отдельный косметический слой в JS-мосте (`EmbedVideoBridge`), а не
+ * функциональная политика оверлея: если скрыть chrome не удалось, fallback — текущее поведение
+ * «наш UI побеждает», никогда — потеря управления.
+ *
+ * @param onBack выход из экрана плеера. Используется только в no-bridge fullscreen
+ * (`!state.isVideoFound`): там стрелка «назад» не может свернуть в compact, потому что
+ * `CompactVideoGestureLayer` запирает embed-страницу, а мост не управляет видео. В обычном
+ * bridge-fullscreen стрелка сворачивает в compact через [onCollapseFullscreen], поэтому этот
+ * колбэк — fallback-выход (единственный выход на iOS без edge-swipe, см. абзац выше).
+ * @param onCollapseFullscreen сворачивает fullscreen обратно в компактный режим (P13) — просто
+ * смена раскладки без навигации. При `bridgeActive` именно это делает стрелка «назад».
  * @param onEpisodeNearEnd вызывается, когда серия подходит к концу — сюда подвешена авто-отметка
  * «просмотрено» (P8.T8). Порог — общий с баннером ([isNearEnd] из `:shared:player`), сознательно
  * один и тот же на обе фичи.
@@ -133,6 +143,7 @@ fun PlayerOverlay(
     modifier: Modifier = Modifier,
 ) {
     val colors = AnixThemeTokens.colors
+    val flash = rememberPlayerSeekFlash()
     var controlsVisible by remember { mutableStateOf(true) }
     // Счётчик «пользователь что-то нажал» — перезапускает таймер авто-скрытия, не меняя
     // видимость. Именно счётчик, а не timestamp: ключ `LaunchedEffect` должен меняться на
@@ -161,19 +172,46 @@ fun PlayerOverlay(
     Box(modifier = modifier.fillMaxSize()) {
         val scrimAlpha by animateFloatAsState(if (controlsShown) 1f else 0f, label = "playerScrim")
         if (bridgeActive) {
-            // Отдельный слой-перехватчик: тап по любому месту кадра показывает/прячет контролы.
+            // Отдельный слой-перехватчик: тап по любому месту кадра показывает/прячет контролы,
+            // двойной тап по левой/правой половине — перемотка на −10с/+10с.
             // `indication = null` — рябь на весь экран поверх видео выглядела бы как дефект.
             Box(
                 modifier =
                     Modifier
                         .fillMaxSize()
                         .background(colors.posterScrim.copy(alpha = colors.posterScrim.alpha * scrimAlpha))
-                        .clickableNoIndication {
-                            controlsVisible = !controlsVisible
-                            interactionTick++
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = {
+                                    controlsVisible = !controlsVisible
+                                    interactionTick++
+                                },
+                                onDoubleTap = { offset ->
+                                    val direction =
+                                        if (offset.x < size.width / 2f) {
+                                            PlayerSeekDirection.BACK
+                                        } else {
+                                            PlayerSeekDirection.FORWARD
+                                        }
+                                    val deltaMs =
+                                        if (direction == PlayerSeekDirection.BACK) {
+                                            -PLAYER_SEEK_STEP_MS
+                                        } else {
+                                            PLAYER_SEEK_STEP_MS
+                                        }
+                                    controller.seekBy(deltaMs)
+                                    controlsVisible = true
+                                    interactionTick++
+                                    flash.fire(direction)
+                                },
+                            )
                         },
             )
         }
+
+        // Вспышка ±10с у края тапа — декоративный отклик жеста, не перехватывает касания.
+        // Один вызов: [PlayerSeekFlashOverlay] сам позиционируется по направлению перемотки.
+        PlayerSeekFlashOverlay(state = flash)
 
         // Колонка сама по себе не перехватывает касания (у неё нет pointer-модификаторов), поэтому
         // тапы мимо кнопок проваливаются в слой-перехватчик выше и продолжают прятать контролы.
@@ -184,6 +222,7 @@ fun PlayerOverlay(
                 PlayerTopBar(
                     onBack = onBack,
                     onCollapseFullscreen = onCollapseFullscreen,
+                    bridgeActive = bridgeActive,
                     onInteraction = { interactionTick++ },
                 )
             }
@@ -219,11 +258,18 @@ fun PlayerOverlay(
     }
 }
 
-/** Кнопка «назад» + сворачивание из fullscreen (P13) + PiP-заглушка (P8.T3). */
+/**
+ * Стрелка «назад» + PiP-заглушка (P8.T3).
+ *
+ * Семантика стрелки зависит от [bridgeActive]: при активном мосте она сворачивает fullscreen
+ * в compact ([onCollapseFullscreen]), при неактивном — выходит из экрана ([onBack]), чтобы не
+ * запереть пользователя в неуправляемом compact-режиме.
+ */
 @Composable
 private fun PlayerTopBar(
     onBack: () -> Unit,
     onCollapseFullscreen: () -> Unit,
+    bridgeActive: Boolean,
     onInteraction: () -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -237,19 +283,14 @@ private fun PlayerTopBar(
             contentDescription = strings.backContentDescription,
             onClick = {
                 onInteraction()
-                onBack()
+                if (bridgeActive) {
+                    onCollapseFullscreen()
+                } else {
+                    onBack()
+                }
             },
         )
         Spacer(modifier = Modifier.weight(1f))
-        OverlayIconButton(
-            iconName = "fullscreen_exit",
-            filled = true,
-            contentDescription = strings.playerExitFullscreen,
-            onClick = {
-                onInteraction()
-                onCollapseFullscreen()
-            },
-        )
         OverlayIconButton(
             iconName = "picture_in_picture_alt",
             contentDescription = strings.playerPictureInPicture,
@@ -315,7 +356,7 @@ private fun PlayerCenterControls(
             contentDescription = strings.playerSeekBackward,
             onClick = {
                 onInteraction()
-                controller.seekBy(-SEEK_STEP_MS)
+                controller.seekBy(-PLAYER_SEEK_STEP_MS)
             },
         )
         OverlayIconButton(
@@ -334,28 +375,33 @@ private fun PlayerCenterControls(
             contentDescription = strings.playerSeekForward,
             onClick = {
                 onInteraction()
-                controller.seekBy(SEEK_STEP_MS)
+                controller.seekBy(PLAYER_SEEK_STEP_MS)
             },
         )
     }
 }
 
 /**
- * Нижняя панель: прогресс-бар с seek (P8.T3), скорость воспроизведения (P8.T5) и озвучка (P13.T10).
+ * Нижняя панель fullscreen: прогресс-бар с seek (P8.T3) + одна центрированная строка пилюль
+ * (P13.T10 / player-triple-design, §3).
+ *
+ * Раскладка — `Column { PlayerProgressBar; Box(Center) { Row(horizontalScroll) { пилюли } } }`.
+ * Порядок пилюль идентичен compact-строке: audio → sub → speeds, чтобы оба режима читались
+ * одинаково. Строка центрирована, когда влезает, и скроллируется при переполнении.
  *
  * Прогресс-бар рисуется **только** при `durationMs != null` — до события `loadedmetadata`
  * длительности не существует вообще (`duration = NaN`), и шкала «от нуля до неизвестно чего»
- * была бы выдумкой. Пока её нет — панель показывает только скорость.
+ * была бы выдумкой. Пока её нет — панель показывает только пилюли.
  *
  * **Качества здесь нет и не будет** — CUT, см. `docs/REELWAVE_PLAN.md` (отчёт P13.T9): сегмент
  * качества в Kodik embed-URL (`/720p`) декоративный на нашей стороне — приложение никогда само не
  * выбирает качество, решает сервер Anixart/Kodik при подписи ссылки. Своя кнопка переключения
  * либо ничего не даст, либо сломает подпись URL и покажет пользователю ошибку вместо видео.
+ * Хостовое меню качества в chrome плеера намеренно скрыто вместе с остальным chrome — см.
+ * `EmbedVideoBridge` и §1.5 player-triple-design.
  *
- * **Аудиодорожка (озвучка), наоборот, теперь есть** ([AudioChip]/[SubtitlesStatusChip]) — в отличие
- * от качества это не внутренний UI чужого embed-плеера, а собственный выбор Anixart API
- * (`episode/{releaseId}/{typeId}`), тот же список, что и в `VoiceTypeSelector` на Title Detail
- * (`ReleaseEpisodesSection.kt`, P8.T6) — просто доступный без выхода из плеера.
+ * Пилюли — [PlayerPillChip] (тот же компонент, что в compact-режиме), а не M3
+ * `FilterChip`/`AssistChip`: мокап рисует их нейтральными, без акцентного selected-цвета.
  */
 @Suppress("LongParameterList") // Состояние/контроллер видео + колбэк взаимодействия (существующая
 // P8.T3/T5 тройка) + список озвучек/текущая озвучка/колбэк открытия пикера (P13.T10). Группировать
@@ -387,76 +433,52 @@ private fun PlayerBottomPanel(
             )
         }
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-            modifier = Modifier.selectableGroup(),
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = strings.playerSpeedLabel,
-                style = MaterialTheme.typography.labelMedium,
-                color = OVERLAY_CONTENT_COLOR,
-            )
-            PLAYBACK_RATES.forEach { rate ->
-                FilterChip(
-                    selected = state.playbackRate.matches(rate),
-                    onClick = {
-                        onInteraction()
-                        controller.setPlaybackRate(rate)
-                    },
-                    label = { Text(strings.playerSpeedValue(rate.formatRate())) },
-                )
-            }
-        }
-
-        // Меньше двух озвучек — переключаться некуда, чип не рисуем вовсе (тот же принцип
-        // честного UI, что и у PiP-заглушки/качества выше — см. KDoc [PlayerOverlay]).
-        if (voiceTypes.size > 1) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
             ) {
-                AudioChip(currentVoiceType = currentVoiceType, onClick = onOpenAudioPicker)
-                if (currentVoiceType?.isSub == true) SubtitlesStatusChip()
+                // Меньше двух озвучек — переключаться некуда, чип не рисуем вовсе (тот же принцип
+                // честного UI, что и у PiP-заглушки/качества выше — см. KDoc [PlayerOverlay]).
+                if (voiceTypes.size > 1) {
+                    PlayerPillChip(
+                        label =
+                            currentVoiceType?.let { strings.playerAudioChipLabel(it.name) }
+                                ?: strings.playerAudioLabel,
+                        onClick = {
+                            onInteraction()
+                            onOpenAudioPicker()
+                        },
+                    )
+                    if (currentVoiceType?.isSub == true) {
+                        PlayerPillChip(label = strings.releaseVoiceFilterSub, onClick = null)
+                    }
+                }
+                PLAYBACK_RATES.forEach { rate ->
+                    PlayerPillChip(
+                        label = strings.playerSpeedValue(rate.formatRate()),
+                        selected = state.playbackRate.matches(rate),
+                        onClick = {
+                            onInteraction()
+                            controller.setPlaybackRate(rate)
+                        },
+                    )
+                }
             }
         }
     }
 }
 
 /**
- * Чип «Audio: {имя}» (P13.T10) — открывает [AudioPickerOverlay] поверх кадра. Подпись падает до
- * общего `Strings.playerAudioLabel`, пока [currentVoiceType] ещё не подобран (см. его KDoc в
- * `PlayerUiState`) — короткое окно сразу после открытия плеера, не ошибка.
- */
-@Composable
-private fun AudioChip(
-    currentVoiceType: VoiceType?,
-    onClick: () -> Unit,
-) {
-    val strings = LocalStrings.current
-    val label = currentVoiceType?.let { strings.playerAudioChipLabel(it.name) } ?: strings.playerAudioLabel
-    AssistChip(onClick = onClick, label = { Text(label) })
-}
-
-/**
- * Статичный лейбл «Subtitles» (P13.T10) — **не кликабельный**, ровно как в мокапе (`showDubPicker`
- * там не вешает `onClick` на этот элемент): просто отражает `VoiceType.isSub` текущего источника.
- * Рисуется только когда `isSub == true` — тот же приём, что уже применён к бейджу `SubBadge` в
- * `VoiceTypeRow.kt` (P8.T6): для дубляжа (`isSub == false`) чип молчит, а не показывает «Dub».
- */
-@Composable
-private fun SubtitlesStatusChip() {
-    val strings = LocalStrings.current
-    AssistChip(onClick = {}, enabled = false, label = { Text(strings.releaseVoiceFilterSub) })
-}
-
-/**
- * Пикер озвучки поверх кадра плеера (P13.T10) — открывается чипом «Audio» ([AudioChip] в
- * fullscreen-режиме, [PlayerPillChip] в compact), не отдельный экран или маршрут (как
- * `showDubPicker` в мокапе): полноэкранный скрим с прижатой к низу панелью и списком
- * [VoiceTypeRow] — тем же переиспользуемым компонентом `shared/ui`, что и `VoiceTypeSelector` на
- * Title Detail (`ReleaseEpisodesSection.kt`, P8.T6). Список озвучек — один и тот же API-объект
- * ([VoiceType]) в обоих местах, заводить второй визуальный компонент под него незачем.
+ * Пикер озвучки поверх кадра плеера (P13.T10) — открывается пилюлей «Audio» ([PlayerPillChip] в
+ * обоих режимах), не отдельный экран или маршрут (как `showDubPicker` в мокапе): полноэкранный
+ * скрим с прижатой к низу панелью и списком [VoiceTypeRow] — тем же переиспользуемым компонентом
+ * `shared/ui`, что и `VoiceTypeSelector` на Title Detail (`ReleaseEpisodesSection.kt`, P8.T6).
+ * Список озвучек — один и тот же API-объект ([VoiceType]) в обоих местах, заводить второй
+ * визуальный компонент под него незачем.
  *
  * `internal`, не `private` (P13) — состояние видимости (`showAudioPicker`) поднято из
  * [PlayerOverlay] в [PlayerScreen], один и тот же пикер рисуется поверх ОБОИХ режимов
@@ -751,9 +773,6 @@ internal fun Float.matches(rate: Float): Boolean {
 internal val PLAYBACK_RATES = listOf(1f, 1.25f, 1.5f, 1.75f, 2f)
 
 private const val RATE_EPSILON = 0.01f
-
-/** Шаг тап-зон перемотки — те самые «−10с/+10с» из KDoc `EmbedVideoController.seekBy`. */
-private const val SEEK_STEP_MS = 10_000L
 
 /** Стандартное для видеоплееров время до авто-скрытия контролов. */
 private const val CONTROLS_AUTO_HIDE_MS = 4_000L

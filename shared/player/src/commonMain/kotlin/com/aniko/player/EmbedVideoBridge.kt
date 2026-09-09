@@ -137,6 +137,23 @@ private val TWO_LEVEL_SUFFIXES =
 /**
  * JS-мост, инжектируемый в каждый фрейм на document-start.
  *
+ * Кроме моста скрипт теперь выполняет best-effort скрытие хостового chrome, чтобы остался
+ * единственный рабочий UI — наш оверлей. Два слоя:
+ * - слой A (generic): `video.controls = false` + `removeAttribute('controls')` в `attach(v)` и
+ *   периодическом `scan()`, плюс `<style>` со `::-webkit-media-controls*` на document-start.
+ *   Это убирает нативные HTML5-контролы без per-host селекторов;
+ * - слой B (per-host): статическая таблица `hostSuffix → CSS-правило`, применяемая только в
+ *   фрейме, чей `location.host` совпал с суффиксом по границе метки. Таблица пока пуста:
+ *   селекторы кастомных плееров (Kodik, Sibnet, AniLibria) получаем из живых DOM-дампов,
+ *   а не выдумываем. Добавление правила — одна строка в [CHROME_HIDE_CSS].
+ *
+ * Почему это безопасно для команд моста: `play/pause/seek/rate` управляют непосредственно
+ * `<video>` и не зависят от атрибута `controls`, поэтому отключение chrome не ломает
+ * воспроизведение, позицию и скорость. Per-frame применение CSS безопасно: слой A использует
+ * селекторы только внутри `<video>`, а слой B срабатывает только при совпадении домена фрейма,
+ * поэтому рекламные/аналитические фреймы (`mc.yandex.ru`) остаются нетронутыми. Fallback при
+ * неудаче скрытия — status quo: наш перехватывающий оверлей по-прежнему побеждает тапы.
+ *
  * Осознанные решения, каждое — следствие конкретной находки спайка:
  * - слушаем нативные DOM-события элемента, а НЕ резолв промиса `play()`: `play()` штатно
  *   отклоняется с `AbortError: The play() request was interrupted by a call to pause()`
@@ -163,6 +180,54 @@ internal fun embedBridgeScript(): String =
       var V = '$EMBED_BRIDGE_PROTOCOL';
       var video = null;
       var lastPayload = '';
+
+      /**
+       * Per-host CSS rules for hiding a host's custom player chrome.
+       * Format: { suffix: 'kodikplayer.com', css: '.selector { display:none !important; }' }.
+       * Boundary-label match: host === suffix || host.endsWith('.' + suffix).
+       * The table is empty for now: Kodik/Sibnet/AniLibria selectors come from live DOM dumps
+       * instead of guesses over obfuscated classes. Adding a host is a one-line edit.
+       */
+      var CHROME_HIDE_CSS = [];
+
+      function hostMatches(host, suffix) {
+        return host === suffix || host.substring(host.length - suffix.length - 1) === '.' + suffix;
+      }
+
+      function hostChromeCss(host) {
+        var out = [];
+        for (var i = 0; i < CHROME_HIDE_CSS.length; i++) {
+          if (hostMatches(host, CHROME_HIDE_CSS[i].suffix)) { out.push(CHROME_HIDE_CSS[i].css); }
+        }
+        return out.join('\n');
+      }
+
+      function refreshHostChromeStyle() {
+        var host = location.host;
+        var css = hostChromeCss(host);
+        var id = '__anikoHostChromeHide';
+        var style = document.getElementById(id);
+        if (!css) {
+          if (style && style.parentNode) { style.parentNode.removeChild(style); }
+          return;
+        }
+        if (!style) {
+          style = document.createElement('style');
+          style.id = id;
+          (document.head || document.documentElement).appendChild(style);
+        }
+        style.textContent = css;
+      }
+
+      function injectGlobalChromeHide() {
+        var id = '__anikoGlobalChromeHide';
+        if (document.getElementById(id)) { return; }
+        var style = document.createElement('style');
+        style.id = id;
+        style.textContent =
+          'video::-webkit-media-controls, video::-webkit-media-controls-enclosure { display:none !important; }';
+        (document.head || document.documentElement).appendChild(style);
+      }
 
       function post(text) {
         try {
@@ -197,6 +262,10 @@ internal fun embedBridgeScript(): String =
       function attach(v) {
         if (!v || v === video) { return; }
         video = v;
+        // Layer A: strip native HTML5 controls. play/pause/seek/rate work regardless of the
+        // controls attribute, so the bridge keeps controlling the video.
+        v.controls = false;
+        v.removeAttribute('controls');
         for (var i = 0; i < EVENTS.length; i++) {
           v.addEventListener(EVENTS[i], function () { send(false); }, true);
         }
@@ -204,8 +273,16 @@ internal fun embedBridgeScript(): String =
       }
 
       function scan() {
+        // Layer B: refresh per-host styles on every pass — the host may rebuild the DOM,
+        // and the frame already matched by domain, so the injection is safe.
+        refreshHostChromeStyle();
         if (video && !document.contains(video)) { video = null; }
-        if (video) { return; }
+        if (video) {
+          // Layer A: periodically re-check whether the host's own JS restored controls.
+          video.controls = false;
+          video.removeAttribute('controls');
+          return;
+        }
         var v = document.querySelector('video');
         if (v) { attach(v); }
       }
@@ -248,6 +325,9 @@ internal fun embedBridgeScript(): String =
           }
         } catch (e) {}
       }
+
+      // Layer A: inject native webkit-control hiding at document-start.
+      injectGlobalChromeHide();
 
       wire();
       scan();

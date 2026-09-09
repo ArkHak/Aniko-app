@@ -1,6 +1,7 @@
 package com.aniko.app.feature.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -105,18 +107,14 @@ private fun BoxScope.CompactVideoOverlay(
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
+    val flash = rememberPlayerSeekFlash()
     Box(modifier = Modifier.fillMaxWidth().height(videoHeight).align(Alignment.TopStart)) {
-        // Перехватывающий слой (тот же приём, что и в PlayerOverlay.kt, см. её KDoc про "перехват
-        // касаний"): без него нативный UI чужой embed-страницы под нами может забирать тапы себе
-        // раньше, чем они дойдут до наших кнопок — на живой проверке кнопка "На весь экран" в
-        // правом верхнем углу видео не реагировала ни разу, пока не появился этот слой. Тап по
-        // видео (не по кнопке) переключает play/pause — тот же жест, что и в мокапе
-        // (`onClick="togglePlay"` на всей видео-области `showPlayer`).
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .clickableNoIndication { controller.togglePlayPause() },
+        // Перехватывающий слой (см. KDoc [CompactVideoGestureLayer]): без него нативный UI чужой
+        // embed-страницы забирает тапы раньше наших кнопок; тап — play/pause, double-tap — ±10с.
+        CompactVideoGestureLayer(
+            controller = controller,
+            flash = flash,
+            modifier = Modifier.fillMaxSize(),
         )
         Row(
             modifier =
@@ -147,7 +145,51 @@ private fun BoxScope.CompactVideoOverlay(
                 contentDescription = if (isPlaying) strings.playerPause else strings.playerPlay,
             )
         }
+
+        // Вспышка ±10с у края double-tap (общий с fullscreen индикатор, [PlayerSeekFlashOverlay]
+        // сам позиционируется по направлению перемотки). Чисто визуальный слой, тапы не ест.
+        PlayerSeekFlashOverlay(state = flash)
     }
+}
+
+/**
+ * Перехватывающий слой компактного видео-оверлея (тот же приём, что и в [PlayerOverlay.kt], см.
+ * её KDoc про "перехват касаний"): без него нативный UI чужой embed-страницы под нами может
+ * забирать тапы себе раньше, чем они дойдут до наших кнопок — на живой проверке кнопка
+ * "На весь экран" в правом верхнем углу видео не реагировала ни разу, пока не появился этот слой.
+ * Тап по видео (не по кнопке) переключает play/pause; double-tap в левой/правой половине
+ * перематывает на −10с/+10с (те же ±10с, что и в [PlayerOverlay]).
+ */
+@Composable
+private fun CompactVideoGestureLayer(
+    controller: EmbedVideoController,
+    flash: PlayerSeekFlashState,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier.pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { controller.togglePlayPause() },
+                    onDoubleTap = { offset ->
+                        val direction =
+                            if (offset.x < size.width / 2f) {
+                                PlayerSeekDirection.BACK
+                            } else {
+                                PlayerSeekDirection.FORWARD
+                            }
+                        val deltaMs =
+                            if (direction == PlayerSeekDirection.BACK) {
+                                -PLAYER_SEEK_STEP_MS
+                            } else {
+                                PLAYER_SEEK_STEP_MS
+                            }
+                        controller.seekBy(deltaMs)
+                        flash.fire(direction)
+                    },
+                )
+            },
+    )
 }
 
 /** Название/прогресс/чипы под видео — не Column-обёртка вокруг видео (см. KDoc

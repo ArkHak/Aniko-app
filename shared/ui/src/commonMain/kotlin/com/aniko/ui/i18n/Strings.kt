@@ -188,7 +188,6 @@ interface Strings {
     val playerSeekBackward: String
     val playerSeekForward: String
     val playerPictureInPicture: String
-    val playerSpeedLabel: String
     val playerSpeedValue: (rate: String) -> String
     val playerNextEpisodeIn: (seconds: Int) -> String
     val playerNextEpisodeNow: String
@@ -204,9 +203,8 @@ interface Strings {
     val playerAudioChipLabel: (name: String) -> String
 
     // Компактный (не полноэкранный) режим плеера по умолчанию (P13, сверка с мокапом) — кнопка
-    // разворота в старый полноэкранный режим ([playerEnterFullscreen]) и обратно ([playerExitFullscreen]).
+    // разворота в полноэкранный режим ([playerEnterFullscreen]).
     val playerEnterFullscreen: String
-    val playerExitFullscreen: String
 
     // --- Настройки ---
     // P13.T2 (сверка с мокапом Claude Design): `settingsTitle` — новый ключ, заголовок `TopAppBar`
