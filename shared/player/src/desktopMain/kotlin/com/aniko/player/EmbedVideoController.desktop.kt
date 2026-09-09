@@ -41,5 +41,7 @@ actual class EmbedVideoController actual constructor() {
 
     actual fun setPlaybackRate(rate: Float) = Unit
 
+    actual fun setQuality(quality: String) = Unit
+
     actual fun release() = Unit
 }

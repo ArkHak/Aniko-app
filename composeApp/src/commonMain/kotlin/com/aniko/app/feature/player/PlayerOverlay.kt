@@ -143,6 +143,8 @@ fun PlayerOverlay(
     voiceTypes: List<VoiceType> = emptyList(),
     currentVoiceType: VoiceType? = null,
     onOpenAudioPicker: () -> Unit = {},
+    qualityLabel: String? = null,
+    onOpenQualityPicker: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = AnixThemeTokens.colors
@@ -255,6 +257,11 @@ fun PlayerOverlay(
                         interactionTick++
                         onOpenAudioPicker()
                     },
+                    qualityLabel = qualityLabel,
+                    onOpenQualityPicker = {
+                        interactionTick++
+                        onOpenQualityPicker()
+                    },
                 )
             }
         }
@@ -353,9 +360,12 @@ private fun PlayerCenterControls(
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceL),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OverlayIconButton(
-            iconName = "replay_10",
-            filled = true,
+        // −30s: глифа replay_30 нет в подмножестве Material-шрифта приложения (31 глиф), а
+        // подставлять replay_10 нельзя — кнопка визуально неотличима от −10 (баг пользователя
+        // 2026-09-09). Текстовый контрол «−30» в том же стиле оверлея однозначен и не требует
+        // расширения шрифта.
+        OverlayTextButton(
+            label = strings.playerRewind30Short,
             contentDescription = strings.playerRewind30,
             onClick = {
                 onInteraction()
@@ -405,19 +415,37 @@ private fun PlayerCenterControls(
  * длительности не существует вообще (`duration = NaN`), и шкала «от нуля до неизвестно чего»
  * была бы выдумкой. Пока её нет — панель показывает только пилюли.
  *
- * **Качества здесь нет и не будет** — CUT, см. `docs/REELWAVE_PLAN.md` (отчёт P13.T9): сегмент
- * качества в Kodik embed-URL (`/720p`) декоративный на нашей стороне — приложение никогда само не
- * выбирает качество, решает сервер Anixart/Kodik при подписи ссылки. Своя кнопка переключения
- * либо ничего не даст, либо сломает подпись URL и покажет пользователю ошибку вместо видео.
- * Хостовое меню качества в chrome плеера намеренно скрыто вместе с остальным chrome — см.
- * `EmbedVideoBridge` и §1.5 player-triple-design.
+ * Качество (P16-фикс 2026-09-09): ранний CUT (P13.T9) пересмотрен после живой сессии —
+ * страница kodikplayer.com идентична для /720p|480p|1080p, качество выбирается КЛИЕНТСКИ в его
+ * `quality-dropdown` (flowplayer), сегмент URL декоративен. Чип «Качество» появляется у хостов с
+ * клиентским переключением (Kodik: [QualityPickerOverlay] → [EmbedVideoController.setQuality],
+ * мост кликает пункт dropdown; см. `EmbedVideoBridge.switchQuality`). На хостах без уровней
+ * (Sibnet/VideoJS без плагина) чип не рисуется — менять нечего, честный UI.
  *
  * Пилюли — [PlayerPillChip] (тот же компонент, что в compact-режиме), а не M3
  * `FilterChip`/`AssistChip`: мокап рисует их нейтральными, без акцентного selected-цвета.
  */
-@Suppress("LongParameterList") // Состояние/контроллер видео + колбэк взаимодействия (существующая
-// P8.T3/T5 тройка) + список озвучек/текущая озвучка/колбэк открытия пикера (P13.T10). Группировать
-// P13.T10-параметры в объект ради одного вызова было бы отдельным типом без другого назначения.
+
+@Composable
+private fun PlayerQualityChip(
+    qualityLabel: String?,
+    onInteraction: () -> Unit,
+    onOpen: () -> Unit,
+) {
+    if (qualityLabel == null) return
+    val strings = LocalStrings.current
+    PlayerPillChip(
+        label = strings.playerQualityChip(qualityLabel),
+        onClick = {
+            onInteraction()
+            onOpen()
+        },
+    )
+}
+
+@Suppress("LongParameterList") // Состояние/контроллер + колбэк взаимодействия (P8.T3/T5), набор
+// озвучек + открытие пикера (P13.T10) и пара «качество/открытие пикера качества» (P16-фикс
+// 2026-09-09). Группировать в объект ради счётчика — косвенность без назначения.
 @Composable
 private fun PlayerBottomPanel(
     state: EmbedVideoState,
@@ -426,6 +454,8 @@ private fun PlayerBottomPanel(
     voiceTypes: List<VoiceType>,
     currentVoiceType: VoiceType?,
     onOpenAudioPicker: () -> Unit,
+    qualityLabel: String? = null,
+    onOpenQualityPicker: () -> Unit = {},
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
@@ -469,6 +499,11 @@ private fun PlayerBottomPanel(
                         PlayerPillChip(label = strings.releaseVoiceFilterSub, onClick = null)
                     }
                 }
+                PlayerQualityChip(
+                    qualityLabel = qualityLabel,
+                    onInteraction = onInteraction,
+                    onOpen = onOpenQualityPicker,
+                )
                 PLAYBACK_RATES.forEach { rate ->
                     PlayerPillChip(
                         label = strings.playerSpeedValue(rate.formatRate()),
@@ -749,6 +784,31 @@ private fun OverlayIconButton(
             filled = filled,
             tint = OVERLAY_CONTENT_COLOR,
             modifier = Modifier.size(iconSize),
+        )
+    }
+}
+
+/** Текстовая кнопка оверлея (для действий без глифа в подмножестве Material-шрифта, напр.
+ *  −30с): тот же тач-таргет/семантика, что у [OverlayIconButton]. */
+@Composable
+private fun OverlayTextButton(
+    label: String,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    val dimens = AnixThemeTokens.dimens
+    IconButton(
+        onClick = onClick,
+        modifier =
+            Modifier
+                .size(dimens.minTouchTarget)
+                .clearAndSetSemantics { this.contentDescription = contentDescription },
+    ) {
+        Text(
+            text = label,
+            color = OVERLAY_CONTENT_COLOR,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }

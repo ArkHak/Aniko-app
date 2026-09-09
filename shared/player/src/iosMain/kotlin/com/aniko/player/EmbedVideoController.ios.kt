@@ -98,6 +98,8 @@ actual class EmbedVideoController actual constructor() {
 
     actual fun setPlaybackRate(rate: Float) = send(EmbedVideoCommand.rate(rate))
 
+    actual fun setQuality(quality: String) = send(EmbedVideoCommand.quality(quality))
+
     private fun onBridgeMessage(
         origin: String?,
         body: String,

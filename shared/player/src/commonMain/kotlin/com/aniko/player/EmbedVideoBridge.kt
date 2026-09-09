@@ -38,6 +38,8 @@ internal object EmbedVideoCommand {
     fun seekBy(deltaMs: Long): String = "seekBy:$deltaMs"
 
     fun rate(rate: Float): String = "rate:$rate"
+
+    fun quality(quality: String): String = "quality:$quality"
 }
 
 /**
@@ -208,6 +210,19 @@ internal fun embedBridgeScript(): String =
             '#player_container .vjs-related-carousel-button',
           ].join(', ') + ' { display:none !important; }',
         },
+        {
+          suffix: 'kodikplayer.com',
+          css: [
+            // Live session 2026-09-09 (CDP): on top of our UI Kodik shows its own overlays —
+            // resume plate (.resume-button inside .main-box) and copy-code popups
+            // (#get_code_window/#for-copy). The <video>/player frame itself stays untouched;
+            // quality-dropdown remains in DOM (our setQuality clicks its items).
+            '.main-box .resume-button',
+            '.resume-button.active',
+            '#get_code_window',
+            '#for-copy',
+          ].join(', ') + ' { display:none !important; }',
+        },
       ];
 
       function hostMatches(host, suffix) {
@@ -307,6 +322,43 @@ internal fun embedBridgeScript(): String =
         if (v) { attach(v); }
       }
 
+      function switchQuality(q) {
+        function isVisible(e) {
+          return !!(e && (e.offsetWidth || e.offsetHeight || e.getClientRects().length));
+        }
+        var item = null;
+        var all = document.querySelectorAll('*');
+        for (var i = 0; i < all.length; i++) {
+          var n = all[i];
+          if (n.children.length > 0) { continue; }
+          var t = (n.innerText || n.textContent || '').trim();
+          if (t === q) { item = n; break; }
+        }
+        if (!item) { return; }
+        if (isVisible(item)) {
+          try { item.click(); } catch (e) {}
+          return;
+        }
+        // Item inside a hidden dropdown: click its container-opener first (classes
+        // quality/fp-quality), then re-click the item once the menu is open.
+        var menu = item;
+        while (menu && menu !== document.body) {
+          var cls = String(menu.className && menu.className.baseVal !== undefined ? menu.className.baseVal : menu.className || '');
+          if (/quality|fp-|dropdown/i.test(cls) && !isVisible(menu)) { break; }
+          menu = menu.parentElement;
+        }
+        var opener = menu || item;
+        try { opener.click(); } catch (e) {}
+        setTimeout(function () {
+          var items = document.querySelectorAll('*');
+          for (var j = 0; j < items.length; j++) {
+            var m = items[j];
+            if (m.children.length > 0) { continue; }
+            if ((m.innerText || m.textContent || '').trim() === q) { try { m.click(); } catch (e2) {} break; }
+          }
+        }, 450);
+      }
+
       function exec(cmd) {
         if (typeof cmd !== 'string') { return; }
         scan();
@@ -326,6 +378,11 @@ internal fun embedBridgeScript(): String =
           } else if (cmd.indexOf('rate:') === 0) {
             var rate = parseFloat(cmd.slice(5));
             if (isFinite(rate) && rate > 0) { video.playbackRate = rate; }
+          } else if (cmd.indexOf('quality:') === 0) {
+            // P16 fix 2026-09-09: client-side host quality switch (Kodik/flowplayer
+            // quality-dropdown). Safe no-op when no menu exists; the player rebuilds the
+            // source, the bridge keeps tracking <video> via scan().
+            switchQuality(cmd.slice(8));
           }
         } catch (e) {}
         send(true);

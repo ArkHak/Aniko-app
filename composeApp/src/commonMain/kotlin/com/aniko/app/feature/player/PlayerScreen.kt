@@ -158,6 +158,15 @@ fun PlayerScreen(
                     val controller = rememberEmbedVideoController(source.url)
                     val videoState by controller.state.collectAsStateWithLifecycle()
 
+                    // P16-фикс 2026-09-09 — качество видео: только у хостов с клиентским
+                    // переключением (Kodik/flowplayer quality-dropdown). Список пуст — чип не
+                    // рисуется вовсе (честный UI, как у Audio-пикера с одной озвучкой).
+                    val qualityOptions = remember(source.url) { playerEmbedQualities(source.url) }
+                    var currentQuality by remember(source.url) {
+                        mutableStateOf(currentEmbedQuality(source.url))
+                    }
+                    var showQualityPicker by remember { mutableStateOf(false) }
+
                     // Back в fullscreen работает в два шага: сначала закрыть пикер озвучки,
                     // потом — свернуть в compact. Пикер добавлен позже в композиции, поэтому
                     // его BackHandler побеждает при `showAudioPicker == true`.
@@ -272,6 +281,10 @@ fun PlayerScreen(
                                     voiceTypes = state.voiceTypes,
                                     currentVoiceType = state.currentVoiceType,
                                     onOpenAudioPicker = { showAudioPicker = true },
+                                    qualityLabel = currentQuality.takeIf { qualityOptions.isNotEmpty() },
+                                    onOpenQualityPicker = {
+                                        if (qualityOptions.isNotEmpty()) showQualityPicker = true
+                                    },
                                 )
                             } else {
                                 CompactPlayerChrome(
@@ -283,6 +296,10 @@ fun PlayerScreen(
                                     voiceTypes = state.voiceTypes,
                                     currentVoiceType = state.currentVoiceType,
                                     onOpenAudioPicker = { showAudioPicker = true },
+                                    qualityLabel = currentQuality.takeIf { qualityOptions.isNotEmpty() },
+                                    onOpenQualityPicker = {
+                                        if (qualityOptions.isNotEmpty()) showQualityPicker = true
+                                    },
                                 )
                             }
 
@@ -296,6 +313,19 @@ fun PlayerScreen(
                                         showAudioPicker = false
                                     },
                                     onDismiss = { showAudioPicker = false },
+                                )
+                            }
+
+                            if (showQualityPicker) {
+                                QualityPickerOverlay(
+                                    options = qualityOptions,
+                                    current = currentQuality,
+                                    onSelect = { quality ->
+                                        controller.setQuality(quality)
+                                        currentQuality = quality
+                                        showQualityPicker = false
+                                    },
+                                    onDismiss = { showQualityPicker = false },
                                 )
                             }
 

@@ -75,6 +75,14 @@ expect class EmbedVideoController() {
     /** Скорость воспроизведения, 1.0 — обычная. Фактический результат придёт событием `ratechange`. */
     fun setPlaybackRate(rate: Float)
 
+    /**
+     * Просит плеер хоста переключить качество видео (P16-фикс 2026-09-09). Поддерживается
+     * там, где хост даёт клиентское переключение (Kodik/flowplayer — его quality-dropdown);
+     * на хостах без такого UI (Sibnet/VideoJS без плагина уровней) — безопасный no-op.
+     * [quality] — отображаемое имя («720p»/«480p»).
+     */
+    fun setQuality(quality: String)
+
     /** Снимает мост с WebView. Вызывается из [rememberEmbedVideoController], вручную не нужен. */
     fun release()
 }

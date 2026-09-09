@@ -113,6 +113,8 @@ actual class EmbedVideoController actual constructor() {
 
     actual fun setPlaybackRate(rate: Float) = send(EmbedVideoCommand.rate(rate))
 
+    actual fun setQuality(quality: String) = send(EmbedVideoCommand.quality(quality))
+
     // detekt здесь ошибочно считает код после guard-условия недостижимым — судя по всему, не может
     // разрешить тип `EmbedOriginFilter.accepts` (internal-класс из commonMain) при анализе
     // androidMain и считает `originFilter?.accepts(...) != true` тождественно истинным.

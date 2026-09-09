@@ -77,6 +77,8 @@ fun BoxScope.CompactPlayerChrome(
     voiceTypes: List<VoiceType>,
     currentVoiceType: VoiceType?,
     onOpenAudioPicker: () -> Unit,
+    qualityLabel: String? = null,
+    onOpenQualityPicker: () -> Unit = {},
 ) {
     CompactVideoOverlay(
         videoHeight = videoHeight,
@@ -92,6 +94,8 @@ fun BoxScope.CompactPlayerChrome(
         voiceTypes = voiceTypes,
         currentVoiceType = currentVoiceType,
         onOpenAudioPicker = onOpenAudioPicker,
+        qualityLabel = qualityLabel,
+        onOpenQualityPicker = onOpenQualityPicker,
     )
 }
 
@@ -205,6 +209,8 @@ private fun BoxScope.CompactBelowVideoContent(
     voiceTypes: List<VoiceType>,
     currentVoiceType: VoiceType?,
     onOpenAudioPicker: () -> Unit,
+    qualityLabel: String? = null,
+    onOpenQualityPicker: () -> Unit = {},
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
@@ -240,6 +246,12 @@ private fun BoxScope.CompactBelowVideoContent(
                 if (currentVoiceType?.isSub == true) {
                     PlayerPillChip(label = strings.releaseVoiceFilterSub, onClick = null)
                 }
+            }
+            if (qualityLabel != null) {
+                PlayerPillChip(
+                    label = strings.playerQualityChip(qualityLabel),
+                    onClick = onOpenQualityPicker,
+                )
             }
             PLAYBACK_RATES.forEach { rate ->
                 PlayerPillChip(
