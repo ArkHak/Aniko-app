@@ -7,9 +7,11 @@ package com.aniko.model
 data class VoiceType(
     val id: Int,
     val name: String,
-    val episodesCount: Int? = null,
+    /** URL аватара/логотипа команды озвучки. Живая верификация (P16.T5): `icon` в ответе. */
+    val icon: String? = null,
     /** Живая верификация (R3): реальный API отдаёт строку (или пусто), не массив имён. */
     val workers: String? = null,
+    val episodesCount: Int? = null,
     /**
      * `true` — это дорожка субтитров, а не дубляж. Живая верификация (P8.T6, `GET episode/1`):
      * поле `is_sub` реально приходит с сервера (не выдумано под мокап), используется для бейджа
@@ -20,6 +22,8 @@ data class VoiceType(
     val viewCount: Int? = null,
     /** Закреплённая озвучка — поднимается в начало списка. Живая верификация (P8.T6). */
     val pinned: Boolean = false,
+    /** Метка качества озвучки (1 = 1080p, 2 = 1440p, 3 = 4K, 0 = скрыта). Живая верификация (P16.T4). */
+    val quality: Int = 0,
 )
 
 /**
@@ -33,6 +37,8 @@ data class EpisodeSource(
     val name: String,
     val host: VideoHost,
     val episodesCount: Int? = null,
+    /** Метка качества источника (1 = 1080p, 2 = 1440p, 3 = 4K, 0 = скрыта). Живая верификация (P16.T4). */
+    val quality: Int = 0,
 )
 
 /**

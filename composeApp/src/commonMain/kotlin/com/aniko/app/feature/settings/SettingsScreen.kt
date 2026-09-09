@@ -16,16 +16,22 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aniko.app.di.AppIconHelper
+import com.aniko.data.theme.AppIconStore
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLanguagePicker
+import com.aniko.ui.component.ChipRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -69,6 +75,8 @@ fun SettingsScreen(
 ) {
     val strings = LocalStrings.current
     val dimens = AnixThemeTokens.dimens
+    val appIconStore = koinInject<AppIconStore>()
+    val appIconHelper = koinInject<AppIconHelper>()
 
     Scaffold(
         modifier = modifier.testTag(AnixTestTags.SETTINGS_SCREEN_ROOT),
@@ -117,6 +125,30 @@ fun SettingsScreen(
                             onSelect = onLanguageTagChange,
                             modifier = Modifier.padding(top = dimens.spaceXs),
                         )
+                    }
+                    // P16.T21: секция скрыта, когда платформа не поддерживает несколько иконок
+                    // лаунчера (Desktop/iOS — `NoOpAppIconHelper.supportedIcons` пуст).
+                    if (appIconHelper.supportedIcons.isNotEmpty()) {
+                        val appIconKey by appIconStore.iconKey.collectAsStateWithLifecycle()
+                        SettingsPickerListItem(headline = strings.settingsAppIcon) {
+                            ChipRow(
+                                items = appIconHelper.supportedIcons,
+                                isSelected = { it == appIconKey },
+                                label = { key ->
+                                    when (key) {
+                                        "classic" -> strings.appIconClassic
+                                        "dream" -> strings.appIconDream
+                                        "ice" -> strings.appIconIce
+                                        else -> strings.appIconMain
+                                    }
+                                },
+                                onClick = { key ->
+                                    appIconStore.setIconKey(key)
+                                    appIconHelper.apply(key)
+                                },
+                                modifier = Modifier.padding(top = dimens.spaceXs),
+                            )
+                        }
                     }
                     ListItem(
                         headlineContent = {

@@ -17,6 +17,7 @@ import com.aniko.data.api.SearchApi
 import com.aniko.data.locale.LocaleStore
 import com.aniko.data.notification.NotificationPoller
 import com.aniko.data.notification.NotificationSyncStore
+import com.aniko.data.playerposition.LocalPlayerPositionStore
 import com.aniko.data.repository.AuthRepository
 import com.aniko.data.repository.CommentRepository
 import com.aniko.data.repository.EpisodeRepository
@@ -29,7 +30,9 @@ import com.aniko.data.session.SessionStore
 import com.aniko.data.sync.PeriodicSyncTask
 import com.aniko.data.sync.SyncCoordinator
 import com.aniko.data.sync.SyncQueueWorker
+import com.aniko.data.theme.AppIconStore
 import com.aniko.data.theme.ThemeStore
+import com.aniko.data.voicepin.LocalVoicePinStore
 import com.aniko.network.ApiConfig
 import com.aniko.network.SessionInvalidator
 import com.aniko.network.TokenProvider
@@ -78,6 +81,9 @@ val dataModule =
         single<SessionInvalidator> { get<SessionStore>() }
         single { LocaleStore(settings = get()) }
         single { ThemeStore(settings = get()) }
+        single { AppIconStore(settings = get()) }
+        single { LocalPlayerPositionStore(settings = get()) }
+        single { LocalVoicePinStore(settings = get()) }
 
         single<HttpClient> {
             createAnixHttpClient(

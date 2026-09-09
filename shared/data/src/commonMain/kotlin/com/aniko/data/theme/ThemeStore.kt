@@ -16,26 +16,34 @@ import kotlinx.coroutines.flow.asStateFlow
  * учитывается). Разрешение `null` в конкретную тему — забота вызывающего кода в `composeApp`,
  * не этого класса: `shared/data` намеренно не зависит от Compose, чтобы не тащить
  * UI-фреймворк в слой данных.
+ *
+ * Поддерживаемые значения: `"light"`, `"dark"`, `"amoled"`. Любое другое значение
+ * при записи округляется до `null` (дефолт светлая тема).
  */
 class ThemeStore(
     private val settings: Settings,
 ) {
-    private val _themeMode = MutableStateFlow(settings.getStringOrNull(KEY_THEME_MODE))
+    private val _themeMode = MutableStateFlow(settings.getStringOrNull(KEY_THEME_MODE)?.let(::validate))
 
-    /** Явно выбранная тема (`"light"`/`"dark"`) либо `null`, если пользователь не переопределял системную. */
+    /** Явно выбранная тема (`"light"`/`"dark"`/`"amoled"`) либо `null`, если пользователь
+     * не переопределял системную. */
     val themeMode: StateFlow<String?> = _themeMode.asStateFlow()
 
-    /** [mode] `null` сбрасывает выбор обратно на «следовать системе». */
+    /** [mode] `null` сбрасывает выбор обратно на дефолт (светлая тема). */
     fun setThemeMode(mode: String?) {
-        if (mode == null) {
+        val validated = validate(mode)
+        if (validated == null) {
             settings.remove(KEY_THEME_MODE)
         } else {
-            settings.putString(KEY_THEME_MODE, mode)
+            settings.putString(KEY_THEME_MODE, validated)
         }
-        _themeMode.value = mode
+        _themeMode.value = validated
     }
 
     private companion object {
         const val KEY_THEME_MODE = "theme.mode"
+        val VALID_MODES = setOf("light", "dark", "amoled")
+
+        fun validate(mode: String?): String? = mode?.takeIf { it in VALID_MODES }
     }
 }

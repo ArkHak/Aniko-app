@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- P16.T21: набор иконки лаунчера "Иней" (API 26+). Легаси-PNG для <26 — mipmap-mdpi..xxxhdpi. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background_ice" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>

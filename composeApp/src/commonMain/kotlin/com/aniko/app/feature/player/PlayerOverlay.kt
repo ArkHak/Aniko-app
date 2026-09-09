@@ -57,6 +57,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aniko.data.voicepin.LocalVoicePinStore
 import com.aniko.model.VoiceType
 import com.aniko.player.EmbedVideoController
 import com.aniko.player.EmbedVideoState
@@ -68,6 +70,7 @@ import com.aniko.ui.component.VoiceTypeRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 import kotlinx.coroutines.delay
+import org.koin.compose.koinInject
 
 /**
  * Оверлей плеера поверх кадра embed-страницы: P8.T3 (назад, PiP, тап-зона play/pause,
@@ -332,7 +335,7 @@ private fun PlayerCenterArea(
 }
 
 /**
- * Центральная тап-зона: −10 с / play-pause / +10 с (P8.T3).
+ * Центральная тап-зона: −30 с / −10 с / play-pause / +10 с (P8.T3, P16.T10).
  *
  * Рисуется только когда мост держит `<video>` (см. `bridgeActive` в [PlayerOverlay]) — поэтому
  * отдельного «неактивного» состояния у кнопок нет: если команду некому исполнить, кнопок просто
@@ -350,6 +353,15 @@ private fun PlayerCenterControls(
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceL),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        OverlayIconButton(
+            iconName = "replay_10",
+            filled = true,
+            contentDescription = strings.playerRewind30,
+            onClick = {
+                onInteraction()
+                controller.seekBy(-PLAYER_REWIND_STEP_MS)
+            },
+        )
         OverlayIconButton(
             iconName = "replay_10",
             filled = true,
@@ -502,7 +514,16 @@ internal fun AudioPickerOverlay(
     val dimens = AnixThemeTokens.dimens
     val colors = AnixThemeTokens.colors
     val strings = LocalStrings.current
-    val sorted = remember(voiceTypes) { voiceTypes.sortedByDescending(VoiceType::pinned) }
+    val pinStore = koinInject<LocalVoicePinStore>()
+    val pinnedIds by pinStore.pinnedIds().collectAsStateWithLifecycle(initialValue = emptySet())
+    val sorted =
+        remember(voiceTypes, pinnedIds) {
+            // Тот же порядок, что в Detail (ReleaseEpisodesSection): локальные пины → серверные
+            // pinned → остальные (ревью Волны 3, P2).
+            voiceTypes.sortedWith(
+                compareByDescending<VoiceType> { it.id in pinnedIds }.thenByDescending { it.pinned },
+            )
+        }
     // Живая проверка нашла: список озвучек у некоторых релизов доходит до 10+ студий, а старая
     // версия рисовала их обычным `Column.forEach` без ограничения высоты и без скролла — панель
     // росла выше экрана, верхние строки списка оказывались за его пределами и были физически
@@ -776,6 +797,9 @@ private const val RATE_EPSILON = 0.01f
 
 /** Стандартное для видеоплееров время до авто-скрытия контролов. */
 private const val CONTROLS_AUTO_HIDE_MS = 4_000L
+
+/** P16.T10 — шаг мгновенной перемотки назад (30 с). */
+private const val PLAYER_REWIND_STEP_MS = 30_000L
 
 /**
  * Цвет контента оверлея — фиксированный белый, а не из темы: под ним всегда кадр видео с тёмным

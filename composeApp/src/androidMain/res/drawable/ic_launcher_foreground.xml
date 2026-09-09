@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- P16.T21: передний план adaptive-иконки лаунчера — белый play-треугольник (фирменный знак
+     Aniko), общий для всех 4 наборов (Основная/Классика/Мечта/Иней различаются только фоном,
+     см. colors.xml). Виджет 108x108dp — стандартный adaptive-icon canvas, треугольник вписан
+     в безопасную зону (круг 66dp в центре), маска-форма (круг/скруглённый квадрат/...)
+     применяется системой поверх этого слоя + background. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M44,35 L44,73 L78,54 Z" />
+</vector>

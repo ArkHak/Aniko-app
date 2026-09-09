@@ -206,6 +206,15 @@ interface Strings {
     // разворота в полноэкранный режим ([playerEnterFullscreen]).
     val playerEnterFullscreen: String
 
+    // P16.T10 — мгновенная перемотка на 30 с назад (рядом с −10 с).
+    val playerRewind30: String
+
+    // P16.T7 — resume-диалог: продолжить с сохранённой позиции или начать сначала.
+    val playerResumeTitle: String
+    val playerResumeContinue: String
+    val playerResumeFromStart: String
+    val playerResumeContinueFrom: (time: String) -> String
+
     // --- Настройки ---
     // P13.T2 (сверка с мокапом Claude Design): `settingsTitle` — новый ключ, заголовок `TopAppBar`
     // экрана настроек (раньше отдельного заголовка не было — экран был таб-рутом без `TopAppBar`,
@@ -221,6 +230,14 @@ interface Strings {
     val settingsTheme: String
     val themeLight: String
     val themeDark: String
+    val themeAmoled: String
+
+    // P16.T21 — секция выбора иконки приложения (Android: activity-alias переключение).
+    val settingsAppIcon: String
+    val appIconMain: String
+    val appIconClassic: String
+    val appIconDream: String
+    val appIconIce: String
 
     // --- Экран-галерея токенов (P2.T12) ---
     val galleryTitle: String
@@ -369,6 +386,13 @@ interface Strings {
     val releaseVoiceTypeViewsContentDescription: (count: Int) -> String
     val badgeSub: String
     val badgeSubContentDescription: String
+
+    // --- Метки качества и пин озвучки (P16.T4/T6) ---
+    val qualityBadge1080p: String
+    val qualityBadge1440p: String
+    val qualityBadge4k: String
+    val releaseVoiceTypePin: String
+    val releaseVoiceTypeUnpin: String
 
     // --- Офлайн-режим (P10.T3) ---
     // Два ключа, а не один: баннер показывает и факт («связи нет»), и следствие («сделанное не

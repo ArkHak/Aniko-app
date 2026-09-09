@@ -11,6 +11,7 @@
     <application
         android:name=".AnixApplication"
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Aniko">
@@ -42,6 +43,49 @@
                 <data android:scheme="aniko" android:host="release" />
             </intent-filter>
         </activity>
+
+        <!-- P16.T21: наборы иконок лаунчера (Основная/Классика/Мечта/Иней) — четыре
+             activity-alias на ту же `.MainActivity`, каждый со своей иконкой/лейблом.
+             `android:enabled="false"` по умолчанию — включён ровно ОДИН компонент за раз
+             (см. `AndroidAppIconHelper`, включает выбранный/выключает остальные через
+             `PackageManager.setComponentEnabledSetting`); "Основная" не имеет алиаса — это
+             сама `.MainActivity` выше, единственная реально включённая по умолчанию. -->
+        <activity-alias
+            android:name=".MainActivity.Classic"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_classic"
+            android:label="@string/app_name_classic"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".MainActivity.Dream"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_dream"
+            android:label="@string/app_name_dream"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".MainActivity.Ice"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_ice"
+            android:label="@string/app_name_ice"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
     </application>
 
 </manifest>

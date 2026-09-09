@@ -1,5 +1,6 @@
 package com.aniko.ui.theme
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.LocalContentColor
@@ -7,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 
 /**
  * Корневая тема приложения. Оборачивает Material3 и добавляет собственные токены:
@@ -25,15 +27,27 @@ import androidx.compose.ui.Modifier
 @Composable
 fun AppTheme(
     darkTheme: Boolean = false,
+    isAmoled: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val extraColors = if (darkTheme) AnixDarkExtraColors else AnixLightExtraColors
+    val extraColors =
+        when {
+            isAmoled -> AnixAmoledExtraColors
+            darkTheme -> AnixDarkExtraColors
+            else -> AnixLightExtraColors
+        }
+    val colorScheme =
+        when {
+            isAmoled -> AnixAmoledColors
+            darkTheme -> AnixDarkColors
+            else -> AnixLightColors
+        }
     CompositionLocalProvider(
         LocalAnixDimens provides AnixDimens(),
         LocalAnixColors provides extraColors,
     ) {
         MaterialTheme(
-            colorScheme = if (darkTheme) AnixDarkColors else AnixLightColors,
+            colorScheme = colorScheme,
             typography = anixTypography(),
         ) {
             // Корневой фон приложения (Track A, Foundation) — bg-page текущей темы + два
@@ -42,15 +56,22 @@ fun AppTheme(
             // только Home, потому что `App()` (composeApp/.../App.kt) вызывает [AppTheme] один
             // раз на самом корне. Дочерние `Scaffold` внутри `AdaptiveScaffold` красят
             // `containerColor = Color.Transparent`, чтобы не перекрывать этот фон своей
-            // непрозрачной заливкой.
+            // непрозрачной плашкой.
             // 2026-09-08 (баг тёмной темы «не видно текст тайтлов»): где-то в контенте
             // LocalContentColor деградировал в тёмный (вероятно, contentColorFor(Transparent) у
             // Scaffold-обёрток) — текст по умолчанию (заголовки карточек/строк без явного color)
             // рисовался тёмным на тёмном. Явно пиним контентный цвет на onSurface текущей схемы
             // для всего дерева приложения (проверено пиксельно: до — 0 белых пикселей в зоне
             // тайтлов, после — белые глифы на месте).
+            // P16.T20 (AMOLED): блобы убираем, фон — чистый `#000000`.
             CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-                Box(modifier = Modifier.fillMaxSize().anixAppBackground()) {
+                val backgroundModifier =
+                    if (isAmoled) {
+                        Modifier.background(Color.Black)
+                    } else {
+                        Modifier.anixAppBackground()
+                    }
+                Box(modifier = Modifier.fillMaxSize().then(backgroundModifier)) {
                     content()
                 }
             }

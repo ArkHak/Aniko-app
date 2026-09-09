@@ -6,8 +6,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +34,8 @@ import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.testing.AnixTestTags
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -79,7 +85,9 @@ import org.koin.compose.viewmodel.koinViewModel
  * маршрут. Открытие следующей серии, наоборот, идёт через навигатор — там `openPlayer` и так
  * бьёт ровно в `NavController`.
  */
-@Suppress("LongParameterList", "LongMethod") // 4 параметра маршрута задаются `AnixDestination.Player`
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod") // 4 параметра маршрута
+// задаются `AnixDestination.Player`; сложность — несколько независимых эффектов (resume P16.T7,
+// сохранение позиции, аудио-пикер, next-episode) в одном экране, вынос добавил бы косвенность.
 // и схлопнуть их в data-класс нельзя без изменения контракта навигации; остальные три —
 // стандартная тройка экрана (onBack + modifier + viewModel). Тело функции чуть перевалило за лимит
 // после P13.T10/P13 (compact/fullscreen) — исчерпывающий `when` по состоянию загрузки плюс
@@ -170,6 +178,57 @@ fun PlayerScreen(
                     val openNextEpisode = { navigator.openPlayer(releaseId, sourceId, position + 1, host) }
 
                     if (controller.isSupported) {
+                        // P16.T7 — сохранение позиции воспроизведения в `LocalPlayerPositionStore`
+                        // (через `PlayerViewModel`, который знает ключ текущей серии). Троттлинг
+                        // ~2с реализован ручным циклом delay(), а не `Flow.sample` — тот же приём,
+                        // что уже применяется по всему плееру ([PlayerOverlay]/[PlayerSeekFeedback]
+                        // для авто-скрытия контролов), не тянет `@OptIn(FlowPreview::class)`.
+                        LaunchedEffect(releaseId, sourceId, position, controller) {
+                            while (isActive) {
+                                delay(POSITION_SAVE_THROTTLE_MS)
+                                val snapshot = controller.state.value
+                                if (snapshot.isPlaying) {
+                                    viewModel.onPlaybackPositionChanged(snapshot.currentTimeMs, snapshot.durationMs)
+                                }
+                            }
+                        }
+                        // Финальное сохранение по переходу playing→paused: троттлинг выше молчит,
+                        // пока `isPlaying == false`, а именно на паузе теряется самая свежая позиция.
+                        LaunchedEffect(releaseId, sourceId, position, controller) {
+                            var wasPlaying = controller.state.value.isPlaying
+                            controller.state.collect { snapshot ->
+                                if (wasPlaying && !snapshot.isPlaying) {
+                                    viewModel.onPlaybackPositionChanged(snapshot.currentTimeMs, snapshot.durationMs)
+                                }
+                                wasPlaying = snapshot.isPlaying
+                            }
+                        }
+                        // Финальное сохранение по dispose (уход с экрана/смена серии) — то, что
+                        // не успел троттлинг выше.
+                        DisposableEffect(releaseId, sourceId, position, controller) {
+                            onDispose {
+                                val snapshot = controller.state.value
+                                // Явный ключ: к моменту dispose (смена серии/озвучки) loadedKey в VM
+                                // может указывать уже на новую серию (ревью Волны 3, P3).
+                                viewModel.onControllerDisposed(
+                                    releaseId = releaseId,
+                                    sourceId = sourceId,
+                                    position = position,
+                                    currentMs = snapshot.currentTimeMs,
+                                    durationMs = snapshot.durationMs,
+                                )
+                            }
+                        }
+                        // P16.T7 — «Продолжить» из resume-диалога: перемотка откладывается до
+                        // момента, когда мост реально найдёт `<video>` (иначе `seekTo` уйдёт в
+                        // никуда — команда не подтверждается, см. KDoc [EmbedVideoController]).
+                        LaunchedEffect(state.pendingSeekToMs, videoState.isVideoFound) {
+                            val pendingSeekMs = state.pendingSeekToMs
+                            if (pendingSeekMs != null && videoState.isVideoFound) {
+                                controller.seekTo(pendingSeekMs)
+                                viewModel.onResumeSeekConsumed()
+                            }
+                        }
                         // `BoxWithConstraints` (SubcomposeLayout) здесь НЕ подходит — живая
                         // проверка показала, что её содержимое переставало реагировать на смену
                         // `isFullscreen` после того, как внутри уже был смонтирован `EmbedPlayerView`
@@ -239,6 +298,20 @@ fun PlayerScreen(
                                     onDismiss = { showAudioPicker = false },
                                 )
                             }
+
+                            // P16.T7 — resume-диалог «Продолжить с M:SS / С начала», по одному
+                            // разу на переоткрытие серии ([PlayerUiState.resumePositionMs]
+                            // сбрасывается обоими выборами).
+                            val resumePositionMs = state.resumePositionMs
+                            if (resumePositionMs != null) {
+                                ResumePlaybackDialog(
+                                    positionMs = resumePositionMs,
+                                    strings = strings,
+                                    onContinue = viewModel::onResumeContinue,
+                                    onStartOver = viewModel::onResumeStartOver,
+                                    onDismiss = viewModel::onResumeDismiss,
+                                )
+                            }
                         }
                     } else {
                         Box(modifier = Modifier.fillMaxSize()) {
@@ -281,3 +354,43 @@ private fun PlayerError?.toMessage(strings: Strings): String =
         is PlayerError.SourceUnavailable -> strings.playerSourceError(hostKey)
         PlayerError.Generic, null -> strings.playerLoadError
     }
+
+/** P16.T7 — троттлинг периодического сохранения позиции воспроизведения. */
+private const val POSITION_SAVE_THROTTLE_MS = 2_000L
+
+/**
+ * P16.T7 — resume-диалог: «Продолжить с M:SS» / «С начала». Показывается один раз на
+ * переоткрытие серии (см. KDoc [PlayerUiState.resumePositionMs]) поверх видео, независимо от
+ * compact/fullscreen — тот же слой, что и [AudioPickerOverlay].
+ */
+@Composable
+private fun ResumePlaybackDialog(
+    positionMs: Long,
+    strings: Strings,
+    onContinue: () -> Unit,
+    onStartOver: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(strings.playerResumeTitle) },
+        text = { Text(strings.playerResumeContinueFrom(formatResumeTime(positionMs))) },
+        confirmButton = {
+            TextButton(onClick = onContinue) { Text(strings.playerResumeContinue) }
+        },
+        dismissButton = {
+            TextButton(onClick = onStartOver) { Text(strings.playerResumeFromStart) }
+        },
+    )
+}
+
+/** `125_000L` → `"2:05"` — M:SS без ведущего нуля у минут, секунды дополняются нулём слева. */
+private fun formatResumeTime(positionMs: Long): String {
+    val totalSeconds = positionMs / MILLIS_IN_SECOND
+    val minutes = totalSeconds / SECONDS_IN_MINUTE
+    val seconds = totalSeconds % SECONDS_IN_MINUTE
+    return "$minutes:${seconds.toString().padStart(2, '0')}"
+}
+
+private const val MILLIS_IN_SECOND = 1_000L
+private const val SECONDS_IN_MINUTE = 60L

@@ -14,7 +14,8 @@ data class TypesResponseDto(
 data class EpisodeTypeDto(
     val id: Int = 0,
     val name: String? = null,
-    @SerialName("episodes_count") val episodesCount: Int? = null,
+    /** URL аватара/логотипа команды озвучки. Живая верификация (P16.T5): `icon` в ответе. */
+    val icon: String? = null,
     /**
      * Живая верификация (R3, `episode/186`): реальный ответ отдаёт строку
      * (`"workers":"Ancord"` либо `"workers":""`), а не массив. `List<String>` здесь ронял бы
@@ -22,6 +23,7 @@ data class EpisodeTypeDto(
      * известного поля.
      */
     val workers: String? = null,
+    @SerialName("episodes_count") val episodesCount: Int? = null,
     /**
      * Живая верификация (P8.T6, `GET episode/1`): поле реально присутствует в сыром ответе —
      * `true` для типа «Субтитры», `false` для дубляжей (пример: `AniDUB` → `false`,
@@ -40,6 +42,8 @@ data class EpisodeTypeDto(
      * поднять закреплённые типы озвучки в начало списка.
      */
     val pinned: Boolean = false,
+    /** Метка качества озвучки (1 = 1080p, 2 = 1440p, 3 = 4K, 0 = скрыта). Живая верификация (P16.T4). */
+    val quality: Int = 0,
 )
 
 /** `SourcesResponse` — `GET episode/{releaseId}/{typeId}`. */
@@ -60,6 +64,8 @@ data class EpisodeSourceDto(
      */
     val name: String? = null,
     @SerialName("episodes_count") val episodesCount: Int? = null,
+    /** Метка качества источника (1 = 1080p, 2 = 1440p, 3 = 4K, 0 = скрыта). Живая верификация (P16.T4). */
+    val quality: Int = 0,
 )
 
 /** `EpisodeResponse` — `GET episode/{releaseId}/{typeId}/{sourceId}`. */

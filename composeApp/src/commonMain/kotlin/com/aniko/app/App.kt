@@ -128,7 +128,7 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
         // Тема — читается из ThemeStore тем же способом, что и язык выше. null — «не выбран
         // явно»: первый запуск/сброс → светлая тема (макет Home в Claude Design светлый,
         // сверка 2026-09-08 по скриншоту пользователя; системная тема macOS не учитывается).
-        // Явный выбор — "light"/"dark".
+        // Явный выбор — "light"/"dark"/"amoled" (P16.T20).
         val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
 
         // Единственный авторитет размера окна (P5.T4) — вычисляется один раз на корневом уровне и
@@ -136,13 +136,10 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
         // (все ниже по дереву) видели одно и то же значение без повторного вычисления.
         val windowSize = rememberAnixWindowSize()
 
+        val isAmoled = themeMode == "amoled"
         AppTheme(
-            darkTheme =
-                when (themeMode) {
-                    "light" -> false
-                    "dark" -> true
-                    else -> false
-                },
+            darkTheme = themeMode == "dark" || isAmoled,
+            isAmoled = isAmoled,
         ) {
             ProvideAppStrings(languageTag = languageTag) {
                 CompositionLocalProvider(LocalAnixWindowSize provides windowSize) {

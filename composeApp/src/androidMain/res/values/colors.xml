@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- P16.T21: фоновые цвета 4 наборов иконки лаунчера (activity-alias в AndroidManifest.xml).
+         Основная — accent-токен макета (`AnixPalette.PrimaryLight`, см. shared/ui/.../theme/Color.kt),
+         остальные три — авторские варианты в той же стилистике (не копии официальных ассетов
+         Anixart — см. отчёт задачи). -->
+    <color name="ic_launcher_background_main">#7743CC</color>
+    <color name="ic_launcher_background_classic">#F04E5C</color>
+    <color name="ic_launcher_background_dream">#3F51B5</color>
+    <color name="ic_launcher_background_ice">#4FC3F7</color>
+</resources>

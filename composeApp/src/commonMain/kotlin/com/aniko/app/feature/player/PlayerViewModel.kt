@@ -2,6 +2,8 @@ package com.aniko.app.feature.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aniko.data.playerposition.LocalPlayerPositionStore
+import com.aniko.data.playerposition.PositionKey
 import com.aniko.data.repository.EpisodeRepository
 import com.aniko.data.repository.LibraryRepository
 import com.aniko.model.AnixError
@@ -44,6 +46,15 @@ import kotlinx.coroutines.launch
  * `LockLandscapeOrientationEffect` диспозится без единого вызова колбэка сворачивания). ViewModel
  * же живёт в `ViewModelStore` конкретной `NavBackStackEntry`, которая не зависит от того, через
  * какую ветку `AdaptiveScaffold` сейчас отрисован `NavHost` — переживает эту перестройку.
+ * @param resumePositionMs P16.T7 — сохранённая позиция серии (мс), при которой пользователю
+ * предлагается resume-диалог «Продолжить с M:SS / С начала». `null` — либо позиция ещё не
+ * загружена/отсутствует, либо диалог уже закрыт (см. [PlayerViewModel.onResumeContinue]/
+ * [PlayerViewModel.onResumeStartOver] — оба сбрасывают поле, чтобы диалог не показывался повторно
+ * до переоткрытия серии).
+ * @param pendingSeekToMs P16.T7 — позиция, на которую нужно перемотать видео сразу как только
+ * мост найдёт `<video>` (`EmbedVideoState.isVideoFound`); выставляется
+ * [PlayerViewModel.onResumeContinue], потребляется и сбрасывается [PlayerScreen] через
+ * [PlayerViewModel.onResumeSeekConsumed] после фактического `seekTo`.
  */
 data class PlayerUiState(
     val isLoading: Boolean = true,
@@ -56,6 +67,8 @@ data class PlayerUiState(
     val currentVoiceType: VoiceType? = null,
     val isAudioSwitching: Boolean = false,
     val isFullscreen: Boolean = false,
+    val resumePositionMs: Long? = null,
+    val pendingSeekToMs: Long? = null,
 )
 
 /**
@@ -96,10 +109,15 @@ sealed interface PlayerError {
  *
  * `releaseId`/`sourceId`/`position` приходят из `AnixDestination.Player` через `toRoute()` в
  * `App.kt`, аналогично `ReleaseDetailsViewModel.load(releaseId)` — не через Koin `parametersOf`.
+ *
+ * TooManyFunctions подавлен: 13 функций — интенты экрана плеера + resume-поток (P16.T7);
+ * объединение смешало бы независимые интенты.
  */
+@Suppress("TooManyFunctions") // См. KDoc класса: рост функций — от независимых интентов плеера.
 class PlayerViewModel(
     private val episodeRepository: EpisodeRepository,
     private val libraryRepository: LibraryRepository,
+    private val positionStore: LocalPlayerPositionStore,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
@@ -109,7 +127,10 @@ class PlayerViewModel(
         val sourceId: Int,
         val position: Int,
         val host: VideoHost,
-    )
+    ) {
+        /** P16.T7 — ключ локального хранилища позиции воспроизведения для этой серии. */
+        fun toPositionKey() = PositionKey(releaseId = releaseId, sourceId = sourceId, episodeOrdinal = position)
+    }
 
     private var loadedKey: LoadKey? = null
 
@@ -175,6 +196,15 @@ class PlayerViewModel(
             // ни ронять экран — `hasEpisode` сам глотает сетевую ошибку в `false`.
             val hasNext = episodeRepository.hasEpisode(releaseId, sourceId, position + 1)
             if (loadedKey == key) _uiState.update { it.copy(hasNextEpisode = hasNext) }
+        }
+        // P16.T7 — resume-диалог: сохранённая позиция читается параллельно с кадром видео и не
+        // задерживает его показ. Диалог показывается только при позиции дальше самого начала
+        // (см. [RESUME_MIN_POSITION_MS]) — иначе он бы всплывал на каждой почти нетронутой серии.
+        viewModelScope.launch {
+            val saved = runCatching { positionStore.load(key.toPositionKey()) }.getOrNull()
+            if (loadedKey == key && saved != null && saved >= RESUME_MIN_POSITION_MS) {
+                _uiState.update { it.copy(resumePositionMs = saved) }
+            }
         }
         resolveCurrentVoiceType(key)
     }
@@ -262,6 +292,108 @@ class PlayerViewModel(
         _uiState.update { it.copy(isFullscreen = value) }
     }
 
+    /**
+     * P16.T7 — пользователь выбрал «Продолжить с M:SS» в resume-диалоге: диалог закрывается, а
+     * позиция перекладывается в [PlayerUiState.pendingSeekToMs] — фактический `seekTo` делает
+     * [PlayerScreen], как только мост найдёт `<video>` (`isVideoFound`), а не эта ViewModel,
+     * которая ничего не знает про [com.aniko.player.EmbedVideoController].
+     */
+    fun onResumeContinue() {
+        val positionMs = _uiState.value.resumePositionMs ?: return
+        val key = loadedKey ?: return
+        _uiState.update { it.copy(resumePositionMs = null, pendingSeekToMs = positionMs) }
+        // Старая точка больше не нужна: «продолжить» перемотает на неё через pendingSeekToMs, а
+        // последующие автосохранения перезапишут ключ свежими позициями. Очистка сразу исключает
+        // гонку, где троттлинг успел бы записать 0-позицию поверх точки resume.
+        viewModelScope.launch { runCatching { positionStore.clear(key.toPositionKey()) } }
+    }
+
+    /**
+     * P16.T7 — resume-диалог закрыт без выбора (тап мимо/back): просто прячем диалог, сохранённая
+     * позиция в сторе ОСТАЁТСЯ — следующее открытие серии снова предложит продолжить (ревью
+     * Волны 3, P3). Отдельный обработчик, не путать с «С начала» ([onResumeStartOver]).
+     */
+    fun onResumeDismiss() {
+        _uiState.update { it.copy(resumePositionMs = null) }
+    }
+
+    /**
+     * P16.T7 — пользователь выбрал «С начала»: диалог закрывается, а сохранённая позиция стирается
+     * из [LocalPlayerPositionStore] — иначе следующее открытие той же серии снова предложило бы
+     * resume с уже отвергнутой позиции.
+     */
+    fun onResumeStartOver() {
+        val key = loadedKey ?: return
+        _uiState.update { it.copy(resumePositionMs = null, pendingSeekToMs = null) }
+        viewModelScope.launch { runCatching { positionStore.clear(key.toPositionKey()) } }
+    }
+
+    /** P16.T7 — [PlayerScreen] вызывает это сразу после того, как реально выполнил `seekTo`
+     *  из [onResumeContinue] — снимает [PlayerUiState.pendingSeekToMs], чтобы повторная
+     *  рекомпозиция не перемотала видео второй раз. */
+    fun onResumeSeekConsumed() {
+        _uiState.update { it.copy(pendingSeekToMs = null) }
+    }
+
+    /**
+     * P16.T7 — сохранение позиции воспроизведения (троттлинг ~2с и финальное сохранение на
+     * паузе/dispose — забота [PlayerScreen], здесь только запись). Позиция у конца серии
+     * (`>=` [RESUME_NEAR_END_PROGRESS] от длительности, если она известна) не сохраняется, а
+     * стирает существующую запись — досмотренную серию не нужно предлагать «продолжить».
+     */
+    fun onPlaybackPositionChanged(
+        currentMs: Long,
+        durationMs: Long?,
+    ) {
+        val key = loadedKey ?: return
+        // Пока открыт resume-диалог (позиция ещё не выбрана), автосохранение запрещено: видео
+        // уже играет с 0, и запись затрёт настоящую точку resume раньше, чем пользователь
+        // выберет (ревью Волны 3, P3). После «Продолжить»/«С начала» диалог закрыт — запись снова
+        // работает, а старая точка уже очищена соответствующим обработчиком.
+        if (_uiState.value.resumePositionMs != null) return
+        persistPosition(key.toPositionKey(), currentMs, durationMs)
+    }
+
+    /**
+     * P16.T7 — сохранение позиции при dispose контроллера. Принимает ключ ЯВНО: к моменту
+     * dispose (смена серии/озвучки) [loadedKey] может уже указывать на новую серию, и запись под
+     * «живым» ключом положила бы позицию старой серии в ключ новой (ревью Волны 3, P3).
+     * Подавление при открытом resume-диалоге — только если диалог относится к ЭТОМУ ключу.
+     */
+    fun onControllerDisposed(
+        releaseId: Int,
+        sourceId: Int,
+        position: Int,
+        currentMs: Long,
+        durationMs: Long?,
+    ) {
+        val positionKey = PositionKey(releaseId = releaseId, sourceId = sourceId, episodeOrdinal = position)
+        val dialogOpenForSameKey =
+            _uiState.value.resumePositionMs != null &&
+                loadedKey?.let {
+                    it.releaseId == releaseId && it.sourceId == sourceId && it.position == position
+                } == true
+        if (dialogOpenForSameKey) return
+        persistPosition(positionKey, currentMs, durationMs)
+    }
+
+    private fun persistPosition(
+        positionKey: PositionKey,
+        currentMs: Long,
+        durationMs: Long?,
+    ) {
+        val progress = durationMs?.takeIf { it > 0 }?.let { currentMs.toDouble() / it }
+        viewModelScope.launch {
+            runCatching {
+                if (progress != null && progress >= RESUME_NEAR_END_PROGRESS) {
+                    positionStore.clear(positionKey)
+                } else {
+                    positionStore.save(positionKey, currentMs)
+                }
+            }
+        }
+    }
+
     fun retry() {
         loadedKey?.let { (releaseId, sourceId, position, host) -> load(releaseId, sourceId, position, host) }
     }
@@ -319,3 +451,11 @@ private fun Exception.toPlayerError(): PlayerError {
         else -> PlayerError.Generic
     }
 }
+
+/** P16.T7 — минимальная сохранённая позиция, при которой имеет смысл предлагать resume-диалог:
+ *  меньше — считается «серия почти не начата», диалог только раздражал бы. */
+private const val RESUME_MIN_POSITION_MS = 5_000L
+
+/** P16.T7 — доля длительности, начиная с которой позиция считается «серия досмотрена» — такую
+ *  позицию не сохраняем (и стираем прежнюю), resume от неё не имеет смысла. */
+private const val RESUME_NEAR_END_PROGRESS = 0.95

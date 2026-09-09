@@ -33,4 +33,7 @@ actual fun platformModule(): Module =
         }
         // P10.T5 — локальные уведомления на Desktop через системный трей (java.awt.SystemTray).
         single<LocalNotificationPresenter> { DesktopLocalNotificationPresenter() }
+        // P16.T21 — Desktop не поддерживает несколько иконок лаунчера; секция в SettingsScreen
+        // скрывается по пустому `supportedIcons`.
+        single<AppIconHelper> { NoOpAppIconHelper() }
     }

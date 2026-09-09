@@ -14,11 +14,13 @@ fun EpisodeTypeDto.toDomain(): VoiceType =
     VoiceType(
         id = id,
         name = name.orEmpty(),
+        icon = icon,
         episodesCount = episodesCount,
         workers = workers,
         isSub = isSub,
         viewCount = viewCount,
         pinned = pinned,
+        quality = quality,
     )
 
 fun EpisodeSourceDto.toDomain(): EpisodeSource =
@@ -27,6 +29,7 @@ fun EpisodeSourceDto.toDomain(): EpisodeSource =
         name = name.orEmpty(),
         host = resolveHost(),
         episodesCount = episodesCount,
+        quality = quality,
     )
 
 /**

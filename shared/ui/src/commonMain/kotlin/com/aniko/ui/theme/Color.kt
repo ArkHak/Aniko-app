@@ -49,6 +49,10 @@ internal object AnixPalette {
     val SurfaceDarkElevated = SurfaceDark // alias — см. KDoc объекта выше
     val OnDark = Color(0xFFFFFFFF) // text-1
 
+    // AMOLED (P16.T20) — обводки/разделители на чистом чёрном фоне, чтобы сохранить читаемость.
+    val AmoledOutline = Color(0xFF333333)
+    val AmoledOutlineVariant = Color(0xFF222222)
+
     // Light theme surfaces — bg-page/bg-elevated макета.
     val BackgroundLight = Color(0xFFF3F5F9) // bg-page
     val SurfaceLight = Color(0xFFFDFDFF) // bg-elevated
@@ -118,6 +122,19 @@ internal val AnixDarkColors =
         onSurface = AnixPalette.OnDark,
         surfaceVariant = AnixPalette.SurfaceDarkElevated, // bg-elevated (alias, см. KDoc AnixPalette)
         onSurfaceVariant = AnixPalette.OnDark,
+    )
+
+/**
+ * AMOLED-вариант тёмной темы (P16.T20): те же акценты и тексты, но фон и все поверхности
+ * чистый `#000000`, обводки/разделители — тёмно-серые, чтобы сохранить читаемость.
+ */
+internal val AnixAmoledColors =
+    AnixDarkColors.copy(
+        background = Color.Black,
+        surface = Color.Black,
+        surfaceVariant = Color.Black,
+        outline = AnixPalette.AmoledOutline,
+        outlineVariant = AnixPalette.AmoledOutlineVariant,
     )
 
 internal val AnixLightColors =
@@ -266,6 +283,10 @@ internal val AnixDarkExtraColors =
         overlay16 = Color.White.copy(alpha = 0.16f),
         overlay18 = Color.White.copy(alpha = 0.18f),
     )
+
+/** AMOLED переиспользует те же семантические/текстовые токены, что и обычная тёмная тема (P16.T20) —
+ * меняются только поверхности [ColorScheme] (см. [AnixAmoledColors]), не токены [AnixColors]. */
+internal val AnixAmoledExtraColors = AnixDarkExtraColors
 internal val AnixLightExtraColors =
     AnixColors(
         live = AnixPalette.SecondaryLight,

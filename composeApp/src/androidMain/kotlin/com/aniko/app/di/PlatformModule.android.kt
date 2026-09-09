@@ -42,4 +42,6 @@ actual fun platformModule(): Module =
                 channelName = appStringsFor(get<LocaleStore>().languageTag.value).notificationChannelName,
             )
         }
+        // P16.T21 — переключатель иконки лаунчера через activity-alias (AndroidManifest.xml).
+        single<AppIconHelper> { AndroidAppIconHelper(androidContext()) }
     }

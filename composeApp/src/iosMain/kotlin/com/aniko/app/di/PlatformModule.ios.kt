@@ -32,4 +32,7 @@ actual fun platformModule(): Module =
         }
         // P10.T6 — локальные уведомления через UNUserNotificationCenter.
         single<LocalNotificationPresenter> { IosLocalNotificationPresenter() }
+        // P16.T21 — iOS не поддерживает несколько иконок лаунчера в этой реализации; секция в
+        // SettingsScreen скрывается по пустому `supportedIcons`.
+        single<AppIconHelper> { NoOpAppIconHelper() }
     }
