@@ -185,10 +185,30 @@ internal fun embedBridgeScript(): String =
        * Per-host CSS rules for hiding a host's custom player chrome.
        * Format: { suffix: 'kodikplayer.com', css: '.selector { display:none !important; }' }.
        * Boundary-label match: host === suffix || host.endsWith('.' + suffix).
-       * The table is empty for now: Kodik/Sibnet/AniLibria selectors come from live DOM dumps
-       * instead of guesses over obfuscated classes. Adding a host is a one-line edit.
+       *
+       * Live DOM dumps (2026-09-09, CDP over WebView remote-debugging; evidence files in chat):
+       * - video.sibnet.ru/shell.php — VideoJS player: <video id="video_html5_wrapper_html5_api"
+       *   class="vjs-tech"> inside #video_html5_wrapper.video-js inside #player_container
+       *   (class videojs_player). Persistent chrome = .vjs-control-bar, logo
+       *   #vjs-logobrand-image, .vjs-share-button, .vjs-related-carousel-button. The big play
+       *   button (.vjs-big-play-button) and poster are deliberately NOT hidden: before the bridge
+       *   finds <video> our overlay releases the frame, and the host's own play affordance must
+       *   stay tappable for first activation.
+       * - kodikplayer.com: player mounts into div.player_box; the player page did not initialize
+       *   during the dump session (host-side failure) so its internal chrome selectors are still
+       *   unknown — rule stays pending a working session.
        */
-      var CHROME_HIDE_CSS = [];
+      var CHROME_HIDE_CSS = [
+        {
+          suffix: 'sibnet.ru',
+          css: [
+            '#player_container .vjs-control-bar',
+            '#player_container #vjs-logobrand-image',
+            '#player_container .vjs-share-button',
+            '#player_container .vjs-related-carousel-button',
+          ].join(', ') + ' { display:none !important; }',
+        },
+      ];
 
       function hostMatches(host, suffix) {
         return host === suffix || host.substring(host.length - suffix.length - 1) === '.' + suffix;
