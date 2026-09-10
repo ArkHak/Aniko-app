@@ -112,7 +112,14 @@ fun <T> AnixContentSlot(
         state.isLoading && state.items.isEmpty() -> AnixLoadingState(modifier)
         state.errorMessage != null && state.items.isEmpty() -> AnixErrorState(state.errorMessage, modifier, onRetry)
         state.isEmpty && emptyMessage != null -> AnixEmptyState(emptyMessage, modifier)
-        else -> content(state.items)
+        // BUG (найден live-тестированием на Pixel 7, 2026-09-10): раньше здесь было голое
+        // `content(state.items)` — единственная из четырёх веток, теряющая caller-овский
+        // [modifier]. `content` — `@Composable (List<T>) -> Unit`, он не принимает Modifier как
+        // параметр, поэтому modifier (часто несущий `ColumnScope.weight(1f)` от родительского
+        // `Column`, см. `ReleaseCommentsScreen.kt`) некуда было передать напрямую. Оборачиваем в
+        // `Box(modifier)` — тот же приём, что уже применяют AnixLoadingState/AnixErrorState/
+        // AnixEmptyState (Modifier как первый параметр Box), без изменения публичной сигнатуры.
+        else -> Box(modifier) { content(state.items) }
     }
 }
 
