@@ -50,6 +50,12 @@ data class ProfileDetails(
     val preferredGenres: List<PreferredGenre> = emptyList(),
     /** «Недавно смотрели» — последние просмотренные релизы из того же ответа `profile/{id}`. */
     val recentlyWatched: List<Release> = emptyList(),
+    /**
+     * P16.T13 «профиль-витрина, обложка»: URL фоновой картинки витрины (`theme_background_url` —
+     * см. KDoc `ProfileDetailsDto.themeBackgroundUrl`). `null` — самый частый случай (пользователь
+     * не настроил тему витрины); [ProfileHeader] в этом случае рисует обычную шапку без фона.
+     */
+    val coverUrl: String? = null,
 ) {
     /** Часы просмотра — [watchedTime] приходит в минутах (см. вердикт P0.T4 плана). */
     val watchedHours: Int get() = (watchedTime / MINUTES_PER_HOUR).toInt()

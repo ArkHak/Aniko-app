@@ -5,6 +5,7 @@
 
 package com.aniko.app.feature.profile
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,10 +13,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
@@ -34,8 +38,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -44,6 +51,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
+import com.aniko.data.profileshowcase.LocalProfilePinnedSectionStore
+import com.aniko.data.profileshowcase.ProfileShowcaseSection
 import com.aniko.model.Achievement
 import com.aniko.model.FriendRequestVisibility
 import com.aniko.model.PrivacyVisibility
@@ -60,6 +70,7 @@ import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -254,6 +265,20 @@ private data class ProfilePrivacyCallbacks(
 )
 
 /**
+ * Текущий пин + колбэк переключения одной группой (P16.T13) — тот же приём группировки, что
+ * [ProfilePrivacyCallbacks]: без неё каждая из четырёх движимых секций
+ * ([FavoriteGenresSection]/[AchievementsSection]/[RecentlyWatchedSection]/`StatsGrid`-блок)
+ * тащила бы [ProfileShowcaseSection]`?` и колбэк раздельно. [onTogglePin] — `suspend`, а не
+ * fire-and-forget лямбда: вызывающая сторона ([ProfileSectionTitleRow]) сама решает, в каком
+ * `CoroutineScope` его запустить (тот же паттерн, что `VoiceTypePinButton.onToggle` в
+ * `ReleaseEpisodesSection.kt`).
+ */
+internal data class ProfilePinState(
+    val pinnedSection: ProfileShowcaseSection?,
+    val onTogglePin: suspend (ProfileShowcaseSection) -> Unit,
+)
+
+/**
  * Гостевое состояние (P9.T12): не сетевая ошибка, а понятное приглашение войти. Кнопка сбрасывает
  * остатки сессии — на экран логина уводит `AnixSessionGate` (см. KDoc [ProfileViewModel.signOut]).
  */
@@ -296,12 +321,22 @@ private fun ProfileGuestBox(
  * P13.T2/T11 (сверка с мокапом Claude Design) добавили сюда переключатель темы сразу под шапкой
  * ([ProfileThemeSection]) — раньше он жил на `SettingsScreen`, мокап рисует его прямо под шапкой
  * профиля. [AchievementsSection] осталась на прежнем месте относительно остальных секций (порядок
- * `Header → Theme → Highlights → FavoriteGenres → Achievements → Stats → Charts → RecentlyWatched →
- * Privacy`) — план не требовал её перемещать, только подтвердить, что она есть в новой компоновке.
+ * ПО УМОЛЧАНИЮ, без пина: `Header → Theme → Highlights → FavoriteGenres → Achievements → Stats →
+ * Charts → RecentlyWatched → Privacy`) — план не требовал её перемещать, только подтвердить, что
+ * она есть в новой компоновке.
+ *
+ * P16.T13 (локальный пин секции витрины) добавил переупорядочивание: если пользователь закрепил
+ * одну из четырёх движимых секций ([ProfileShowcaseSection] — жанры/достижения/связка
+ * `StatsGrid`+`ProfileChartsSection`/«недавно смотрели»), она рендерится СРАЗУ после
+ * [ProfileHeader] (перед темой и «часами просмотра»), а остальные три — следом, в исходном
+ * порядке. Без пина (`pinnedSection == null`) порядок совпадает с описанным выше дефолтом
+ * байт-в-байт: `section != pinnedSection` истинно для абсолютно всех секций, `pinnedBlock == null`
+ * ничего не рендерит.
  */
-@Suppress("LongParameterList") // Тот же координирующий блок, что и `ProfileScreen` — см. её
-// KDoc/Suppress. `onOpenLists` (P13, точное соответствие макету: ссылка "My Lists →" под именем в
-// шапке) добавлен аддитивно к уже сгруппированным data/callbacks-параметрам.
+@Suppress("LongParameterList", "LongMethod") // Тот же координирующий блок, что и `ProfileScreen` —
+// см. её KDoc/Suppress. `onOpenLists` (P13) добавлен аддитивно к уже сгруппированным
+// data/callbacks-параметрам; P16.T13 добавил локальный пин-стор и сборку движимых секций в
+// список — оба аддитивны к уже существовавшей структуре функции, не новая ответственность.
 @Composable
 private fun ProfileContent(
     data: ProfileContentData,
@@ -322,6 +357,42 @@ private fun ProfileContent(
     val windowSize = LocalAnixWindowSize.current
     val sectionPadding = Modifier.padding(horizontal = dimens.spaceM)
 
+    val pinnedSectionStore = koinInject<LocalProfilePinnedSectionStore>()
+    val pinnedSection by pinnedSectionStore.pinnedSection().collectAsStateWithLifecycle(initialValue = null)
+    val pinState =
+        remember(pinnedSection, pinnedSectionStore) {
+            ProfilePinState(pinnedSection = pinnedSection, onTogglePin = pinnedSectionStore::toggle)
+        }
+
+    // Четыре движимые секции (P16.T13) в исходном порядке — при пине одна из них выносится сразу
+    // после шапки, остальные остаются здесь же, в этом же порядке. Каждый блок — самодостаточная
+    // Composable-лямбда: несёт собственные отступы/заголовок/пин-кнопку (и, для статистики,
+    // ведущий разделитель), поэтому безопасен к перемещению в начало ленты без потери контекста.
+    val movableSections: List<Pair<ProfileShowcaseSection, @Composable () -> Unit>> =
+        listOf(
+            ProfileShowcaseSection.FAVORITE_GENRES to {
+                FavoriteGenresSection(profile = profile, pinState = pinState, modifier = sectionPadding)
+            },
+            ProfileShowcaseSection.ACHIEVEMENTS to {
+                AchievementsSection(achievements = achievements, pinState = pinState)
+            },
+            ProfileShowcaseSection.STATISTICS to {
+                HorizontalDivider(modifier = sectionPadding)
+                ProfileSectionTitleRow(
+                    title = strings.profileStatsTitle,
+                    section = ProfileShowcaseSection.STATISTICS,
+                    pinState = pinState,
+                    modifier = sectionPadding,
+                )
+                StatsGrid(profile = profile, modifier = sectionPadding)
+                ProfileChartsSection(profile = profile, windowSize = windowSize, modifier = sectionPadding)
+            },
+            ProfileShowcaseSection.RECENTLY_WATCHED to {
+                RecentlyWatchedSection(profile = profile, onReleaseClick = onReleaseClick, pinState = pinState)
+            },
+        )
+    val pinnedBlock = movableSections.firstOrNull { it.first == pinnedSection }?.second
+
     Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
         Column(
             modifier =
@@ -334,6 +405,8 @@ private fun ProfileContent(
         ) {
             ProfileHeader(profile = profile, onOpenLists = onOpenLists, modifier = sectionPadding)
 
+            pinnedBlock?.invoke()
+
             ProfileThemeSection(
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange,
@@ -342,23 +415,9 @@ private fun ProfileContent(
 
             ProfileHighlights(profile = profile, modifier = sectionPadding)
 
-            FavoriteGenresSection(profile = profile, modifier = sectionPadding)
-
-            AchievementsSection(achievements = achievements)
-
-            HorizontalDivider(modifier = sectionPadding)
-
-            Text(
-                text = strings.profileStatsTitle,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = sectionPadding,
-            )
-            StatsGrid(profile = profile, modifier = sectionPadding)
-
-            ProfileChartsSection(profile = profile, windowSize = windowSize, modifier = sectionPadding)
-
-            RecentlyWatchedSection(profile = profile, onReleaseClick = onReleaseClick)
+            movableSections.forEach { (section, block) ->
+                if (section != pinnedSection) block()
+            }
 
             HorizontalDivider(modifier = sectionPadding)
 
@@ -405,10 +464,20 @@ private fun ProfileThemeSection(
  * Lists →" прямо под именем в шапке профиля, ведущую на тот же экран, что и вкладка таб-бара
  * `Library` (см. [com.aniko.app.navigation.AnixSection.Library]) — колбэк подключает координатор
  * (`App.kt`), как и остальные навигационные колбэки этого экрана ([onSettingsClick]-подобные).
+ *
+ * P16.T13 добавил два аддитивных, независимо отказоустойчивых штриха «витрины»:
+ * - [ProfileDetails.coverUrl] (`theme_background_url`), если задан — рисуется баннером высотой
+ *   [PROFILE_COVER_HEIGHT] с аватаром поверх (`Box` + `Alignment.Center`); `null` — баннер просто
+ *   не рендерится, обычный аватар без изменений (см. KDoc `coverUrl`: у всех живых проб зеркала
+ *   пока `null`, поле — задел под пользователей с настроенной темой витрины).
+ * - Акцентное кольцо вокруг аватара по топ-любимому жанру ([profileGenreAccentColor]) — тоже
+ *   аддитивно: без любимых жанров ([ProfileDetails.preferredGenres] пуст) кольца нет вообще, тот
+ *   же `Modifier` без `border`.
  */
 @Suppress("LongMethod") // Шапка целиком повторяет структуру макета (аватар/имя/ссылка/бейджи/
 // бан-баннер) одной функцией; вынос опциональных блоков добавил бы косвенность ради счётчика строк
-// (тот же приём, что и в остальных Track-A секциях этого файла).
+// (тот же приём, что и в остальных Track-A секциях этого файла). P16.T13 добавил обложку/акцент
+// аддитивно к уже существовавшему набору опциональных блоков — та же логика.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProfileHeader(
@@ -418,13 +487,53 @@ private fun ProfileHeader(
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
+    val topGenreName = profile.preferredGenres.maxByOrNull { it.percentage }?.name
+    val genreAccent = profileGenreAccentColor(topGenreName, AnixThemeTokens.colors.chartSeries)
+    val avatarModifier =
+        if (genreAccent != null) {
+            Modifier
+                .border(PROFILE_AVATAR_ACCENT_WIDTH, genreAccent, CircleShape)
+                .padding(PROFILE_AVATAR_ACCENT_GAP)
+        } else {
+            Modifier
+        }
 
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
     ) {
-        AnixAvatar(avatarUrl = profile.avatarUrl, login = profile.login, size = AVATAR_SIZE)
+        val coverUrl = profile.coverUrl
+        if (coverUrl != null) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(PROFILE_COVER_HEIGHT)
+                        .clip(RoundedCornerShape(dimens.cornerL)),
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model = coverUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize(),
+                )
+                AnixAvatar(
+                    avatarUrl = profile.avatarUrl,
+                    login = profile.login,
+                    size = AVATAR_SIZE,
+                    modifier = avatarModifier,
+                )
+            }
+        } else {
+            AnixAvatar(
+                avatarUrl = profile.avatarUrl,
+                login = profile.login,
+                size = AVATAR_SIZE,
+                modifier = avatarModifier,
+            )
+        }
         Text(
             text = profile.login,
             style = MaterialTheme.typography.titleLarge.copy(fontSize = PROFILE_NAME_FONT_SIZE),
@@ -576,3 +685,10 @@ private fun FriendRequestVisibility.toDisplayName(strings: Strings): String =
 private val AVATAR_SIZE = 64.dp
 private val PROFILE_NAME_FONT_SIZE = 17.sp
 private val PROFILE_LISTS_LINK_ICON_SIZE = 14.dp
+
+/** [ProfileHeader] — обложка витрины (P16.T13): высота баннера, аватар рисуется поверх центром. */
+private val PROFILE_COVER_HEIGHT = 96.dp
+
+/** [ProfileHeader] — акцентное кольцо аватара по топ-любимому жанру (P16.T13). */
+private val PROFILE_AVATAR_ACCENT_WIDTH = 2.dp
+private val PROFILE_AVATAR_ACCENT_GAP = 3.dp

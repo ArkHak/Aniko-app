@@ -160,6 +160,12 @@ interface Strings {
     val profileRecentlyWatchedTitle: String
     val profileRecentlyWatchedEmpty: String
     val profileAchievementsTitle: String
+
+    /** Кнопка-пин заголовка секции витрины профиля (P16.T13, локальный пин — см. KDoc
+     *  `LocalProfilePinnedSectionStore`). Параметризовано названием секции, чтобы
+     *  content-description оставался осмысленным для скринридера при любой из закрепляемых секций. */
+    val profilePinSectionAction: (title: String) -> String
+    val profileUnpinSectionAction: (title: String) -> String
     val profileGuestTitle: String
     val profileGuestMessage: String
     val privacyWhoSeesStats: String

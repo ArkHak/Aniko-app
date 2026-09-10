@@ -19,6 +19,7 @@ import com.aniko.data.locale.LocaleStore
 import com.aniko.data.notification.NotificationPoller
 import com.aniko.data.notification.NotificationSyncStore
 import com.aniko.data.playerposition.LocalPlayerPositionStore
+import com.aniko.data.profileshowcase.LocalProfilePinnedSectionStore
 import com.aniko.data.repository.AuthRepository
 import com.aniko.data.repository.CommentRepository
 import com.aniko.data.repository.EpisodeRepository
@@ -87,6 +88,7 @@ val dataModule =
         single { LocalPlayerPositionStore(settings = get()) }
         single { LocalVoicePinStore(settings = get()) }
         single { LocalCatalogFilterStore(settings = get()) }
+        single { LocalProfilePinnedSectionStore(settings = get()) }
 
         single<HttpClient> {
             createAnixHttpClient(

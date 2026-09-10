@@ -29,9 +29,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,9 +44,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.aniko.data.profileshowcase.ProfileShowcaseSection
 import com.aniko.model.Achievement
 import com.aniko.model.ProfileDetails
 import com.aniko.ui.adaptive.AnixWindowSize
+import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.StatTileData
 import com.aniko.ui.component.TitleCard
 import com.aniko.ui.component.chart.BarEntry
@@ -53,6 +57,7 @@ import com.aniko.ui.component.chart.DonutChart
 import com.aniko.ui.component.chart.WeeklyBarChart
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
+import kotlinx.coroutines.launch
 import kotlin.math.ceil
 
 /**
@@ -115,6 +120,110 @@ private fun HighlightMetric(
 }
 
 /**
+ * Заголовок движимой секции витрины + кнопка-пин (P16.T13, локальный пин — см. KDoc
+ * [LocalProfilePinnedSectionStore][com.aniko.data.profileshowcase.LocalProfilePinnedSectionStore]).
+ * Тот же визуальный паттерн, что кнопка-булавка озвучки (`VoiceTypePinButton` в
+ * `ReleaseEpisodesSection.kt`, P16.T6): `bookmark`, `filled` и цвет `primary` в закреплённом
+ * состоянии, иначе тусклая `textSecondary60`. Используется всеми четырьмя движимыми секциями
+ * (см. [ProfileShowcaseSection]) — единая точка, чтобы стиль кнопки не разъезжался между ними.
+ */
+@Composable
+internal fun ProfileSectionTitleRow(
+    title: String,
+    section: ProfileShowcaseSection,
+    pinState: ProfilePinState,
+    modifier: Modifier = Modifier,
+) {
+    val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
+    val scope = rememberCoroutineScope()
+    val isPinned = pinState.pinnedSection == section
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        IconButton(
+            onClick = { scope.launch { pinState.onTogglePin(section) } },
+            modifier = Modifier.size(dimens.minTouchTarget),
+        ) {
+            AnixIcon(
+                name = "bookmark",
+                contentDescription =
+                    if (isPinned) strings.profileUnpinSectionAction(title) else strings.profilePinSectionAction(title),
+                filled = isPinned,
+                tint = if (isPinned) MaterialTheme.colorScheme.primary else AnixThemeTokens.colors.textSecondary60,
+            )
+        }
+    }
+}
+
+/**
+ * Локальный акцент витрины по любимому жанру (P16.T13 «тема витрины по любимым жанрам»).
+ *
+ * Официальный v10 считает тему на сервере по статистике «просмотрено ≥10» с ежедневным
+ * пересчётом (см. `docs/REELWAVE_PLAN.md`, «P16.T13/T15 — механика витрины из строк») —
+ * недокументированная серверная логика, воспроизвести её нельзя и не нужно (задание прямо
+ * запрещает пытаться повторить её буквально). Здесь — чисто клиентское, детерминированное
+ * приближение: цвет берётся из уже существующей категориальной палитры [palette] (на практике —
+ * [com.aniko.ui.theme.AnixColors.chartSeries], та же, что красит донат-график распределения
+ * списков в [ListsDonutSection]) по хэшу имени топ-жанра. Никаких новых hex не изобретается, а
+ * один и тот же жанр у одного пользователя всегда даёт один и тот же индекс палитры (хэш строки
+ * детерминирован в рамках одного процесса).
+ *
+ * Живой баг на реальном устройстве (Pixel 7, реальный аккаунт, топ-жанр «экшен» 13%): у
+ * `AnixColors.chartSeries` ПОСЛЕДНИЙ элемент (индекс 5 из 6) — буквально `Color.Gray`, добавленный
+ * туда как нейтральный слайс «прочее» для донат-легенды (уместно там, но не здесь). У
+ * `"экшен".lowercase().hashCode().mod(6)` результат ровно 5 — то есть кольцо аватара красилось в
+ * серый, визуально неотличимо от «акцент не применён», для этого (и статистически ~1 из 6)
+ * реальных пользователей. Функция поэтому сама фильтрует [palette] от ахроматичных (серых/
+ * чёрных/белых — см. [isAchromatic]) записей ПЕРЕД хэшированием: это деталь реализации именно
+ * этой функции (палитра — общий токен для донат-графика, у вызывающего кода нет причины знать,
+ * что в ней есть нейтральный «filler»), поэтому фильтр не вынесен на сторону вызова. Если после
+ * фильтрации палитра пуста (патологический вход — только серые цвета) — тот же результат, что и
+ * при отсутствии любимых жанров: `null`.
+ *
+ * `null`, если у профиля нет любимых жанров ([topGenreName] == `null`/пусто) или в палитре не
+ * осталось ни одного цветного (не ахроматичного) элемента — вызывающий код в этом случае не
+ * подкрашивает ничего, оставляя обычные цвета темы.
+ *
+ * `ReturnCount`: два guard clause (нет жанра / палитра пуста после фильтрации) + основной
+ * результат — линейная цепочка читается лучше вложенного `when`, тот же приём, что и
+ * `parseDeepLink` в `DeepLink.kt`.
+ */
+@Suppress("ReturnCount")
+internal fun profileGenreAccentColor(
+    topGenreName: String?,
+    palette: List<Color>,
+): Color? {
+    if (topGenreName.isNullOrBlank()) return null
+    val huePalette = palette.filterNot { it.isAchromatic() }
+    if (huePalette.isEmpty()) return null
+    val index = topGenreName.lowercase().hashCode().mod(huePalette.size)
+    return huePalette[index]
+}
+
+/** Порог разброса RGB-каналов, ниже которого цвет считается ахроматичным (серым/чёрным/белым). */
+private const val ACHROMATIC_CHROMA_THRESHOLD = 0.02f
+
+/**
+ * Ахроматичен ли цвет (серый/чёрный/белый — нет доминирующего тона): каналы R/G/B у таких цветов
+ * почти равны. Используется [profileGenreAccentColor], чтобы не выбрать из палитры графика
+ * нейтральный «filler»-цвет (живой пример — `Color.Gray` в `AnixColors.chartSeries`, см. её KDoc).
+ */
+private fun Color.isAchromatic(): Boolean {
+    val maxChannel = maxOf(red, green, blue)
+    val minChannel = minOf(red, green, blue)
+    return maxChannel - minChannel < ACHROMATIC_CHROMA_THRESHOLD
+}
+
+/**
  * Любимые жанры — готовое `preferred_genres` с процентами от сервера. Минимальный UI (чипы
  * «жанр · N%») намеренно: своей визуализации распределения жанров макет не требует, а
  * придумывать её сверх того, что отдаёт API, — вне объёма v1.
@@ -122,6 +231,7 @@ private fun HighlightMetric(
 @Composable
 internal fun FavoriteGenresSection(
     profile: ProfileDetails,
+    pinState: ProfilePinState,
     modifier: Modifier = Modifier,
 ) {
     if (profile.preferredGenres.isEmpty()) return
@@ -130,10 +240,10 @@ internal fun FavoriteGenresSection(
     val strings = LocalStrings.current
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
-        Text(
-            text = strings.profileFavoriteGenresTitle,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
+        ProfileSectionTitleRow(
+            title = strings.profileFavoriteGenresTitle,
+            section = ProfileShowcaseSection.FAVORITE_GENRES,
+            pinState = pinState,
         )
         // Не `ChipRow`: тот даёт `FilterChip` с семантикой выбора, а здесь чипы чисто
         // информационные — выбирать среди жанров нечего.
@@ -164,6 +274,7 @@ internal fun FavoriteGenresSection(
 @Composable
 internal fun AchievementsSection(
     achievements: List<Achievement>,
+    pinState: ProfilePinState,
     modifier: Modifier = Modifier,
 ) {
     if (achievements.isEmpty()) return
@@ -172,10 +283,10 @@ internal fun AchievementsSection(
     val strings = LocalStrings.current
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
-        Text(
-            text = strings.profileAchievementsTitle,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
+        ProfileSectionTitleRow(
+            title = strings.profileAchievementsTitle,
+            section = ProfileShowcaseSection.ACHIEVEMENTS,
+            pinState = pinState,
             modifier = Modifier.padding(horizontal = dimens.spaceM),
         )
         LazyRow(
@@ -512,6 +623,7 @@ private fun WeeklyActivitySection(
 internal fun RecentlyWatchedSection(
     profile: ProfileDetails,
     onReleaseClick: (Int) -> Unit,
+    pinState: ProfilePinState,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -519,10 +631,10 @@ internal fun RecentlyWatchedSection(
     val strings = LocalStrings.current
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
-        Text(
-            text = strings.profileRecentlyWatchedTitle,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
+        ProfileSectionTitleRow(
+            title = strings.profileRecentlyWatchedTitle,
+            section = ProfileShowcaseSection.RECENTLY_WATCHED,
+            pinState = pinState,
             modifier = Modifier.padding(horizontal = dimens.spaceM),
         )
         if (profile.recentlyWatched.isEmpty()) {

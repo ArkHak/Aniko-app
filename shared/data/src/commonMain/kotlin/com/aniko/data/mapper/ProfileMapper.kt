@@ -62,6 +62,7 @@ fun ProfileDetailsDto.toDomain(staticBaseUrl: String = ApiConfig.DEFAULT_STATIC_
                 .filter { it.name.isNotBlank() }
                 .map { PreferredGenre(name = it.name, percentage = it.percentage) },
         recentlyWatched = history.map { it.toDomain(staticBaseUrl) },
+        coverUrl = themeBackgroundUrl?.takeIf { it.isNotBlank() }?.toAbsoluteUrl(staticBaseUrl),
     )
 
 /** `Badge.TYPE_ANIMATION = 1` (decompiled) — всё, что не `1`, трактуется как статичное. */
