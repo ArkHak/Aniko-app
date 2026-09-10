@@ -1,15 +1,16 @@
 package com.aniko.data.repository
 
 import com.aniko.data.api.ReleaseCommentApi
+import com.aniko.data.dto.CommentAddRequestDto
 import com.aniko.data.mapper.toDomain
 import com.aniko.data.paging.Paginator
 import com.aniko.model.ReleaseComment
 
 /**
  * Обёртка над `ReleaseCommentApi` (P3.T12) для экрана комментариев (P7.T13).
- * Только чтение + голосование — добавление/редактирование/удаление комментариев не входит
- * в объём фундамента Фазы 7, `ReleaseCommentApi` уже реализует эти методы напрямую, если
- * следующим трекам понадобится их прокинуть.
+ * Чтение, голосование и публикация нового комментария (P16.T17, `addComment`) — редактирование/
+ * удаление не входят в объём этого трека, `ReleaseCommentApi` уже реализует эти методы напрямую,
+ * если следующим трекам понадобится их прокинуть.
  */
 class CommentRepository(
     private val commentApi: ReleaseCommentApi,
@@ -29,6 +30,19 @@ class CommentRepository(
         vote: Int,
     ) {
         commentApi.vote(commentId, vote)
+    }
+
+    /**
+     * `POST release/comment/add/{releaseId}` — публикация нового комментария (P16.T17). Ответы,
+     * реплаи (`parentCommentId`/`replyToProfileId`) и спойлер-флаг не входят в объём этой задачи
+     * (только композер верхнеуровневого комментария на `ReleaseCommentsScreen`) — сигнатура
+     * умышленно принимает только `message`, а не весь [CommentAddRequestDto].
+     */
+    suspend fun addComment(
+        releaseId: Int,
+        message: String,
+    ) {
+        commentApi.add(releaseId.toLong(), CommentAddRequestDto(message = message))
     }
 
     /**

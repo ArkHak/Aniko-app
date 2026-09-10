@@ -395,6 +395,8 @@ interface Strings {
     val commentsSortNewest: String
     val commentsSortOldest: String
     val commentReplyCount: (count: Int) -> String
+    val commentsComposerPlaceholder: String
+    val commentsComposerSubmit: String
 
     // --- Player + выбор озвучки (P8.T6) ---
     // "All" переиспользует уже существующий [filterChipAll] (тот же смысл — сбросить фильтр).

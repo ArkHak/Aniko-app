@@ -33,11 +33,18 @@ enum class CommentsSort(
  * задокументирована и не подтверждена вживую, подделывать её на клиенте рискованнее, чем оставить
  * счётчик как есть до следующего `refresh()`/подгрузки страницы — обновляется только подсветка
  * кнопки «текущий голос» (см. `CommentRow`).
+ *
+ * [composerText]/[isPostingComment] — черновик нового комментария (P16.T17). Живёт в
+ * `CommentsState`, а не в локальном Compose-состоянии экрана: [CommentsViewModel] обязан сам
+ * очистить поле после успешной публикации (`SubmitComment`), а UI-композабл не знает, когда
+ * запрос завершился успехом — тот же MVI-паттерн полей формы, что у `LoginUiState`/`LoginScreen`.
  */
 data class CommentsState(
     val paging: PagingState<ReleaseComment> = PagingState(),
     val sort: CommentsSort = CommentsSort.NEWEST,
     val voteOverrides: Map<Long, Int> = emptyMap(),
+    val composerText: String = "",
+    val isPostingComment: Boolean = false,
 ) : UiState
 
 /**
@@ -47,6 +54,11 @@ data class CommentsState(
  * `ReleaseDetailsViewModel`/старого `CommentsViewModel`, см. их KDoc) — экран сам присылает его
  * из `LaunchedEffect(releaseId)`. Повторный [Load] с тем же `releaseId`, пока уже есть
  * загруженный/загружающийся пагинатор для него — no-op (см. `CommentsViewModel.handleIntent`).
+ *
+ * [Retry] переиспользован и для pull-to-refresh жеста над списком (P16.T17) — семантика та же
+ * самая операция (`Paginator.refresh()`), отдельный `Refresh`-интент был бы бессмысленным
+ * дублем: и кнопка "повторить" в `AnixErrorState`, и свайп-рефрешу нужен ровно один и тот же
+ * сброс-и-перезагрузка первой страницы.
  */
 sealed interface CommentsIntent : UiIntent {
     data class Load(
@@ -67,6 +79,17 @@ sealed interface CommentsIntent : UiIntent {
         val commentId: Long,
         val vote: Int,
     ) : CommentsIntent
+
+    /** Правка черновика нового комментария (P16.T17) — держит `CommentsState.composerText`
+     *  в синхроне с полем ввода, тот же паттерн, что `SearchScreen`/`state.query`. */
+    data class ChangeComposerText(
+        val text: String,
+    ) : CommentsIntent
+
+    /** Публикация черновика (P16.T17, `ReleaseCommentApi.add`). UI обязан не слать этот интент,
+     *  пока `isCommentMessageValid(state.composerText)` не `true` (кнопка отправки задизейблена) —
+     *  сам ViewModel всё равно перепроверяет длину перед сетевым вызовом (см. `submitComment`). */
+    data object SubmitComment : CommentsIntent
 }
 
 /** См. KDoc `HomeEffect.ShowError` — тот же случай: неудачная подгрузка следующей страницы

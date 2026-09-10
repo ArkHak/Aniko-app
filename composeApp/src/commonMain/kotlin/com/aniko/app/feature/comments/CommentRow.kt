@@ -1,5 +1,9 @@
 package com.aniko.app.feature.comments
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,13 +19,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -83,10 +90,26 @@ fun CommentRow(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(dimens.spaceXs),
         ) {
-            Text(
-                text = comment.author.login,
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = comment.author.login,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                // P16.T17: "подпись серии" — переиспользует ту же строку/шаблон, что уже рисует
+                // `releaseEpisodeFallbackName` для безымянных серий на Title Detail ("Серия N" /
+                // "Episode N", см. Strings.kt) — тот же смысл (номер серии для человека), заводить
+                // отдельный i18n-ключ под идентичный текст бессмысленно. Локальный `val episode` —
+                // не косметика: `postedAtEpisode` объявлено в другом модуле (`:shared:model`),
+                // компилятор не смарт-кастит такие свойства по одной лишь проверке `!= null`.
+                val episode = comment.postedAtEpisode
+                if (episode != null) {
+                    EpisodeTag(label = strings.releaseEpisodeFallbackName(episode))
+                }
+            }
 
             CommentMessage(comment = comment)
 
@@ -200,6 +223,13 @@ private fun SpoilerPlaceholder(
  * P11.T7: `contentDescription` раньше был просто числом лайков (`likesCount.toString()`) —
  * скринридер озвучивал голое число без какого-либо смысла действия/состояния. Теперь описывает
  * и действие (поставить/убрать лайк, по [isVoted]), и счётчик.
+ *
+ * P16.T17: короткий пружинный "поп" масштаба при переключении [isVoted] (реакция на тап) — цвет
+ * плавно переходит через [animateColorAsState], масштаб дёргается через [Animatable] вручную
+ * (мгновенный скачок до [VOTE_POP_SCALE], затем пружина обратно к `1f` — тот же приём
+ * "Animatable + LaunchedEffect", что уже использует `PlayerSeekFeedback.kt`). Первая композиция
+ * строки НЕ анимируется (`isFirstComposition`) — иначе уже лайкнутые комментарии дёргались бы
+ * при каждом входе в `LazyColumn`/скролле, а не только по реальному тапу.
  */
 @Composable
 private fun VoteIndicator(
@@ -208,15 +238,29 @@ private fun VoteIndicator(
     onClick: () -> Unit,
 ) {
     val strings = LocalStrings.current
-    val color = if (isVoted) AnixThemeTokens.colors.primaryText else MaterialTheme.colorScheme.onSurfaceVariant
+    val targetColor = if (isVoted) AnixThemeTokens.colors.primaryText else MaterialTheme.colorScheme.onSurfaceVariant
+    val animatedColor by animateColorAsState(targetValue = targetColor, label = "commentVoteColor")
+
+    val scale = remember { Animatable(1f) }
+    var isFirstComposition by remember { mutableStateOf(true) }
+    LaunchedEffect(isVoted) {
+        if (isFirstComposition) {
+            isFirstComposition = false
+            return@LaunchedEffect
+        }
+        scale.snapTo(VOTE_POP_SCALE)
+        scale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+    }
+
     val voteDescription =
         if (isVoted) strings.commentUnlikeContentDescription else strings.commentLikeContentDescription
     Text(
         text = "$LIKE_MARK $likesCount",
         style = MaterialTheme.typography.labelMedium,
-        color = color,
+        color = animatedColor,
         modifier =
             Modifier
+                .scale(scale.value)
                 .clip(RoundedCornerShape(AnixThemeTokens.dimens.cornerPill))
                 .clickable(role = Role.Button, onClick = onClick)
                 // TalkBack не сливает Text-потомка с кликабельным родителем в этой версии CMP
@@ -229,9 +273,33 @@ private fun VoteIndicator(
     )
 }
 
+/** Подпись серии у комментария (P16.T17, `ReleaseComment.postedAtEpisode`) — маленькая пилюля
+ *  рядом с логином автора, тот же визуальный язык `overlay07`/`cornerPill`, что уже использует
+ *  фон карточки комментария/`VoteIndicator` в этом файле, чтобы не заводить третий стиль чипа. */
+@Composable
+private fun EpisodeTag(
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    val dimens = AnixThemeTokens.dimens
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        color = AnixThemeTokens.colors.primaryText,
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(dimens.cornerPill))
+                .background(AnixThemeTokens.colors.overlay07)
+                .padding(horizontal = dimens.spaceS, vertical = dimens.spaceXs),
+    )
+}
+
 private const val LIKE_VOTE = 1
 private const val NO_VOTE = 0
 private const val LIKE_MARK = "▲"
+
+/** Пиковый масштаб "попа" при переключении лайка (P16.T17) — заметно, но не карикатурно. */
+private const val VOTE_POP_SCALE = 1.3f
 
 // Track A: 30dp — тот же размер, что и `ReleaseCommentPreviewRow` на Title Detail (см. её
 // `COMMENT_PREVIEW_AVATAR_SIZE` в `ReleaseDetailsScreen.kt`) и разметка макета `comments` (было
