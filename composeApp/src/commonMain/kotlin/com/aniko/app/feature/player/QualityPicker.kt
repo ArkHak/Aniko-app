@@ -18,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import com.aniko.ui.component.AnixIcon
-import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 
 /**
@@ -78,12 +77,13 @@ private fun QualityOptionRow(
 }
 
 /**
- * Пикер качества поверх кадра плеера (P16-фикс 2026-09-09) — как [AudioPickerOverlay]: тот же
- * скрим + панель снизу. Выбор шлёт [EmbedVideoController.setQuality] хосту (Kodik quality-dropdown);
- * оптимистично обновляет лейбл чипа.
+ * Generic-пикер-лист поверх кадра плеера (скрим + панель снизу), как [AudioPickerOverlay].
+ * Используется для качества (P16-фикс 2026-09-09: выбор шлёт [EmbedVideoController.setQuality],
+ * лейбл чипа обновляется оптимистично) и скорости (2026-09-10: один таб вместо ряда чипов).
  */
 @Composable
-internal fun QualityPickerOverlay(
+internal fun OptionSheetOverlay(
+    title: String,
     options: List<String>,
     current: String?,
     onSelect: (String) -> Unit,
@@ -91,7 +91,6 @@ internal fun QualityPickerOverlay(
 ) {
     val dimens = AnixThemeTokens.dimens
     val colors = AnixThemeTokens.colors
-    val strings = LocalStrings.current
     Box(
         modifier =
             Modifier
@@ -113,7 +112,7 @@ internal fun QualityPickerOverlay(
             ) {
                 Column(modifier = Modifier.padding(dimens.spaceM)) {
                     Text(
-                        text = strings.playerQualityTitle,
+                        text = title,
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )

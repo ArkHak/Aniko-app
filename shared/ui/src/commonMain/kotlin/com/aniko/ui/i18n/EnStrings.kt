@@ -129,10 +129,10 @@ val EnStrings: Strings =
         override val playerAudioLabel = "Audio"
         override val playerAudioChipLabel: (String) -> String = { name -> "Audio: $name" }
         override val playerEnterFullscreen = "Fullscreen"
-        override val playerRewind30 = "Rewind 30 seconds"
-        override val playerRewind30Short = "−30"
         override val playerQualityChip = { label: String -> "Quality: $label" }
         override val playerQualityTitle = "Video quality"
+        override val playerSpeedTitle = "Speed"
+
         override val playerResumeTitle = "Continue watching?"
         override val playerResumeContinue = "Continue"
         override val playerResumeFromStart = "From start"

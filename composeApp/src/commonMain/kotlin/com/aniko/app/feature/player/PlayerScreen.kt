@@ -161,11 +161,19 @@ fun PlayerScreen(
                     // P16-фикс 2026-09-09 — качество видео: только у хостов с клиентским
                     // переключением (Kodik/flowplayer quality-dropdown). Список пуст — чип не
                     // рисуется вовсе (честный UI, как у Audio-пикера с одной озвучкой).
-                    val qualityOptions = remember(source.url) { playerEmbedQualities(source.url) }
-                    var currentQuality by remember(source.url) {
-                        mutableStateOf(currentEmbedQuality(source.url))
-                    }
+                    // Качества берём у хоста (мост отдаёт то, что объявляет его меню), пока хост
+                    // молчит — фолбэк по домену (Kodik: 720p/480p), затем — из embed-URL.
+                    val qualityOptions =
+                        videoState.availableQualities.ifEmpty {
+                            playerEmbedQualities(source.url)
+                        }
+                    var manualQuality by remember(source.url) { mutableStateOf<String?>(null) }
+                    val currentQuality =
+                        manualQuality ?: videoState.currentQuality ?: currentEmbedQuality(source.url)
                     var showQualityPicker by remember { mutableStateOf(false) }
+                    // Скорость — одним табом (как качество, P16 2026-09-10).
+                    val speedRate = videoState.playbackRate
+                    var showSpeedPicker by remember { mutableStateOf(false) }
 
                     // Back в fullscreen работает в два шага: сначала закрыть пикер озвучки,
                     // потом — свернуть в compact. Пикер добавлен позже в композиции, поэтому
@@ -285,6 +293,8 @@ fun PlayerScreen(
                                     onOpenQualityPicker = {
                                         if (qualityOptions.isNotEmpty()) showQualityPicker = true
                                     },
+                                    speedLabel = strings.playerSpeedValue(speedRate.formatRate()),
+                                    onOpenSpeedPicker = { showSpeedPicker = true },
                                 )
                             } else {
                                 CompactPlayerChrome(
@@ -300,6 +310,8 @@ fun PlayerScreen(
                                     onOpenQualityPicker = {
                                         if (qualityOptions.isNotEmpty()) showQualityPicker = true
                                     },
+                                    speedLabel = strings.playerSpeedValue(speedRate.formatRate()),
+                                    onOpenSpeedPicker = { showSpeedPicker = true },
                                 )
                             }
 
@@ -317,15 +329,32 @@ fun PlayerScreen(
                             }
 
                             if (showQualityPicker) {
-                                QualityPickerOverlay(
+                                OptionSheetOverlay(
+                                    title = strings.playerQualityTitle,
                                     options = qualityOptions,
                                     current = currentQuality,
                                     onSelect = { quality ->
                                         controller.setQuality(quality)
-                                        currentQuality = quality
+                                        manualQuality = quality
                                         showQualityPicker = false
                                     },
                                     onDismiss = { showQualityPicker = false },
+                                )
+                            }
+
+                            if (showSpeedPicker) {
+                                val speedLabels = PLAYBACK_RATES.map { strings.playerSpeedValue(it.formatRate()) }
+                                OptionSheetOverlay(
+                                    title = strings.playerSpeedTitle,
+                                    options = speedLabels,
+                                    current = strings.playerSpeedValue(speedRate.formatRate()),
+                                    onSelect = { label ->
+                                        PLAYBACK_RATES
+                                            .firstOrNull { strings.playerSpeedValue(it.formatRate()) == label }
+                                            ?.let { controller.setPlaybackRate(it) }
+                                        showSpeedPicker = false
+                                    },
+                                    onDismiss = { showSpeedPicker = false },
                                 )
                             }
 

@@ -44,7 +44,7 @@ internal object EmbedVideoCommand {
 
 /**
  * Разбирает сообщение JS → Kotlin вида
- * `v1|<найдено 0/1>|<играет 0/1>|<позиция мс>|<длительность мс или `-`>|<скорость>`.
+ * `v1|<найдено 0/1>|<играет 0/1>|<позиция мс>|<длительность мс или `-`>|<скорость>[|<качества csv>|<текущее>]`.
  *
  * `-` в поле длительности — это `duration = NaN` до события `loadedmetadata`
  * (подтверждено спайком: сразу после загрузки страницы `duration=NaN`, `readyState=0`).
@@ -62,10 +62,24 @@ internal fun parseEmbedVideoState(raw: String): EmbedVideoState? {
         currentTimeMs = parts[3].toLongOrNull()?.coerceAtLeast(0L) ?: 0L,
         durationMs = parts[4].toLongOrNull()?.takeIf { it > 0L },
         playbackRate = parts[5].toFloatOrNull()?.takeIf { it > 0f } ?: 1f,
+        availableQualities =
+            parts
+                .getOrNull(EMBED_BRIDGE_QUALITIES_FIELD)
+                .orEmpty()
+                .split(',')
+                .map(String::trim)
+                .filter { it.isNotEmpty() },
+        currentQuality = parts.getOrNull(EMBED_BRIDGE_CURRENT_QUALITY_FIELD)?.trim()?.takeIf { it.isNotEmpty() },
     )
 }
 
 private const val EMBED_BRIDGE_FIELDS = 6
+
+/** Индекс опционального поля «качества через запятую» в payload моста (после базовых шести). */
+private const val EMBED_BRIDGE_QUALITIES_FIELD = 6
+
+/** Индекс опционального поля «текущее качество» в payload моста. */
+private const val EMBED_BRIDGE_CURRENT_QUALITY_FIELD = 7
 
 /**
  * Фильтр «сообщение действительно из фрейма видеохоста, а не из рекламного/аналитического».
@@ -221,6 +235,43 @@ internal fun embedBridgeScript(): String =
             '.resume-button.active',
             '#get_code_window',
             '#for-copy',
+            // Flowplayer HUD of Kodik (live DOM 2026-09-10): .fp-ui/.fp-controls with the
+            // quality selector (.fp-quality '360p'), logo/brand and seek bar. Hide the whole
+            // persistent chrome, but NOT .fp-play/.fp-ui itself: the big center play is
+            // required for first activation until the bridge finds <video> (same as Sibnet).
+            '.fp-controls',
+            '.fp-controls-main',
+            '.fp-controls-row',
+            '.fp-quality',
+            '.fp-quality-menu',
+            '.fp-quality-dropdown',
+            '.fp-dropdown',
+            '.fp-playlist',
+            '.fp-prev-next',
+            '.fp-timeline',
+            '.fp-progress',
+            '.fp-buffer',
+            '.fp-volume',
+            '.fp-volumebar',
+            '.fp-fullscreen',
+            '.fp-speed',
+            '.fp-subtitles',
+            '.fp-settings',
+            '.fp-playback-settings',
+            '.fp-logo',
+            '.fp-brand',
+            '.fp-embed',
+            '.fp-share',
+            '.fp-download',
+            '.movie-panel',
+            '.movie-translations-box',
+            '.preview-icons',
+            // Kodik big play/poster stay visible until first start (trust gesture: the player
+            // ignores synthetic clicks) and get hidden by the class the bridge puts on <html>
+            // once <video> is found (see syncHostChromeState).
+            'html.aniko-video-found .play_button',
+            'html.aniko-video-found .play_background',
+            'html.aniko-video-found .fp-play'
           ].join(', ') + ' { display:none !important; }',
         },
       ];
@@ -274,17 +325,51 @@ internal fun embedBridgeScript(): String =
         } catch (e) {}
       }
 
+      // Host-advertised video qualities (P16 2026-09-10): flowplayer/Kodik render a quality
+      // dropdown; its items are the source of truth, so we never hardcode the list. Selectors of
+      // several player skins are probed; labels must be plain "<N>p".
+      var QUALITY_ITEM_SELECTORS = [
+        '.fp-quality-dropdown div',
+        '.fp-quality-menu div',
+        '.fp-quality-list div',
+        '[class*="quality-dropdown"] div',
+        '[class*="quality"] li'
+      ];
+
+      function collectQualities() {
+        var out = [];
+        for (var i = 0; i < QUALITY_ITEM_SELECTORS.length; i++) {
+          var items = document.querySelectorAll(QUALITY_ITEM_SELECTORS[i]);
+          for (var j = 0; j < items.length; j++) {
+            var t = (items[j].textContent || '').trim();
+            if (t.length <= 6 && /^[0-9]{3,4}p$/i.test(t) && out.indexOf(t) < 0) { out.push(t); }
+          }
+        }
+        return out;
+      }
+
+      function currentQualityLabel() {
+        var nodes = document.querySelectorAll('.fp-quality, [class*="quality-current"], .quality-dropdown .current');
+        for (var i = 0; i < nodes.length; i++) {
+          var m = ((nodes[i].textContent || '').trim()).match(/[0-9]{3,4}p/i);
+          if (m) { return m[0]; }
+        }
+        return '';
+      }
+
       function send(force) {
         var payload;
+        var qualities = collectQualities().join(',');
+        var current = currentQualityLabel();
         if (!video) {
-          payload = V + '|0|0|0|-|1';
+          payload = V + '|0|0|0|-|1|' + qualities + '|' + current;
         } else {
           var d = video.duration;
           var dur = (typeof d === 'number' && isFinite(d) && d > 0) ? Math.round(d * 1000) : '-';
           var playing = (!video.paused && !video.ended) ? '1' : '0';
           var t = Math.round((video.currentTime || 0) * 1000);
           var r = video.playbackRate || 1;
-          payload = V + '|1|' + playing + '|' + t + '|' + dur + '|' + r;
+          payload = V + '|1|' + playing + '|' + t + '|' + dur + '|' + r + '|' + qualities + '|' + current;
         }
         if (!force && payload === lastPayload) { return; }
         lastPayload = payload;
@@ -307,6 +392,15 @@ internal fun embedBridgeScript(): String =
         send(true);
       }
 
+      function syncHostChromeState() {
+        try {
+          var root = document.documentElement;
+          if (!root) { return; }
+          if (video) { root.classList.add('aniko-video-found'); }
+          else { root.classList.remove('aniko-video-found'); }
+        } catch (e) {}
+      }
+
       function scan() {
         // Layer B: refresh per-host styles on every pass — the host may rebuild the DOM,
         // and the frame already matched by domain, so the injection is safe.
@@ -320,6 +414,7 @@ internal fun embedBridgeScript(): String =
         }
         var v = document.querySelector('video');
         if (v) { attach(v); }
+        syncHostChromeState();
       }
 
       function switchQuality(q) {
@@ -359,13 +454,60 @@ internal fun embedBridgeScript(): String =
         }, 450);
       }
 
+      // Host start fallback (P16 2026-09-10): we hide the WHOLE host HUD, including its big play,
+      // so when the host has not created the <video> yet its own controls must be pressed
+      // programmatically. Synthetic click works on display:none elements, so the chrome can stay
+      // hidden while our overlay stays the only visible UI.
+      var HOST_START_SELECTORS = [
+        '.fp-play',
+        '.fp-ui .fp-play',
+        '.play_button',
+        '.play_background',
+        '[class*="big-play"]',
+        '[class*="play-button"]',
+        '.is-splash',
+        '.fp-splash',
+        '.fp-player',
+        '.fp-ui',
+        '.player_box',
+        '.main-player'
+      ];
+
+      function synthClick(el) {
+        try { el.click(); } catch (e) {}
+        try {
+          var ev = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+          el.dispatchEvent(ev);
+        } catch (e) {}
+      }
+
+      function startHostPlayer() {
+        var attempt = 0;
+        var timer = setInterval(function () {
+          attempt++;
+          for (var i = 0; i < HOST_START_SELECTORS.length; i++) {
+            var nodes = document.querySelectorAll(HOST_START_SELECTORS[i]);
+            for (var j = 0; j < nodes.length; j++) { synthClick(nodes[j]); }
+          }
+          scan();
+          if (video || attempt >= 4) { clearInterval(timer); }
+        }, 400);
+      }
+
+      function playVideo() {
+        try { return video.play(); } catch (e) { return null; }
+      }
+
       function exec(cmd) {
         if (typeof cmd !== 'string') { return; }
         scan();
-        if (!video) { return; }
+        if (!video) {
+          if (cmd === 'play') { startHostPlayer(); scan(); video && playVideo(); }
+          return;
+        }
         try {
           if (cmd === 'play') {
-            var p = video.play();
+            var p = playVideo();
             // play() promise rejects (AbortError) even though playback actually started —
             // swallow it to avoid an unhandled rejection; state still arrives via events.
             if (p && typeof p['catch'] === 'function') { p['catch'](function () {}); }

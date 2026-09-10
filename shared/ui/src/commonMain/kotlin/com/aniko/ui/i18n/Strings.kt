@@ -206,13 +206,12 @@ interface Strings {
     // разворота в полноэкранный режим ([playerEnterFullscreen]).
     val playerEnterFullscreen: String
 
-    // P16.T10 — мгновенная перемотка на 30 с назад (рядом с −10 с).
-    val playerRewind30: String
-    val playerRewind30Short: String
-
     // P16-фикс 2026-09-09 — качество видео (чип нижней панели + заголовок пикера).
     val playerQualityChip: (String) -> String
     val playerQualityTitle: String
+
+    // P16 (2026-09-10) — скорость одним табом (заголовок пикера; лейбл — playerSpeedValue).
+    val playerSpeedTitle: String
 
     // P16.T7 — resume-диалог: продолжить с сохранённой позиции или начать сначала.
     val playerResumeTitle: String

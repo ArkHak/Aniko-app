@@ -22,6 +22,10 @@ data class EmbedVideoState(
     val currentTimeMs: Long = 0L,
     val durationMs: Long? = null,
     val playbackRate: Float = 1f,
+    /** Качества, которые объявляет хост-плеер (порядок хоста), напр. `360p,480p,720p`. */
+    val availableQualities: List<String> = emptyList(),
+    /** Текущее качество по данным хоста, если он его показывает. */
+    val currentQuality: String? = null,
 )
 
 /**

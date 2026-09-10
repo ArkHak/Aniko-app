@@ -130,10 +130,10 @@ val RuStrings: Strings =
         override val playerAudioLabel = "Аудио"
         override val playerAudioChipLabel: (String) -> String = { name -> "Аудио: $name" }
         override val playerEnterFullscreen = "На весь экран"
-        override val playerRewind30 = "Назад на 30 секунд"
-        override val playerRewind30Short = "−30"
         override val playerQualityChip = { label: String -> "Качество: $label" }
         override val playerQualityTitle = "Качество видео"
+        override val playerSpeedTitle = "Скорость"
+
         override val playerResumeTitle = "Продолжить просмотр?"
         override val playerResumeContinue = "Продолжить"
         override val playerResumeFromStart = "С начала"

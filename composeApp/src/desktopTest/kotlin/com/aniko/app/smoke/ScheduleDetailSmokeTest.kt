@@ -2,6 +2,7 @@ package com.aniko.app.smoke
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -50,6 +51,14 @@ class ScheduleDetailSmokeTest {
 
             // P13.T5: Compact больше не фильтрует по дню чипом — все 7 секций уже в дереве,
             // достаточно проскроллить прямо к релизу понедельника и кликнуть.
+            // Флак в CI (2026-09-10): расписание грузится асинхронно, и карточка могла ещё не
+            // попасть в дерево на момент клика — ждём её появления, как остальные смоуки ждут
+            // свои экраны/узлы (ассерт не ослаблен, добавлено только ожидание).
+            waitUntil(timeoutMillis = 5_000) {
+                onAllNodesWithContentDescription("Аккуратная и симпатичная", substring = true)
+                    .fetchSemanticsNodes()
+                    .isNotEmpty()
+            }
             onNodeWithContentDescription("Аккуратная и симпатичная", substring = true)
                 .performScrollTo()
                 .performClick()

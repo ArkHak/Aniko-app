@@ -145,6 +145,8 @@ fun PlayerOverlay(
     onOpenAudioPicker: () -> Unit = {},
     qualityLabel: String? = null,
     onOpenQualityPicker: () -> Unit = {},
+    speedLabel: String? = null,
+    onOpenSpeedPicker: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = AnixThemeTokens.colors
@@ -158,6 +160,9 @@ fun PlayerOverlay(
     // Мост реально держит видео. Пока нет — управлять нечем, и оверлей обязан деградировать
     // до одной кнопки «назад», не перехватывая касания (см. KDoc, абзац про перехват).
     val bridgeActive = state.isVideoFound
+    // До нахождения <video> оверлей деградирует до «только назад»: старт делает большой play
+    // хоста (trust-gesture), после первого старта класс `aniko-video-found` скрывает его и
+    // рабочим UI становится наш (см. KDoc `EmbedVideoBridge` CHROME_HIDE_CSS).
     val controlsShown = controlsVisible && bridgeActive
 
     // Авто-скрытие только во время воспроизведения: на паузе контролы обязаны оставаться —
@@ -262,6 +267,11 @@ fun PlayerOverlay(
                         interactionTick++
                         onOpenQualityPicker()
                     },
+                    speedLabel = speedLabel,
+                    onOpenSpeedPicker = {
+                        interactionTick++
+                        onOpenSpeedPicker()
+                    },
                 )
             }
         }
@@ -360,18 +370,7 @@ private fun PlayerCenterControls(
         horizontalArrangement = Arrangement.spacedBy(dimens.spaceL),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // −30s: глифа replay_30 нет в подмножестве Material-шрифта приложения (31 глиф), а
-        // подставлять replay_10 нельзя — кнопка визуально неотличима от −10 (баг пользователя
-        // 2026-09-09). Текстовый контрол «−30» в том же стиле оверлея однозначен и не требует
-        // расширения шрифта.
-        OverlayTextButton(
-            label = strings.playerRewind30Short,
-            contentDescription = strings.playerRewind30,
-            onClick = {
-                onInteraction()
-                controller.seekBy(-PLAYER_REWIND_STEP_MS)
-            },
-        )
+        // P16 (2026-09-10): кнопка −30 убрана по решению пользователя — остаётся только ±10.
         OverlayIconButton(
             iconName = "replay_10",
             filled = true,
@@ -456,6 +455,8 @@ private fun PlayerBottomPanel(
     onOpenAudioPicker: () -> Unit,
     qualityLabel: String? = null,
     onOpenQualityPicker: () -> Unit = {},
+    speedLabel: String? = null,
+    onOpenSpeedPicker: () -> Unit = {},
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
@@ -504,13 +505,12 @@ private fun PlayerBottomPanel(
                     onInteraction = onInteraction,
                     onOpen = onOpenQualityPicker,
                 )
-                PLAYBACK_RATES.forEach { rate ->
+                if (speedLabel != null) {
                     PlayerPillChip(
-                        label = strings.playerSpeedValue(rate.formatRate()),
-                        selected = state.playbackRate.matches(rate),
+                        label = speedLabel,
                         onClick = {
                             onInteraction()
-                            controller.setPlaybackRate(rate)
+                            onOpenSpeedPicker()
                         },
                     )
                 }
@@ -788,34 +788,7 @@ private fun OverlayIconButton(
     }
 }
 
-/** Текстовая кнопка оверлея (для действий без глифа в подмножестве Material-шрифта, напр.
- *  −30с): тот же тач-таргет/семантика, что у [OverlayIconButton]. */
-@Composable
-private fun OverlayTextButton(
-    label: String,
-    contentDescription: String,
-    onClick: () -> Unit,
-) {
-    val dimens = AnixThemeTokens.dimens
-    IconButton(
-        onClick = onClick,
-        modifier =
-            Modifier
-                .size(dimens.minTouchTarget)
-                .clearAndSetSemantics { this.contentDescription = contentDescription },
-    ) {
-        Text(
-            text = label,
-            color = OVERLAY_CONTENT_COLOR,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-        )
-    }
-}
-
-/** Клик без ripple — на слое поверх видео рябь во весь экран читалась бы как дефект отрисовки.
- *  `internal`, не `private` — переиспользуется [CompactPlayerLayout]/[PlayerPillChip] (тот же
- *  пакет, тот же принцип: чипы плеера не должны показывать ripple поверх видео). */
+/** Клик без ripple — на слое поверх видео рябь во весь экран читалась бы как дефект отрисовки. */
 @Composable
 internal fun Modifier.clickableNoIndication(onClick: () -> Unit): Modifier {
     val interactionSource = remember { MutableInteractionSource() }
@@ -857,9 +830,6 @@ private const val RATE_EPSILON = 0.01f
 
 /** Стандартное для видеоплееров время до авто-скрытия контролов. */
 private const val CONTROLS_AUTO_HIDE_MS = 4_000L
-
-/** P16.T10 — шаг мгновенной перемотки назад (30 с). */
-private const val PLAYER_REWIND_STEP_MS = 30_000L
 
 /**
  * Цвет контента оверлея — фиксированный белый, а не из темы: под ним всегда кадр видео с тёмным

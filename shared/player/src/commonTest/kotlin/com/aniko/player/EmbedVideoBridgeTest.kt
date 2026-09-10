@@ -67,6 +67,12 @@ class EmbedVideoBridgeTest {
         assertNull(parseEmbedVideoState("v1|1|1"))
         // Чужой протокол — не наше сообщение, состояние трогать нельзя.
         assertNull(parseEmbedVideoState("v2|1|1|0|-|1"))
+
+        // P16 (2026-09-10): хост объявляет качества — они приходят хвостовыми полями и должны
+        // доезжать до UI списком в порядке хоста, а не хардкодом.
+        val withQualities = parseEmbedVideoState("v1|1|1|1000|2000|1|360p,480p,720p|480p")
+        assertEquals(listOf("360p", "480p", "720p"), withQualities?.availableQualities)
+        assertEquals("480p", withQualities?.currentQuality)
     }
 
     @Test

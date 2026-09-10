@@ -79,10 +79,13 @@ fun BoxScope.CompactPlayerChrome(
     onOpenAudioPicker: () -> Unit,
     qualityLabel: String? = null,
     onOpenQualityPicker: () -> Unit = {},
+    speedLabel: String? = null,
+    onOpenSpeedPicker: () -> Unit = {},
 ) {
     CompactVideoOverlay(
         videoHeight = videoHeight,
         isPlaying = state.isPlaying,
+        videoFound = state.isVideoFound,
         controller = controller,
         onBack = onBack,
         onEnterFullscreen = onEnterFullscreen,
@@ -96,15 +99,20 @@ fun BoxScope.CompactPlayerChrome(
         onOpenAudioPicker = onOpenAudioPicker,
         qualityLabel = qualityLabel,
         onOpenQualityPicker = onOpenQualityPicker,
+        speedLabel = speedLabel,
+        onOpenSpeedPicker = onOpenSpeedPicker,
     )
 }
 
 /** Топбар (назад/fullscreen) + центральная play-pause — часть [CompactPlayerChrome], те же границы
  *  (`videoHeight`), что и у самого видео. Вынесена отдельно (detekt `LongMethod`). */
+@Suppress("LongParameterList") // videoHeight/isPlaying/videoFound (P16 2026-09-10 гейт первого
+// запуска) + контроллер + пара onBack/onEnterFullscreen — те же границы, что у родителя.
 @Composable
 private fun BoxScope.CompactVideoOverlay(
     videoHeight: Dp,
     isPlaying: Boolean,
+    videoFound: Boolean,
     controller: EmbedVideoController,
     onBack: () -> Unit,
     onEnterFullscreen: () -> Unit,
@@ -113,13 +121,17 @@ private fun BoxScope.CompactVideoOverlay(
     val strings = LocalStrings.current
     val flash = rememberPlayerSeekFlash()
     Box(modifier = Modifier.fillMaxWidth().height(videoHeight).align(Alignment.TopStart)) {
-        // Перехватывающий слой (см. KDoc [CompactVideoGestureLayer]): без него нативный UI чужой
-        // embed-страницы забирает тапы раньше наших кнопок; тап — play/pause, double-tap — ±10с.
-        CompactVideoGestureLayer(
-            controller = controller,
-            flash = flash,
-            modifier = Modifier.fillMaxSize(),
-        )
+        // P16 (2026-09-10): до нахождения <video> тапы НЕ перехватываем — старт выполняет
+        // большой play хоста (trust-gesture, синтетический клик плеер игнорирует), он виден до
+        // первого старта и скрывается классом `aniko-video-found`. После — перехват наш:
+        // тап play/pause, double-tap ±10с.
+        if (videoFound) {
+            CompactVideoGestureLayer(
+                controller = controller,
+                flash = flash,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         Row(
             modifier =
                 Modifier
@@ -142,17 +154,20 @@ private fun BoxScope.CompactVideoOverlay(
             )
         }
 
-        Box(modifier = Modifier.align(Alignment.Center)) {
-            CompactPlayPauseButton(
-                isPlaying = isPlaying,
-                onClick = { controller.togglePlayPause() },
-                contentDescription = if (isPlaying) strings.playerPause else strings.playerPlay,
-            )
-        }
+        if (videoFound) {
+            Box(modifier = Modifier.align(Alignment.Center)) {
+                CompactPlayPauseButton(
+                    isPlaying = isPlaying,
+                    onClick = { controller.togglePlayPause() },
+                    contentDescription = if (isPlaying) strings.playerPause else strings.playerPlay,
+                )
+            }
 
-        // Вспышка ±10с у края double-tap (общий с fullscreen индикатор, [PlayerSeekFlashOverlay]
-        // сам позиционируется по направлению перемотки). Чисто визуальный слой, тапы не ест.
-        PlayerSeekFlashOverlay(state = flash)
+            // Вспышка ±10с у края double-tap (общий с fullscreen индикатор,
+            // [PlayerSeekFlashOverlay] сам позиционируется по направлению перемотки).
+            // Чисто визуальный слой, тапы не ест.
+            PlayerSeekFlashOverlay(state = flash)
+        }
     }
 }
 
@@ -211,6 +226,8 @@ private fun BoxScope.CompactBelowVideoContent(
     onOpenAudioPicker: () -> Unit,
     qualityLabel: String? = null,
     onOpenQualityPicker: () -> Unit = {},
+    speedLabel: String? = null,
+    onOpenSpeedPicker: () -> Unit = {},
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
@@ -253,11 +270,10 @@ private fun BoxScope.CompactBelowVideoContent(
                     onClick = onOpenQualityPicker,
                 )
             }
-            PLAYBACK_RATES.forEach { rate ->
+            if (speedLabel != null) {
                 PlayerPillChip(
-                    label = strings.playerSpeedValue(rate.formatRate()),
-                    selected = state.playbackRate.matches(rate),
-                    onClick = { controller.setPlaybackRate(rate) },
+                    label = speedLabel,
+                    onClick = onOpenSpeedPicker,
                 )
             }
         }
