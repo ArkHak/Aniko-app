@@ -24,6 +24,7 @@ import com.aniko.data.repository.CommentRepository
 import com.aniko.data.repository.EpisodeRepository
 import com.aniko.data.repository.LibraryRepository
 import com.aniko.data.repository.NotificationPreferenceRepository
+import com.aniko.data.repository.NotificationRepository
 import com.aniko.data.repository.ProfileRepository
 import com.aniko.data.repository.ReleaseRepository
 import com.aniko.data.repository.ScheduleRepository
@@ -124,6 +125,7 @@ val dataModule =
             )
         }
         single { NotificationPreferenceRepository(api = get()) }
+        single { NotificationRepository(api = get(), syncStore = get()) }
 
         single {
             SyncQueueWorker(

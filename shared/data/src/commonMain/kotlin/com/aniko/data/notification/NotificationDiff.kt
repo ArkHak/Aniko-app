@@ -55,3 +55,22 @@ internal fun selectUnseen(
  * @return `null`, если страница пуста и двигать курсор не от чего.
  */
 internal fun highestIdOrNull(notifications: List<AppNotification>): Long? = notifications.maxOfOrNull { it.id }
+
+/**
+ * Бейдж непрочитанных для экрана уведомлений (P16.T18) — сколько новых уведомлений появилось с
+ * последнего открытия экрана в НАШЕМ приложении.
+ *
+ * Намеренно не про серверный `is_new`: `is_new` сбрасывается вызовом `notification/read`
+ * ОФИЦИАЛЬНОГО клиента (см. KDoc [NotificationApi][com.aniko.data.api.NotificationApi]), а не
+ * нашего — наш экран этот эндпоинт не вызывает (см. её KDoc, почему), так что сервер никогда не
+ * узнает о просмотре в Aniko. Бейдж поэтому — чисто локальное сравнение текущего
+ * `notification/count` с [lastSeenCount] ([NotificationSyncStore.lastSeenCount]).
+ *
+ * @param lastSeenCount `null` — экран уведомлений ни разу не открывался на этом устройстве:
+ * тогда бейдж показывает весь текущий счётчик целиком (в отличие от [selectUnseen], здесь нет
+ * риска "спама" — это пассивный бейдж, не всплывающие уведомления одно за другим).
+ */
+internal fun unreadBadgeCount(
+    currentCount: Long,
+    lastSeenCount: Long?,
+): Long = if (lastSeenCount != null && currentCount <= lastSeenCount) 0L else currentCount

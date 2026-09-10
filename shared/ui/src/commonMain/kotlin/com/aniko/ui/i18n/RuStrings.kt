@@ -274,6 +274,9 @@ val RuStrings: Strings =
         override val notificationArticleBody = "В статьях есть что-то новое"
         override val notificationGenericTitle = "Aniko"
         override val notificationGenericBody = "Появилось новое уведомление"
+        override val notificationsTitle = "Уведомления"
+        override val notificationsEmpty = "Пока нет уведомлений"
+        override val notificationsLoadError = "Не удалось загрузить уведомления"
         override val settingsNotificationsSection = "Уведомления"
         override val settingsNotificationsPollingNote =
             "Aniko проверяет обновления периодически, поэтому уведомление может прийти с задержкой"

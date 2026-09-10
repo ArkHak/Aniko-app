@@ -52,6 +52,9 @@ object AnixTestTags {
     /** Корень [com.aniko.app.feature.comments.ReleaseCommentsScreen]. */
     const val RELEASE_COMMENTS_SCREEN_ROOT: String = "release_comments_screen_root"
 
+    /** Корень [com.aniko.app.feature.notifications.NotificationsScreen]. */
+    const val NOTIFICATIONS_SCREEN_ROOT: String = "notifications_screen_root"
+
     /** Корень [com.aniko.app.feature.player.PlayerScreen]. */
     const val PLAYER_SCREEN_ROOT: String = "player_screen_root"
 

@@ -454,6 +454,11 @@ interface Strings {
     val notificationGenericTitle: String
     val notificationGenericBody: String
 
+    // --- Экран уведомлений в приложении (P16.T18), AnixDestination.Notifications ---
+    val notificationsTitle: String
+    val notificationsEmpty: String
+    val notificationsLoadError: String
+
     // --- Экран настроек: секция уведомлений (P10.T6) ---
     val settingsNotificationsSection: String
 

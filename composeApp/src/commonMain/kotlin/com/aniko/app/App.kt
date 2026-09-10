@@ -35,6 +35,7 @@ import com.aniko.app.feature.comments.ReleaseCommentsScreen
 import com.aniko.app.feature.gallery.TokenGalleryScreen
 import com.aniko.app.feature.home.HomeScreen
 import com.aniko.app.feature.library.LibraryScreen
+import com.aniko.app.feature.notifications.NotificationsScreen
 import com.aniko.app.feature.player.PlayerScreen
 import com.aniko.app.feature.profile.ProfileScreen
 import com.aniko.app.feature.release.ReleaseDetailsScreen
@@ -563,6 +564,7 @@ private fun NavGraphBuilder.chromeRoutes(
         val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
         ProfileScreen(
             onSettingsClick = { navController.navigate(AnixDestination.Settings) },
+            onNotificationsClick = { navController.navigate(AnixDestination.Notifications) },
             // Не `titleNavigator::openTitle`: маршрут профиля не завёрнут в `ListDetailHost`, и на
             // wide-экранах навигатор открыл бы тайтл в панели, которой здесь негде отрисоваться
             // (см. KDoc `ProfileScreen.onReleaseClick`) — отсюда всегда полноэкранный маршрут.
@@ -572,6 +574,12 @@ private fun NavGraphBuilder.chromeRoutes(
             onOpenLists = { navController.navigate(AnixDestination.Library) },
             themeMode = themeMode,
             onThemeModeChange = themeStore::setThemeMode,
+        )
+    }
+    composable<AnixDestination.Notifications> {
+        NotificationsScreen(
+            onBack = { navController.popBackStack() },
+            onReleaseClick = { releaseId -> navController.navigate(AnixDestination.ReleaseDetails(releaseId)) },
         )
     }
     composable<AnixDestination.TokenGallery> {

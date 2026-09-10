@@ -3,6 +3,7 @@ package com.aniko.app.feature.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aniko.data.repository.AuthRepository
+import com.aniko.data.repository.NotificationRepository
 import com.aniko.data.repository.ProfileRepository
 import com.aniko.model.Achievement
 import com.aniko.model.AnixError
@@ -34,6 +35,15 @@ data class ProfileUiState(
      * (как `FavoriteGenresSection` при пустых `preferredGenres`), а не роняет весь экран.
      */
     val achievements: List<Achievement> = emptyList(),
+    /**
+     * Бейдж непрочитанных уведомлений (P16.T18) — [NotificationRepository.unreadBadgeCount], на
+     * колокольчике [ProfileScreen.onNotificationsClick]. Обновляется [ProfileViewModel.refreshUnreadNotifications],
+     * не частью [load]: экран уведомлений может «увидеть» текущий счётчик
+     * ([NotificationRepository.acknowledgeSeen]) уже ПОСЛЕ того, как этот `ViewModel` создан и
+     * закэшировал старое значение — нужен способ обновить бейдж при КАЖДОМ возврате на экран
+     * профиля, а не один раз при первой загрузке.
+     */
+    val unreadNotificationsCount: Long = 0,
 )
 
 /**
@@ -55,9 +65,11 @@ data class ProfileUiState(
  * показывали общий «не удалось загрузить профиль» — теперь это явный гостевой экран с кнопкой
  * входа ([signOut] сбрасывает остатки сессии, после чего гейт в `App.kt` сам уводит на логин).
  */
+@Suppress("TooManyFunctions") // P16.T18: refreshUnreadNotifications добавлен к уже плотному набору privacy-мутаций.
 class ProfileViewModel(
     private val profileRepository: ProfileRepository,
     private val authRepository: AuthRepository,
+    private val notificationRepository: NotificationRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -102,6 +114,19 @@ class ProfileViewModel(
 
     fun retry() {
         load()
+    }
+
+    /**
+     * Обновляет бейдж непрочитанных уведомлений — см. KDoc `ProfileUiState.unreadNotificationsCount`
+     * про то, почему это отдельный публичный метод, а не часть [load]. Вызывается из
+     * `LaunchedEffect(Unit)` `ProfileScreen` при каждой рекомпозиции экрана (в т.ч. при возврате
+     * с экрана уведомлений), поэтому не должно быть дорогим — один `GET notification/count`.
+     */
+    fun refreshUnreadNotifications() {
+        viewModelScope.launch {
+            runCatching { notificationRepository.unreadBadgeCount() }
+                .onSuccess { count -> _uiState.value = _uiState.value.copy(unreadNotificationsCount = count) }
+        }
     }
 
     /**

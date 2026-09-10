@@ -273,6 +273,9 @@ val EnStrings: Strings =
         override val notificationArticleBody = "There is something new in articles"
         override val notificationGenericTitle = "Aniko"
         override val notificationGenericBody = "You have a new notification"
+        override val notificationsTitle = "Notifications"
+        override val notificationsEmpty = "No notifications yet"
+        override val notificationsLoadError = "Could not load notifications"
         override val settingsNotificationsSection = "Notifications"
         override val settingsNotificationsPollingNote =
             "Aniko checks for updates periodically, so a notification may arrive with a delay"

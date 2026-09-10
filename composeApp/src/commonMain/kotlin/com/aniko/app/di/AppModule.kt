@@ -5,6 +5,7 @@ import com.aniko.app.feature.comments.CommentsViewModel
 import com.aniko.app.feature.gallery.TokenGalleryViewModel
 import com.aniko.app.feature.home.HomeViewModel
 import com.aniko.app.feature.library.LibraryViewModel
+import com.aniko.app.feature.notifications.NotificationsViewModel
 import com.aniko.app.feature.player.PlayerViewModel
 import com.aniko.app.feature.profile.ProfileViewModel
 import com.aniko.app.feature.release.ReleaseDetailsViewModel
@@ -49,4 +50,5 @@ val appModule =
         viewModelOf(::TokenGalleryViewModel)
         viewModelOf(::ScheduleViewModel)
         viewModelOf(::CommentsViewModel)
+        viewModelOf(::NotificationsViewModel)
     }

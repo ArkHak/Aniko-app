@@ -1,3 +1,8 @@
+// Экран профиля разложен на маленькие приватные composable по секциям макета (шапка/тема/
+// статистика/приватность/бейджи топбара, P13/P16.T18) — декомпозиция в пользу читаемости, а не
+// разрастание ответственности одного файла (тот же приём, что `ProfileStatsSections.kt`).
+@file:Suppress("TooManyFunctions")
+
 package com.aniko.app.feature.profile
 
 import androidx.compose.foundation.clickable
@@ -13,6 +18,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -25,6 +32,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,7 +96,7 @@ import org.koin.compose.viewmodel.koinViewModel
  * - [themeMode]/[onThemeModeChange] переехали сюда вместе с `AnixThemePicker` (физически теперь
  *   рисуется в [ProfileContent] прямо под шапкой, как в мокапе) — раньше их держал `SettingsScreen`.
  */
-@Suppress("LongParameterList") // themeMode/onThemeModeChange добавлены аддитивно к уже
+@Suppress("LongMethod", "LongParameterList") // themeMode/onThemeModeChange добавлены аддитивно к уже
 // существовавшему плоскому набору параметров (тот же случай, что и `AnixSessionGate`/
 // `SettingsScreen`) — группировка в data class ради обхода линта добавила бы косвенность без
 // пользы, экран остаётся тонким прокси без собственного стейта темы (владелец — `ThemeStore`).
@@ -98,6 +106,7 @@ fun ProfileScreen(
     modifier: Modifier = Modifier,
     onReleaseClick: (Int) -> Unit = {},
     onSettingsClick: () -> Unit = {},
+    onNotificationsClick: () -> Unit = {},
     onOpenLists: () -> Unit = {},
     themeMode: String? = null,
     onThemeModeChange: (String?) -> Unit = {},
@@ -106,20 +115,21 @@ fun ProfileScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = LocalStrings.current
 
+    // Обновляет бейдж непрочитанных уведомлений при каждой рекомпозиции экрана — в т.ч. при
+    // возврате из `NotificationsScreen` (см. KDoc `ProfileUiState.unreadNotificationsCount`).
+    LaunchedEffect(Unit) { viewModel.refreshUnreadNotifications() }
+
     Scaffold(
         modifier = modifier.testTag(AnixTestTags.PROFILE_SCREEN_ROOT),
         topBar = {
             TopAppBar(
                 title = { Text(strings.profileTitle) },
                 actions = {
-                    // Подтверждено на устройстве (Фаза 11, T9): IconButton не сливает
-                    // Icon.contentDescription в свой кликабельный узел.
-                    IconButton(
-                        onClick = onSettingsClick,
-                        modifier = Modifier.clearAndSetSemantics { contentDescription = strings.settingsTitle },
-                    ) {
-                        AnixIcon(name = "settings", contentDescription = null, filled = true)
-                    }
+                    ProfileTopBarActions(
+                        unreadNotificationsCount = uiState.unreadNotificationsCount,
+                        onNotificationsClick = onNotificationsClick,
+                        onSettingsClick = onSettingsClick,
+                    )
                 },
             )
         },
@@ -166,6 +176,54 @@ fun ProfileScreen(
                     modifier = contentModifier,
                 )
         }
+    }
+}
+
+/** Кламп на «99+» — Material `Badge` не резиновый по ширине под произвольное число цифр, тот же
+ *  предел, что у большинства бейджей уведомлений в других приложениях. */
+private fun unreadCountLabel(count: Long): String {
+    val capped = count > UNREAD_BADGE_MAX
+    return if (capped) UNREAD_BADGE_LABEL else count.toString()
+}
+
+private const val UNREAD_BADGE_MAX = 99L
+private const val UNREAD_BADGE_LABEL = "99+"
+
+/**
+ * Колокольчик уведомлений (P16.T18, с бейджем непрочитанных при `unreadNotificationsCount > 0`) +
+ * шестерёнка настроек. Вынесена из [ProfileScreen] отдельной функцией — иначе `TopAppBar.actions`
+ * лямбда сама по себе превышала detekt `LongMethod`.
+ */
+@Composable
+private fun ProfileTopBarActions(
+    unreadNotificationsCount: Long,
+    onNotificationsClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+) {
+    val strings = LocalStrings.current
+
+    // Подтверждено на устройстве (Фаза 11, T9): IconButton не сливает Icon.contentDescription в
+    // свой кликабельный узел.
+    IconButton(
+        onClick = onNotificationsClick,
+        modifier =
+            Modifier.clearAndSetSemantics {
+                contentDescription = strings.notificationsIconContentDescription
+            },
+    ) {
+        if (unreadNotificationsCount > 0) {
+            BadgedBox(badge = { Badge { Text(unreadCountLabel(unreadNotificationsCount)) } }) {
+                AnixIcon(name = "notifications", contentDescription = null)
+            }
+        } else {
+            AnixIcon(name = "notifications", contentDescription = null)
+        }
+    }
+    IconButton(
+        onClick = onSettingsClick,
+        modifier = Modifier.clearAndSetSemantics { contentDescription = strings.settingsTitle },
+    ) {
+        AnixIcon(name = "settings", contentDescription = null, filled = true)
     }
 }
 

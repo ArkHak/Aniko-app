@@ -46,6 +46,15 @@ sealed interface AnixDestination {
     data object NotificationSettings : AnixDestination
 
     /**
+     * Список уведомлений в приложении (P16.T18), открывается из колокольчика в `TopAppBar`
+     * `ProfileScreen.kt` — тот же приём, что у [Settings] (шестерёнка рядом). Своя лента, а не
+     * параметр [Profile]: своя пагинация ([com.aniko.data.repository.NotificationRepository]),
+     * тот же архитектурный выбор, что у [ReleaseComments] относительно `ReleaseDetails`.
+     */
+    @Serializable
+    data object Notifications : AnixDestination
+
+    /**
      * Экран-галерея дизайн-токенов (Фаза 2 плана, P2.T12): палитра/типографика/spacing/radius
      * с переключателем языка и темы для визуальной проверки. Debug-маршрут, открывается из
      * [Settings] — вне основной табовой навигации намеренно, не часть продуктового флоу.
