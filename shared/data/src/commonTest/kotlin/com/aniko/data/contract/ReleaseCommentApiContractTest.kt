@@ -6,7 +6,6 @@ import com.aniko.data.mapper.toDomain
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 /**
@@ -43,9 +42,5 @@ class ReleaseCommentApiContractTest {
                 comment.author.avatarUrl,
             )
             assertEquals(false, comment.author.isBanned)
-
-            assertNotNull(comment.release)
-            assertEquals(186, comment.release?.id)
-            assertEquals("Темнее Черного: Близнецы и Падающая Звезда", comment.release?.title)
         }
 }

@@ -6,15 +6,12 @@ import com.aniko.network.AnixJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 /**
  * Регрессионный тест на живую верификацию (2026-08-10, `GET release/comment/all/186/0?sort=0`):
  * реальный ответ — обычный `PageableResponse<ReleaseComment>`, с `profile` в виде `ProfileCompact`
- * (не полного `Profile`) и вложенным `release`. JSON ниже — урезанная копия реального элемента
- * `content[0]` (поле `release` сокращено до нескольких полей — `ignoreUnknownKeys`/
- * `coerceInputValues` в `AnixJson` позволяют это, т.к. в `ReleaseDto` все поля с дефолтами).
+ * (не полного `Profile`).
  */
 class ReleaseCommentMapperTest {
     private val json =
@@ -85,12 +82,10 @@ class ReleaseCommentMapperTest {
         assertNull(dto.parentCommentId)
         assertEquals(1000006, dto.profile.id)
         assertEquals("commenter_06", dto.profile.login)
-        assertNotNull(dto.release)
-        assertEquals(186, dto.release.id)
     }
 
     @Test
-    fun releaseCommentDto_toDomain_mapsAuthorAndReleaseThrough() {
+    fun releaseCommentDto_toDomain_mapsAuthorThrough() {
         val response = AnixJson.decodeFromString(PageableResponseDto.serializer(ReleaseCommentDto.serializer()), json)
         val domain = response.content.map { it.toDomain() }.single()
 
@@ -100,7 +95,55 @@ class ReleaseCommentMapperTest {
         assertEquals("https://s.anixmirai.com/avatars/sample_avatar_06.jpg", domain.author.avatarUrl)
         assertFalse(domain.author.isBanned)
         assertEquals(12, domain.postedAtEpisode)
-        assertEquals(186, domain.release?.id)
-        assertEquals("Стальной алхимик: Братство", domain.release?.title)
+    }
+
+    /**
+     * Регрессия на живую находку (2026-09-10, `GET release/comment/all/2804/0?sort=0`): сервер
+     * отдаёт поле `release` НЕПОСТОЯННОГО типа между элементами одной страницы — у части элементов
+     * это объект (как в [json] выше), у части — голое число (id релиза без остальных полей).
+     * Раньше `release: ReleaseDto?` падал `JsonConvertException` на этой форме и ронял ВСЮ
+     * страницу комментариев (`AnixContentSlot` показывал «Не удалось загрузить» даже для
+     * реального аккаунта с реальными комментариями). Поле удалено из DTO (никем не читалось,
+     * см. KDoc `ReleaseCommentDto`) — `ignoreUnknownKeys` теперь просто игнорирует его любой
+     * формы, парсинг не падает независимо от того, что сервер пришлёт.
+     */
+    @Test
+    fun releaseCommentDto_decodesWhenReleaseFieldIsNonObjectShape() {
+        val jsonWithBareIntRelease =
+            """
+            {
+                "code": 0,
+                "content": [
+                    {
+                        "id": 1,
+                        "profile": {"id": 1, "login": "x"},
+                        "message": "m",
+                        "timestamp": 0,
+                        "type": 0,
+                        "vote": 0,
+                        "parent_comment_id": null,
+                        "vote_count": 0,
+                        "likes_count": 0,
+                        "is_spoiler": false,
+                        "is_edited": false,
+                        "is_deleted": false,
+                        "is_reply": false,
+                        "reply_count": 0,
+                        "can_like": true,
+                        "posted_at_episode": null,
+                        "release": 2804
+                    }
+                ],
+                "current_page": 0,
+                "total_page_count": 1,
+                "total_count": 1
+            }
+            """.trimIndent()
+        val serializer = PageableResponseDto.serializer(ReleaseCommentDto.serializer())
+
+        val response = AnixJson.decodeFromString(serializer, jsonWithBareIntRelease)
+
+        assertEquals(1, response.content.size)
+        assertEquals(1L, response.content.single().id)
     }
 }

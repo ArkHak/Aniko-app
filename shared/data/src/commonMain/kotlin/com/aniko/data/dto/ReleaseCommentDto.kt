@@ -32,21 +32,18 @@ data class ProfileCompactDto(
 )
 
 /**
- * `ReleaseComment` — комментарий к релизу.
- *
- * Источник: decompiled `database/entity/comment/Comment.java` (базовый generic-класс,
- * `id/profile/parentCommentId/message/voteCount/likesCount/timestamp/isSpoiler/isEdited/
- * isDeleted/isReply/type/replyCount/canLike/vote`) + `database/entity/comment/release/
- * ReleaseComment.java` (добавляет `release`, `postedAtEpisode`). Оба помечены
- * `@JsonIgnoreProperties(ignoreUnknown = true)` — сервер может присылать больше полей.
- *
  * Сверено вживую 2026-08-10 (`GET release/comment/all/186/0?sort=0` → HTTP 200,
  * `PageableResponse<ReleaseComment>`) — форма полей совпала 1:1 с decompile.
  *
- * `release` — намеренно nullable, а не обязательное поле: живой сэмпл `release/comment/all/…`
- * всегда возвращает его вложенным, но пути `replies`/`votes`/`all/profile/{p_id}` не
- * перепроверены живьём в этой сессии (требует отдельной живой проверки). `ignoreUnknownKeys` +
- * `coerceInputValues` в `AnixJson` всё равно не уронят парсинг, если поле когда-то пропадёт.
+ * Поле `release` из decompile (`ReleaseComment.java`) намеренно НЕ заведено: ни один вызывающий
+ * код не читает вложенный релиз комментария (комментарий уже показывается на карточке своего
+ * релиза — контекст и так известен), а живой ответ `release/comment/all/{releaseId}/{page}`
+ * оказался **непостоянного типа**: у части элементов `release` — полный объект, у части — просто
+ * число (найдено live-инструментацией 2026-09-10, `release/comment/all/2804/0` — падение
+ * `JsonConvertException` на `content[1].release`). Заводить поле снова означало бы либо ловить
+ * это же падение, либо городить кастомный полиморфный десериализатор ради данных, которые никто
+ * не использует — `ignoreUnknownKeys = true` (`AnixJson`) и так тихо проигнорирует поле любой
+ * формы. См. регрессионный тест `ReleaseCommentMapperTest.releaseCommentDto_decodesWhenReleaseFieldIsNonObjectShape`.
  */
 @Serializable
 data class ReleaseCommentDto(
@@ -66,7 +63,6 @@ data class ReleaseCommentDto(
     @SerialName("reply_count") val replyCount: Long = 0,
     @SerialName("can_like") val canLike: Boolean = true,
     @SerialName("posted_at_episode") val postedAtEpisode: Int? = null,
-    val release: ReleaseDto? = null,
 )
 
 /**

@@ -41,5 +41,4 @@ fun ReleaseCommentDto.toDomain(staticBaseUrl: String = ApiConfig.DEFAULT_STATIC_
         replyCount = replyCount,
         canLike = canLike,
         postedAtEpisode = postedAtEpisode,
-        release = release?.toDomain(staticBaseUrl),
     )

@@ -23,10 +23,6 @@ data class CommentAuthor(
 
 /**
  * Комментарий к релизу (`ReleaseCommentApi`, P3.T12).
- *
- * [release] — вложенная карточка релиза; заполнена у комментариев из `release/comment/all/…`,
- * но может отсутствовать у ответов других путей того же API (реплаи/голоса/комментарии профиля)
- * — см. KDoc `ReleaseCommentDto.release` в `shared/data`.
  */
 data class ReleaseComment(
     val id: Long,
@@ -48,5 +44,4 @@ data class ReleaseComment(
     val canLike: Boolean,
     /** Серия, к которой привязан комментарий (спойлер-метка), `null` — не привязан. */
     val postedAtEpisode: Int?,
-    val release: Release? = null,
 )
