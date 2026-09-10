@@ -16,7 +16,8 @@ import androidx.compose.ui.unit.dp
  *
  * Макет задаёт их как CSS `radial-gradient` с ЭЛЛИПТИЧЕСКИМ размером и позицией в процентах
  * viewport:
- * - блоб A (фиолетовый, верх-лево): `1200×800px at 18% -10%`, база `#3D2C61`, альфа 0.35;
+ * - блоб A (фиолетовый, верх-лево): `1200×800px at 18% -10%`, база `#352C61` (пересчитан
+ *   2026-09-10 под hue иконки приложения, было `#3D2C61`), альфа 0.35;
  * - блоб B (кримзон, верх-право): `1000×700px at 100% 0%`, база `#5B161A`, альфа 0.25.
  *
  * Compose [Brush.radialGradient] умеет только КРУГЛЫЙ градиент (один [Brush.radialGradient]
@@ -27,7 +28,9 @@ import androidx.compose.ui.unit.dp
  */
 
 @Suppress("MagicNumber") // hex-литерал токена макета — исключение как у AnixPalette (см. KDoc).
-private val BlobABase = Color(0xFF3D2C61)
+// Пересчитан 2026-09-10 под hue иконки приложения (250°, было 259° — почти не отличалось от
+// старого значения макета, просто выровнено с остальным брендом; saturation/lightness не тронуты).
+private val BlobABase = Color(0xFF352C61)
 private const val BLOB_A_ALPHA = 0.35f
 private const val BLOB_A_CENTER_FRACTION_X = 0.18f
 private const val BLOB_A_CENTER_FRACTION_Y = -0.10f

@@ -6,14 +6,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -42,8 +45,12 @@ import com.aniko.ui.testing.AnixTestTags
  * нет. Рисуем собственные элементы вместо M3-компонента (M3 сам навешивает indicator-пилюлю и
  * перекрашивает selected-иконку).
  *
- * Контейнер — M3 `NavigationBar` (корректные insets), поверх которого рисуется тонкий
- * разделитель сверху (в макете нижняя панель отделена от контента).
+ * Контейнер — hand-rolled `Surface` + `Row` (2026-09-10, ревью замечание #2), НЕ M3
+ * `NavigationBar`: M3-компонент навязывает `defaultMinSize(minHeight = 80.dp)` контентному `Row`
+ * (M3 "Tall" navigation bar token) и центрирует наш 64dp-контент внутри — визуально это давало
+ * лишние 8dp сверху и 8dp снизу ДО настоящего инсета системной панели (выглядело как «бар не
+ * прижат к низу экрана»). Insets по-прежнему настоящие (`WindowInsets.navigationBars`), просто
+ * без чужого минимума высоты — контентная высота ровно [BOTTOM_NAV_BAR_HEIGHT], как в макете.
  */
 @Composable
 internal fun AnixNavigationBar(
@@ -51,15 +58,18 @@ internal fun AnixNavigationBar(
     selectedItemId: String?,
     onItemClick: (AdaptiveNavItem) -> Unit,
 ) {
-    NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface,
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         modifier = Modifier.testTag(AnixTestTags.BOTTOM_NAV_BAR),
     ) {
-        // Без явной высоты items с `fillMaxHeight()` растягивают бар на весь экран (контент
-        // Scaffold схлопывается в ноль) — фиксируем контентную высоту бара, как у M3 (~64dp),
-        // инсеты снизу добавляет сам NavigationBar.
-        Row(modifier = Modifier.fillMaxWidth().height(BOTTOM_NAV_BAR_HEIGHT)) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .height(BOTTOM_NAV_BAR_HEIGHT),
+        ) {
             items.forEach { item ->
                 val selected = item.id == selectedItemId
                 AnixBottomNavItem(

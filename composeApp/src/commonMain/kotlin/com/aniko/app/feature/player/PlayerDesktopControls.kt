@@ -20,15 +20,23 @@ import com.aniko.ui.theme.AnixThemeTokens
 /**
  * Единственные контролы плеера на Desktop — там, где `EmbedVideoController.isSupported == false`.
  *
- * Почему их всего два и почему без прогресс-бара/таймера (решение P8.T1, зафиксировано в
- * `docs/REELWAVE_PLAN.md`, не пересматривать): на Desktop видео играет в **системном браузере**
- * (`EmbedPlayer.desktop.kt` → `Desktop.browse`), а не внутри окна приложения. Позиции
- * воспроизведения, длительности и события «серия кончилась» на этой платформе физически не
- * существует — значит:
+ * Почему их всего два (плюс кнопка «Назад», добавленная ревью замечанием #5) и почему без
+ * прогресс-бара/таймера (решение P8.T1, зафиксировано в `docs/REELWAVE_PLAN.md`, не
+ * пересматривать): на Desktop видео играет в **системном браузере** (`EmbedPlayer.desktop.kt` →
+ * `Desktop.browse`), а не внутри окна приложения. Позиции воспроизведения, длительности и
+ * событий «серия кончилась» на этой платформе физически не существует — значит:
  * - баннер «следующая серия через Nс» (P8.T4) здесь невозможен, отсчитывать нечего. Его заменяет
  *   постоянно видимая кнопка «Следующая серия» — переход по решению пользователя,
  *   а не по таймингу видео;
  * - авто-отметка «просмотрено» (P8.T8) здесь тоже невозможна — её заменяет ручной toggle рядом.
+ *
+ * Кнопка «Назад» (2026-09-10, ревью замечание #5): до этой правки на Desktop не было НИ ОДНОГО
+ * способа вернуться из плеера в меню — `onBack`, доступный в `PlayerScreen.kt`, никуда не был
+ * прокинут на этой ветке (Android/iOS используют `PlayerOverlay`/`CompactPlayerChrome`, у
+ * которых кнопка "Назад" есть всегда, без гейтов на `isSupported`/состояние видео — см. их KDoc);
+ * единственный обходной путь был неочевидный системный пункт меню macOS «Go → Back» (⌘[),
+ * невидимый изнутри экрана плеера. Кнопка здесь — тот же принцип, что у Android/iOS: всегда
+ * видна, ничем не гейтится (реального видео-состояния на Desktop и так нет, гейтить нечем).
  *
  * Расположение — нижняя панель по центру окна: `EmbedPlayerView` на Desktop рисует заглушку
  * «Opened in the system browser» строго по центру экрана, и низ у неё свободен.
@@ -40,11 +48,17 @@ import com.aniko.ui.theme.AnixThemeTokens
  *
  * Оверлея (P8.T3) и панели скорости (P8.T5) здесь нет намеренно: рисовать поверх заглушки
  * контролы, которые ничем не управляют, — прямое враньё пользователю.
+ *
+ * `@Suppress("LongParameterList")`: плоский набор колбэков без бизнес-логики (тот же случай, что
+ * у `OverlayIconButton`/`AnixSessionGate` — см. их KDoc); группировка в data class ради обхода
+ * линта добавила бы косвенность без пользы.
  */
 @Composable
+@Suppress("LongParameterList")
 fun PlayerDesktopControls(
     isWatched: Boolean,
     hasNextEpisode: Boolean,
+    onBack: () -> Unit,
     onToggleWatched: () -> Unit,
     onNextEpisode: () -> Unit,
     modifier: Modifier = Modifier,
@@ -62,6 +76,14 @@ fun PlayerDesktopControls(
             horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            OutlinedButton(onClick = onBack) {
+                AnixIcon(
+                    name = "arrow_back",
+                    contentDescription = null,
+                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                )
+                Text(text = strings.backContentDescription, modifier = Modifier.padding(start = dimens.spaceS))
+            }
             OutlinedButton(onClick = onToggleWatched) {
                 AnixIcon(
                     name = if (isWatched) "check_circle" else "radio_button_unchecked",

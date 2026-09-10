@@ -23,6 +23,9 @@ kotlin {
             // `addWebMessageListener` — единственного способа достучаться до `<video>`
             // в cross-origin подфрейме embed-страницы (см. `EmbedVideoBridge.kt`).
             implementation(libs.androidx.webkit)
+            // WindowInsetsControllerCompat — скрытие системных панелей в fullscreen-плеере
+            // (ревью замечание #3, `HideSystemBars.android.kt`).
+            implementation(libs.androidx.core.ktx)
         }
 
         desktopMain.dependencies {

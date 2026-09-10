@@ -244,7 +244,6 @@ interface Strings {
     val settingsTheme: String
     val themeLight: String
     val themeDark: String
-    val themeAmoled: String
 
     // P16.T21 — секция выбора иконки приложения (Android: activity-alias переключение).
     val settingsAppIcon: String

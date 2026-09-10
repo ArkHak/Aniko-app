@@ -146,6 +146,13 @@ compose.desktop {
             // рисковать повторением той же ошибки при следующей рефлективно грузимой
             // зависимости не стоит того.
             includeAllModules = true
+            macOS {
+                // Основная иконка приложения (2026-09-10) — та же иллюстрация, что и на
+                // Android/iOS, конвертирована в .icns (`iconutil`, см. отчёт задачи в
+                // docs/REELWAVE_PLAN.md). Без этого jpackage использует дефолтную иконку кофейной
+                // чашки Java.
+                iconFile.set(project.file("icons/AppIcon.icns"))
+            }
         }
     }
 }

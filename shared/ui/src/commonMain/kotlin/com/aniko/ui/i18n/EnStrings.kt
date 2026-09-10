@@ -148,7 +148,6 @@ val EnStrings: Strings =
         override val settingsTheme = "Theme"
         override val themeLight = "Light"
         override val themeDark = "Dark"
-        override val themeAmoled = "AMOLED"
         override val settingsAppIcon = "App icon"
         override val appIconMain = "Main"
         override val appIconClassic = "Classic"

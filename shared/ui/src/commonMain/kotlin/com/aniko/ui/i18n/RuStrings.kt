@@ -149,7 +149,6 @@ val RuStrings: Strings =
         override val settingsTheme = "Тема"
         override val themeLight = "Светлая"
         override val themeDark = "Тёмная"
-        override val themeAmoled = "AMOLED"
         override val settingsAppIcon = "Иконка приложения"
         override val appIconMain = "Основная"
         override val appIconClassic = "Классика"

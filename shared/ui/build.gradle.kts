@@ -27,5 +27,11 @@ kotlin {
             // языка, см. docs/REELWAVE_PLAN.md.
             implementation(libs.lyricist)
         }
+
+        androidMain.dependencies {
+            // WindowInsetsControllerCompat — синхронизация цвета иконок статус-бара с темой
+            // приложения (ревью замечание #4, `SystemBarStyle.android.kt`).
+            implementation(libs.androidx.core.ktx)
+        }
     }
 }

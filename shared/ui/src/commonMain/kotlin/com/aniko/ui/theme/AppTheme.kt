@@ -8,7 +8,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 
 /**
  * Корневая тема приложения. Оборачивает Material3 и добавляет собственные токены:
@@ -18,30 +17,21 @@ import androidx.compose.ui.graphics.Color
  * Раньше называлась `AnixTheme` — переименована в `AppTheme` (Фаза 2 плана, P2.T6) при
  * переносе на полный набор токенов; переименование было дешёвым: единственный вызов был в
  * `composeApp/.../App.kt`, он обновлён вместе с этим файлом.
- *
  * По умолчанию светлая ([darkTheme] = false) — макет Home в Claude Design светлый (сверка
  * 2026-09-08 по скриншоту пользователя); системная тема macOS не учитывается. `App` передаёт
  * выбор явно из `ThemeStore` ("light"/"dark"/null → светлая); [TokenGalleryScreen] использует
- * собственный локальный переключатель.
+ * собственный локальный переключатель. Тёмная тема (2026-09-10) объединена с прежним AMOLED-
+ * вариантом — единственная тёмная тема темнее и без блобов, но НЕ чистый чёрный (см. KDoc
+ * `AnixPalette` — ревью замечание #1: должна использовать оттенок иконки, не `#000000`).
  */
 @Composable
 fun AppTheme(
     darkTheme: Boolean = false,
-    isAmoled: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val extraColors =
-        when {
-            isAmoled -> AnixAmoledExtraColors
-            darkTheme -> AnixDarkExtraColors
-            else -> AnixLightExtraColors
-        }
-    val colorScheme =
-        when {
-            isAmoled -> AnixAmoledColors
-            darkTheme -> AnixDarkColors
-            else -> AnixLightColors
-        }
+    SystemBarStyleEffect(darkTheme = darkTheme)
+    val extraColors = if (darkTheme) AnixDarkExtraColors else AnixLightExtraColors
+    val colorScheme = if (darkTheme) AnixDarkColors else AnixLightColors
     CompositionLocalProvider(
         LocalAnixDimens provides AnixDimens(),
         LocalAnixColors provides extraColors,
@@ -63,11 +53,14 @@ fun AppTheme(
             // рисовался тёмным на тёмном. Явно пиним контентный цвет на onSurface текущей схемы
             // для всего дерева приложения (проверено пиксельно: до — 0 белых пикселей в зоне
             // тайтлов, после — белые глифы на месте).
-            // P16.T20 (AMOLED): блобы убираем, фон — чистый `#000000`.
+            // Единая тёмная тема (2026-09-10, ревью замечание #1): блобы убираем (в отличие от
+            // светлой — контентный видео-центричный экран выигрывает от ровного тёмного фона),
+            // но фон — не хардкод, а `colorScheme.background` (см. KDoc `AnixPalette`: оттенок
+            // иконки, не чистый `#000000`).
             CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
                 val backgroundModifier =
-                    if (isAmoled) {
-                        Modifier.background(Color.Black)
+                    if (darkTheme) {
+                        Modifier.background(colorScheme.background)
                     } else {
                         Modifier.anixAppBackground()
                     }

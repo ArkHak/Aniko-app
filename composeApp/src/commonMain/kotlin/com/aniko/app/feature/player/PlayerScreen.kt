@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.navigation.LocalTitleNavigator
 import com.aniko.model.VideoHost
 import com.aniko.player.EmbedPlayerView
+import com.aniko.player.HideSystemBarsEffect
 import com.aniko.player.LockLandscapeOrientationEffect
 import com.aniko.player.PlaybackSource
 import com.aniko.player.rememberEmbedVideoController
@@ -129,6 +130,10 @@ fun PlayerScreen(
         // эффект выключен: ориентацию там задаёт система (окно 16:9), а запрос поворота Activity
         // из PiP-режима систему только дёргает.
         LockLandscapeOrientationEffect()
+        // Иммерсивный режим (ревью замечание #3): системные часы/батарея скрыты, пока плеер
+        // полноэкранный — тот же guard, что и у ориентации (PiP-окно маленькое, не должно
+        // скрывать системные панели для всего экрана).
+        HideSystemBarsEffect()
     }
 
     // color = Color.Black: найдено живым запуском на iOS-симуляторе (не видно по коду/detekt/
@@ -415,6 +420,7 @@ fun PlayerScreen(
                             PlayerDesktopControls(
                                 isWatched = state.isWatched,
                                 hasNextEpisode = state.hasNextEpisode,
+                                onBack = onBack,
                                 onToggleWatched = viewModel::toggleWatched,
                                 onNextEpisode = openNextEpisode,
                                 modifier = Modifier.align(Alignment.BottomCenter),

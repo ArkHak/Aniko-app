@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- P16.T21: набор иконки лаунчера "Основная" (API 26+). Легаси-PNG для <26 — mipmap-mdpi..xxxhdpi. -->
+<!-- Основная иконка приложения: пользовательская иллюстрация (2026-09-10), заменила прежний
+     плейсхолдер-треугольник. Фон — цвет из @color/ic_launcher_background_main (сэмплирован из
+     самого изображения), foreground — растровое изображение (не общий vector, как у остальных
+     3 наборов), т.к. это конкретная иллюстрация, а не абстрактный глиф. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background_main" />
-    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground_main" />
 </adaptive-icon>

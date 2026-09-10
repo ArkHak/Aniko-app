@@ -17,16 +17,19 @@ import kotlinx.coroutines.flow.asStateFlow
  * не этого класса: `shared/data` намеренно не зависит от Compose, чтобы не тащить
  * UI-фреймворк в слой данных.
  *
- * Поддерживаемые значения: `"light"`, `"dark"`, `"amoled"`. Любое другое значение
- * при записи округляется до `null` (дефолт светлая тема).
+ * Поддерживаемые значения: `"light"`, `"dark"` (2026-09-10: AMOLED-вариант слит в единственную
+ * тёмную тему — та же чёрная эстетика, пользователь предпочёл её дефолтом тёмной темы, см. отчёт
+ * задачи в `docs/REELWAVE_PLAN.md`). Legacy-значение `"amoled"`, сохранённое до этой правки,
+ * мигрирует на `"dark"` прозрачно при чтении (то же визуальное поведение, ключ просто
+ * переименован) — не откатывается на дефолт, как обычное невалидное значение.
  */
 class ThemeStore(
     private val settings: Settings,
 ) {
     private val _themeMode = MutableStateFlow(settings.getStringOrNull(KEY_THEME_MODE)?.let(::validate))
 
-    /** Явно выбранная тема (`"light"`/`"dark"`/`"amoled"`) либо `null`, если пользователь
-     * не переопределял системную. */
+    /** Явно выбранная тема (`"light"`/`"dark"`) либо `null`, если пользователь не переопределял
+     * системную. */
     val themeMode: StateFlow<String?> = _themeMode.asStateFlow()
 
     /** [mode] `null` сбрасывает выбор обратно на дефолт (светлая тема). */
@@ -42,8 +45,15 @@ class ThemeStore(
 
     private companion object {
         const val KEY_THEME_MODE = "theme.mode"
-        val VALID_MODES = setOf("light", "dark", "amoled")
+        val VALID_MODES = setOf("light", "dark")
 
-        fun validate(mode: String?): String? = mode?.takeIf { it in VALID_MODES }
+        /** `"amoled"` — legacy-ключ (до 2026-09-10) мигрирует на `"dark"`, остальные невалидные
+         * значения округляются до `null` (дефолт светлая тема). */
+        fun validate(mode: String?): String? =
+            when (mode) {
+                "amoled" -> "dark"
+                in VALID_MODES -> mode
+                else -> null
+            }
     }
 }

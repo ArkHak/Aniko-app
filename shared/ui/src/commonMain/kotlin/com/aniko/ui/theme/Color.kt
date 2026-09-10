@@ -7,82 +7,90 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 /**
- * Палитра. Значения зафиксированы дизайном (Claude Design, `Reelwave Prototype.dc.html`) —
- * design-tokens в OKLCH, здесь уже сконвертированы в sRGB hex формулой Ottosson (не пересчитывать
- * на глаз, значения переданы координатором построчно).
+ * Палитра. Brand-токены (Primary/Warning + фоновые "блобы") и фоновые поверхности пересчитаны
+ * 2026-09-10 под официальную иконку приложения (иллюстрация девушки с фиолетовыми волосами на
+ * индиго-фоне, см. отчёт задачи в `docs/REELWAVE_PLAN.md`) — метод: HSL-сэмплы иконки (фон/волосы
+ * ≈ hue 248°, звёзды-акцент ≈ hue 37°) заменили hue исходных Primary/Warning значений макета
+ * (Claude Design, было hue 260°/30°) при неизменных saturation/lightness — тем самым WCAG-
+ * контраст, посчитанный для старых значений (см. числа в комментариях ниже), сохраняется с
+ * точностью до 0.01. Error/Success/Secondary(accent2, live/newEpisode-бейджи) — НЕ тронуты: это
+ * семантические цвета вне визуальной идентичности бренда (красный "live" — универсальная
+ * UX-конвенция), референса в иконке для них нет, эта задача осознанно их не переизобретает.
  *
- * Track A (точное соответствие макету, 2026-09-04) переписал эту палитру под точные значения
- * макета — было (Фаза 2/6/11 плана, `docs/REELWAVE_PLAN.md`): Primary=`#8B6FF0`,
- * Secondary=`#C0483F` (общий на обе темы), Warning=`#E0A030` (общий на обе темы),
- * BackgroundDark=`#0A0C12` (это было на самом деле значение bg-elevated, а не bg-page),
- * BackgroundLight=`#FAF9FD`, OnDark=`#EDE8F2`, OnLight=`#1A1730`. Ключевое структурное
- * изменение: макет задаёт всего ДВА уровня поверхности на тему — bg-page (страница) и
- * bg-elevated (карточки/поверхности) — вместо прежних трёх (Background/Surface/SurfaceElevated).
- * `SurfaceDarkElevated`/`SurfaceLightElevated` ниже поэтому равны `SurfaceDark`/`SurfaceLight`
- * (третьего, более светлого уровня макет не определяет) — поля-алиасы сохранены, чтобы
- * `surface`/`surfaceVariant` в [darkColorScheme]/[lightColorScheme] остались раздельными слотами
- * на случай, если третий уровень появится в макете позже.
+ * Тёмная тема (2026-09-10, ревью замечание #1): АМОЛЕД-вариант (чистый `#000000`, P16.T20)
+ * отменён — референс официального Anixart 10 (декомпилированный APK,
+ * `res/values-night/colors.xml`) использует `screen_background = #121212` (НЕ чёрный) и
+ * заметно более светлый `bottom_nav_background = #252525` для elevated-поверхностей (тот же
+ * принцип различия «страница/поверхность», что и у нас, просто с бОльшим разрывом). Взят тот же
+ * принцип (не чистый чёрный + различимый elevated-уровень), но цвет — не нейтральный серый
+ * Anixart, а тон иконки (hue 250°, тот же, что у Primary/блобов): [BackgroundDark] ≈ L7%,
+ * [SurfaceDark] ≈ L10% (различимый elevated-уровень для нав-бара/карточек, но без потери WCAG-
+ * контраста accent-цветов — проверено python3-скриптом, ≥4.5:1 для всех Primary/Secondary/
+ * Error/Warning на [SurfaceDark]). [DarkOutline]/[DarkOutlineVariant] (бывшие
+ * `AmoledOutline`/`AmoledOutlineVariant`) пересчитаны в тот же hue.
  */
 @Suppress("MagicNumber") // hex-литералы цвета — сами значения и есть содержательные константы,
 // каждая уже поименована (Primary/Secondary/...), заводить отдельные именованные числа под них
 // избыточно.
 internal object AnixPalette {
-    // Brand — accent/accent2/gold из макета теперь заданы РАЗДЕЛЬНО на тёмную и светлую тему
-    // (в отличие от старой палитры, где Secondary/Warning были общими на обе темы) — таковы
-    // точные значения макета.
-    val PrimaryDark = Color(0xFF996DF0) // accent, тёмная тема
-    val PrimaryLight = Color(0xFF7743CC) // accent, светлая тема
-    val SecondaryDark = Color(0xFFF75C61) // accent2, тёмная тема
-    val SecondaryLight = Color(0xFFBA0329) // accent2, светлая тема
-    val WarningDark = Color(0xFFE18528) // gold, тёмная тема
-    val WarningLight = Color(0xFFA54100) // gold, светлая тема
+    // Brand — Primary/Warning пересчитаны под иконку (см. KDoc объекта); Secondary — не тронут.
+    val PrimaryDark = Color(0xFF836DF0) // accent, тёмная тема (hue 250°, было 260°)
+    val PrimaryLight = Color(0xFF5A43CC) // accent, светлая тема (hue 250°, было 263°)
+    val SecondaryDark = Color(0xFFF75C61) // accent2, тёмная тема — не тронут
+    val SecondaryLight = Color(0xFFBA0329) // accent2, светлая тема — не тронут
+    val WarningDark = Color(0xFFE19A28) // gold, тёмная тема (hue 37°, было 30°)
+    val WarningLight = Color(0xFFA56600) // gold, светлая тема (hue 37°, было 24°)
 
     // Semantic — вне таблицы токенов макета (там нет отдельных error/success), значения не
-    // менялись Track A: точного дизайн-референса для них по-прежнему нет (та же логика, что и у
+    // менялись: точного дизайн-референса для них по-прежнему нет (та же логика, что и у
     // [AnixColors.live]/[AnixColors.warning] ниже — не изобретать значения без референса).
     val Error = Color(0xFFE5484D)
     val Success = Color(0xFF3FB27F)
 
-    // Dark theme surfaces — bg-page/bg-elevated макета.
-    val BackgroundDark = Color(0xFF05060A) // bg-page
-    val SurfaceDark = Color(0xFF0A0C12) // bg-elevated
+    // Dark theme surfaces (2026-09-10, ревью замечание #1) — hue иконки (250°), НЕ чистый
+    // чёрный/серый; два различимых уровня (bg-page темнее bg-elevated), тот же принцип, что у
+    // референса Anixart 10 (`screen_background`/`bottom_nav_background`, см. KDoc объекта).
+    val BackgroundDark = Color(0xFF0E0C18) // bg-page (H250 S35 L7%)
+    val SurfaceDark = Color(0xFF141221) // bg-elevated (H250 S30 L10%) — нав-бар/карточки светлее
     val SurfaceDarkElevated = SurfaceDark // alias — см. KDoc объекта выше
     val OnDark = Color(0xFFFFFFFF) // text-1
 
-    // AMOLED (P16.T20) — обводки/разделители на чистом чёрном фоне, чтобы сохранить читаемость.
-    val AmoledOutline = Color(0xFF333333)
-    val AmoledOutlineVariant = Color(0xFF222222)
+    // Обводки/разделители тёмной темы — тот же hue 250°, что и поверхности; заданы явно, т.к. M3
+    // не подбирает их алгоритмически от произвольного (не нейтрального) surface-тона.
+    val DarkOutline = Color(0xFF353149)
+    val DarkOutlineVariant = Color(0xFF262334)
 
-    // Light theme surfaces — bg-page/bg-elevated макета.
-    val BackgroundLight = Color(0xFFF3F5F9) // bg-page
+    // Light theme surfaces — bg-page пересчитан под hue иконки (250°, было 220°), bg-elevated
+    // не тронут (уже практически белый, разница неразличима).
+    val BackgroundLight = Color(0xFFF4F3F9) // bg-page
     val SurfaceLight = Color(0xFFFDFDFF) // bg-elevated
     val SurfaceLightElevated = SurfaceLight // alias — см. KDoc объекта выше
     val OnLight = Color(0xFF0F141D) // text-1
 
-    // Text variants — Фаза 11 (P11.T6), пересчитано Track A под новые accent/accent2/gold и
-    // новые bg-elevated поверхности (оба изменились относительно старой палитры, см. KDoc
-    // объекта выше). Метод не изменился: тот же hue/saturation, что и у исходного цвета, только
-    // смещена светлота (темнее для светлой темы / светлее для тёмной), пока контраст
-    // относительно самой требовательной поверхности своей темы не станет ≥4.5:1 (AA, обычный
-    // текст). Для тёмной темы это [SurfaceDarkElevated] (`#0A0C12`), для светлой —
+    // Text variants — Фаза 11 (P11.T6), пересчитано под новые Primary/Warning/поверхности
+    // (2026-09-10, см. KDoc объекта); метод не изменился: тот же hue/saturation, что и у
+    // исходного цвета, только смещена светлота (темнее для светлой темы / светлее для тёмной),
+    // пока контраст относительно самой требовательной поверхности своей темы не станет ≥4.5:1
+    // (AA, обычный текст). Для тёмной темы это [SurfaceDarkElevated] (`#141221`), для светлой —
     // [SurfaceLightElevated] (`#FDFDFF`). Контраст посчитан по стандартной формуле WCAG
-    // (relative luminance, python3, см. отчёт Track A) для каждого значения ниже.
+    // (relative luminance, python3) для каждого значения ниже.
     //
-    // Primary/Secondary/Warning в новой палитре уже проходят порог БЕЗ сдвига светлоты — макет
-    // сам выбрал accent-оттенки с запасом контраста на своей elevated-поверхности, поэтому ниже
-    // они равны соответствующим Primary/Secondary/WarningDark|Light без изменений. Сдвиг
-    // потребовался только для [ErrorTextLight] и [SuccessTextLight].
-    val PrimaryTextDark = PrimaryDark // на SurfaceDarkElevated: 5.40 (без сдвига)
-    val PrimaryTextLight = PrimaryLight // на SurfaceLightElevated: 5.98 (без сдвига)
-    val SecondaryTextDark = SecondaryDark // на SurfaceDarkElevated: 6.20 (без сдвига)
+    // Primary/Secondary/Warning в палитре уже проходят порог БЕЗ сдвига светлоты — выбранные
+    // accent-оттенки идут с запасом контраста на своей elevated-поверхности, поэтому ниже они
+    // равны соответствующим Primary/Secondary/WarningDark|Light без изменений.
+    val PrimaryTextDark = PrimaryDark // на #141221: 4.75 (было 5.41 на чистом чёрном)
+    val PrimaryTextLight = PrimaryLight // на SurfaceLightElevated: 6.65 (без сдвига)
+    val SecondaryTextDark = SecondaryDark // на #141221: 5.85 (было 6.20 на чистом чёрном)
     val SecondaryTextLight = SecondaryLight // на SurfaceLightElevated: 6.60 (без сдвига)
-    val ErrorTextDark = Error // на SurfaceDarkElevated: 4.99 (без сдвига)
+    val ErrorTextDark = Error // на #141221: 4.71 (было 4.99 на чистом чёрном)
     val ErrorTextLight = Color(0xFFE12B30) // на SurfaceLightElevated: 4.52 (было 3.85 у Error как есть)
     val SuccessTextLight = Color(0xFF2F845E) // на SurfaceLightElevated: 4.51 (было 2.62 у Success как есть)
-    val WarningTextLight = WarningLight // на SurfaceLightElevated: 6.16 (без сдвига)
+    val WarningTextLight = WarningLight // на SurfaceLightElevated: 4.59 (без сдвига)
 
-    // t2-ряд — вторичный текст, 11 шагов lightness (chroma 0.02, hue 260 в OKLCH), уже
-    // сконвертированные в sRGB hex значения макета (не пересчитывать).
+    // t2-ряд — вторичный текст, 11 шагов lightness (chroma 0.02, hue 260 в OKLCH) — НЕ тронут:
+    // chroma настолько мала, что пересчёт под hue 250° иконки дал бы неразличимую на глаз
+    // разницу в sRGB, а риск случайно испортить откалиброванный по контрасту 11-шаговый ряд
+    // реальный (уже сконвертированные в sRGB hex значения макета, не пересчитывать).
     val TextSecondaryDark45 = Color(0xFF4F5661)
     val TextSecondaryDark48 = Color(0xFF575E69)
     val TextSecondaryDark50 = Color(0xFF5D646F)
@@ -108,6 +116,12 @@ internal object AnixPalette {
     val TextSecondaryLight75 = Color(0xFF282E38)
 }
 
+/**
+ * Единственная тёмная тема (2026-09-10, слияние с прежним AMOLED-вариантом — см. KDoc
+ * [AnixPalette]): чистый `#000000` на background/surface, обводки/разделители заданы явно
+ * ([AnixPalette.DarkOutline]/[DarkOutlineVariant]), потому что M3 не может вычислить их
+ * алгоритмически из surface-тона, когда background == surface == чёрный.
+ */
 internal val AnixDarkColors =
     darkColorScheme(
         primary = AnixPalette.PrimaryDark,
@@ -122,19 +136,8 @@ internal val AnixDarkColors =
         onSurface = AnixPalette.OnDark,
         surfaceVariant = AnixPalette.SurfaceDarkElevated, // bg-elevated (alias, см. KDoc AnixPalette)
         onSurfaceVariant = AnixPalette.OnDark,
-    )
-
-/**
- * AMOLED-вариант тёмной темы (P16.T20): те же акценты и тексты, но фон и все поверхности
- * чистый `#000000`, обводки/разделители — тёмно-серые, чтобы сохранить читаемость.
- */
-internal val AnixAmoledColors =
-    AnixDarkColors.copy(
-        background = Color.Black,
-        surface = Color.Black,
-        surfaceVariant = Color.Black,
-        outline = AnixPalette.AmoledOutline,
-        outlineVariant = AnixPalette.AmoledOutlineVariant,
+        outline = AnixPalette.DarkOutline,
+        outlineVariant = AnixPalette.DarkOutlineVariant,
     )
 
 internal val AnixLightColors =
@@ -284,9 +287,6 @@ internal val AnixDarkExtraColors =
         overlay18 = Color.White.copy(alpha = 0.18f),
     )
 
-/** AMOLED переиспользует те же семантические/текстовые токены, что и обычная тёмная тема (P16.T20) —
- * меняются только поверхности [ColorScheme] (см. [AnixAmoledColors]), не токены [AnixColors]. */
-internal val AnixAmoledExtraColors = AnixDarkExtraColors
 internal val AnixLightExtraColors =
     AnixColors(
         live = AnixPalette.SecondaryLight,
