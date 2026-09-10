@@ -147,6 +147,7 @@ fun PlayerOverlay(
     onOpenQualityPicker: () -> Unit = {},
     speedLabel: String? = null,
     onOpenSpeedPicker: () -> Unit = {},
+    onEnterPictureInPicture: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = AnixThemeTokens.colors
@@ -174,12 +175,22 @@ fun PlayerOverlay(
         }
     }
 
+    // P16.T9 — вертикальные жесты яркости/громкости. Контроллер уровней берётся здесь же, а не
+    // параметром: это фича ровно этого (полноэкранного) слоя, компактному режиму она не нужна.
+    val systemLevels = rememberPlayerSystemLevels()
+    val levelGesture = rememberPlayerLevelGesture(systemLevels)
+
     val nearEnd = state.isNearEnd()
     LaunchedEffect(nearEnd) {
         if (nearEnd) onEpisodeNearEnd()
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    // Жест уровней висит на КОРНЕ оверлея, а не на тап-слое: тап-слой — сосед `Column`'а снизу по
+    // z-порядку, и до него события не доходят вовсе (живая проверка: свайп уходил прямо в
+    // embed-страницу и открывал собственный регулятор хоста). Корень же есть в пути доставки
+    // всегда — он родитель и тап-слоя, и панелей; ребёнок-тап не потребляет движение, поэтому
+    // драг доходит до корня и, перешагнув slop, гасит тап (см. KDoc [PlayerLevelGestureState]).
+    Box(modifier = modifier.fillMaxSize().then(levelGesture.modifier)) {
         val scrimAlpha by animateFloatAsState(if (controlsShown) 1f else 0f, label = "playerScrim")
         if (bridgeActive) {
             // Отдельный слой-перехватчик: тап по любому месту кадра показывает/прячет контролы,
@@ -223,6 +234,23 @@ fun PlayerOverlay(
         // Один вызов: [PlayerSeekFlashOverlay] сам позиционируется по направлению перемотки.
         PlayerSeekFlashOverlay(state = flash)
 
+        // Индикатор уровня — у той стороны, где идёт жест (яркость слева, громкость справа).
+        levelGesture.target?.let { target ->
+            PlayerLevelIndicator(
+                target = target,
+                level = levelGesture.level,
+                modifier =
+                    Modifier
+                        .align(
+                            if (target == PlayerLevelTarget.BRIGHTNESS) {
+                                Alignment.CenterStart
+                            } else {
+                                Alignment.CenterEnd
+                            },
+                        ).padding(horizontal = AnixThemeTokens.dimens.spaceL),
+            )
+        }
+
         // Колонка сама по себе не перехватывает касания (у неё нет pointer-модификаторов), поэтому
         // тапы мимо кнопок проваливаются в слой-перехватчик выше и продолжают прятать контролы.
         Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
@@ -233,6 +261,7 @@ fun PlayerOverlay(
                     onBack = onBack,
                     onCollapseFullscreen = onCollapseFullscreen,
                     bridgeActive = bridgeActive,
+                    onEnterPictureInPicture = onEnterPictureInPicture,
                     onInteraction = { interactionTick++ },
                 )
             }
@@ -290,6 +319,7 @@ private fun PlayerTopBar(
     onBack: () -> Unit,
     onCollapseFullscreen: () -> Unit,
     bridgeActive: Boolean,
+    onEnterPictureInPicture: (() -> Unit)?,
     onInteraction: () -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -311,16 +341,19 @@ private fun PlayerTopBar(
             },
         )
         Spacer(modifier = Modifier.weight(1f))
-        OverlayIconButton(
-            iconName = "picture_in_picture_alt",
-            contentDescription = strings.playerPictureInPicture,
-            // P8.T3 просит только разместить кнопку; сам режим «картинка в картинке» — это
-            // P10.T8 (Фаза 10), где он и делается платформенно (Android PiP / iOS AVPictureIn-
-            // PictureController). Держать здесь наполовину рабочую реализацию хуже, чем явную
-            // заглушку: место в макете занято, обещание не дано.
-            // TODO(P10.T8): подключить реальный PiP, когда появится платформенный API.
-            onClick = onInteraction,
-        )
+        // Кнопка рисуется только там, где PiP реально работает (P16.T8): на iOS оверлей не может
+        // ни войти в PiP, ни нарисовать в нём свои кнопки — вместо неработающей кнопки её нет
+        // вовсе (тот же принцип честного UI, что у чипа Audio с одной озвучкой).
+        if (onEnterPictureInPicture != null) {
+            OverlayIconButton(
+                iconName = "picture_in_picture_alt",
+                contentDescription = strings.playerPictureInPicture,
+                onClick = {
+                    onInteraction()
+                    onEnterPictureInPicture()
+                },
+            )
+        }
     }
 }
 

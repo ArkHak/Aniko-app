@@ -133,6 +133,8 @@ val RuStrings: Strings =
         override val playerQualityChip = { label: String -> "Качество: $label" }
         override val playerQualityTitle = "Качество видео"
         override val playerSpeedTitle = "Скорость"
+        override val playerBrightnessLabel = "Яркость"
+        override val playerVolumeLabel = "Громкость"
 
         override val playerResumeTitle = "Продолжить просмотр?"
         override val playerResumeContinue = "Продолжить"

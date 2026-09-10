@@ -132,6 +132,8 @@ val EnStrings: Strings =
         override val playerQualityChip = { label: String -> "Quality: $label" }
         override val playerQualityTitle = "Video quality"
         override val playerSpeedTitle = "Speed"
+        override val playerBrightnessLabel = "Brightness"
+        override val playerVolumeLabel = "Volume"
 
         override val playerResumeTitle = "Continue watching?"
         override val playerResumeContinue = "Continue"

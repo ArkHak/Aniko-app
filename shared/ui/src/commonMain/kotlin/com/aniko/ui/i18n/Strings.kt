@@ -213,6 +213,10 @@ interface Strings {
     // P16 (2026-09-10) — скорость одним табом (заголовок пикера; лейбл — playerSpeedValue).
     val playerSpeedTitle: String
 
+    // P16.T9 — вертикальные жесты полноэкранного плеера: подписи индикатора уровня.
+    val playerBrightnessLabel: String
+    val playerVolumeLabel: String
+
     // P16.T7 — resume-диалог: продолжить с сохранённой позиции или начать сначала.
     val playerResumeTitle: String
     val playerResumeContinue: String

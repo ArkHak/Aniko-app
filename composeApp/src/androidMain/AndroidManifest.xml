@@ -16,12 +16,18 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Aniko">
 
+        <!-- `android:supportsPictureInPicture="true"` (P16.T8): без него
+             `enterPictureInPictureMode` молча возвращает false. `configChanges` выше уже содержит
+             `screenSize|smallestScreenSize|screenLayout|orientation` — при входе в PiP и смене
+             размера окна Activity не пересоздаётся, а значит `<video>` в WebView не перезагружается
+             и воспроизведение не прерывается. -->
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
             android:theme="@style/Theme.Aniko"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

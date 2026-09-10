@@ -119,8 +119,15 @@ fun PlayerScreen(
     // почему состояние здесь, а не внутри [PlayerOverlay].
     var showAudioPicker by remember { mutableStateOf(false) }
 
-    if (isFullscreen) {
-        // Принудительный поворот в альбомную ориентацию, пока открыт fullscreen (P13).
+    // P16.T8 — PiP. Флаг поднят сюда, а не живёт в ветке embed-источника, потому что от него
+    // зависит и поворот экрана, и обе раскладки; сам контроллер PiP создаётся ниже, где уже есть
+    // `controller` (PiP-кнопки — это команды моста, без моста их некуда слать).
+    var pipActive by remember { mutableStateOf(false) }
+
+    if (isFullscreen && !pipActive) {
+        // Принудительный поворот в альбомную ориентацию, пока открыт fullscreen (P13). В PiP-окне
+        // эффект выключен: ориентацию там задаёт система (окно 16:9), а запрос поворота Activity
+        // из PiP-режима систему только дёргает.
         LockLandscapeOrientationEffect()
     }
 
@@ -157,6 +164,10 @@ fun PlayerScreen(
                     // no-op (P8.T1).
                     val controller = rememberEmbedVideoController(source.url)
                     val videoState by controller.state.collectAsStateWithLifecycle()
+                    val pictureInPicture = rememberPlayerPictureInPicture(controller)
+                    LaunchedEffect(pictureInPicture) {
+                        pictureInPicture.isActive.collect { pipActive = it }
+                    }
 
                     // P16-фикс 2026-09-09 — качество видео: только у хостов с клиентским
                     // переключением (Kodik/flowplayer quality-dropdown). Список пуст — чип не
@@ -246,6 +257,20 @@ fun PlayerScreen(
                                 viewModel.onResumeSeekConsumed()
                             }
                         }
+                        // P16.T8 — синхронизация PiP: авто-вход только когда есть чем управлять
+                        // (fullscreen + найденное видео + идёт игра), иконка play/pause — по
+                        // фактическому состоянию. `DisposableEffect` — снять авто-вход при уходе
+                        // с экрана, иначе «домой» из другого экрана уводило бы в PiP пустой плеер.
+                        LaunchedEffect(isFullscreen, videoState.isVideoFound, videoState.isPlaying) {
+                            pictureInPicture.setPlaying(videoState.isPlaying)
+                            pictureInPicture.setAutoEnterEnabled(
+                                isFullscreen && videoState.isVideoFound && videoState.isPlaying,
+                            )
+                        }
+                        DisposableEffect(pictureInPicture) {
+                            onDispose { pictureInPicture.setAutoEnterEnabled(false) }
+                        }
+
                         // `BoxWithConstraints` (SubcomposeLayout) здесь НЕ подходит — живая
                         // проверка показала, что её содержимое переставало реагировать на смену
                         // `isFullscreen` после того, как внутри уже был смонтирован `EmbedPlayerView`
@@ -277,7 +302,7 @@ fun PlayerScreen(
                                 controller = controller,
                                 modifier = Modifier.fillMaxWidth().height(videoHeight).align(Alignment.TopStart),
                             )
-                            if (isFullscreen) {
+                            if (isFullscreen && !pipActive) {
                                 PlayerOverlay(
                                     state = videoState,
                                     controller = controller,
@@ -295,8 +320,15 @@ fun PlayerScreen(
                                     },
                                     speedLabel = strings.playerSpeedValue(speedRate.formatRate()),
                                     onOpenSpeedPicker = { showSpeedPicker = true },
+                                    // Кнопка PiP — только когда есть чем управлять: без найденного
+                                    // `<video>` окно «картинка в картинке» показывало бы пустую
+                                    // страницу, поэтому в no-bridge fullscreen её нет вовсе.
+                                    onEnterPictureInPicture =
+                                        pictureInPicture
+                                            .takeIf { it.isSupported && videoState.isVideoFound }
+                                            ?.let { pip -> { pip.enter() } },
                                 )
-                            } else {
+                            } else if (!pipActive) {
                                 CompactPlayerChrome(
                                     videoHeight = videoHeight,
                                     state = videoState,
