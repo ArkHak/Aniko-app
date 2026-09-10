@@ -8,8 +8,8 @@ import com.aniko.data.cache.ReleaseCacheStores
 import com.aniko.data.cache.cacheFirstFlow
 import com.aniko.data.cache.hydratePagedIds
 import com.aniko.data.cache.persistPagedReleases
-import com.aniko.data.dto.FilterRequestDto
 import com.aniko.data.mapper.toDomain
+import com.aniko.data.mapper.toFilterRequestDto
 import com.aniko.data.mapper.toReleaseDetails
 import com.aniko.data.paging.Paginator
 import com.aniko.database.cache.CacheKeys
@@ -19,7 +19,6 @@ import com.aniko.database.store.ReleaseCacheStore
 import com.aniko.database.store.ReleaseListStore
 import com.aniko.model.AnixError
 import com.aniko.model.CatalogFilter
-import com.aniko.model.CatalogSort
 import com.aniko.model.InterestingBanner
 import com.aniko.model.Paged
 import com.aniko.model.Release
@@ -91,32 +90,7 @@ class ReleaseRepository(
     private suspend fun filter(
         filter: CatalogFilter,
         page: Int,
-    ): Paged<Release> {
-        val request =
-            FilterRequestDto(
-                statusId = filter.statusId?.toLong(),
-                startYear = filter.startYear,
-                endYear = filter.endYear,
-                sort = filter.sort.toApiSort(),
-                genres = filter.genres.toList(),
-                isGenresExcludeModeEnabled = filter.genresExcludeMode,
-                genresMode =
-                    if (filter.genresExcludeMode) {
-                        FilterRequestDto.GENRES_MODE_EXCLUDE
-                    } else {
-                        FilterRequestDto.GENRES_MODE_ALL
-                    },
-            )
-        return filterApi.filter(page, request).toDomain { it.toDomain() }
-    }
-
-    private fun CatalogSort.toApiSort(): Int =
-        when (this) {
-            CatalogSort.RECENTLY_UPDATED -> FilterRequestDto.SORT_UPDATED_DESC
-            CatalogSort.RATING -> FilterRequestDto.SORT_GRADE_DESC
-            CatalogSort.YEAR -> FilterRequestDto.SORT_YEAR_DESC
-            CatalogSort.POPULARITY -> FilterRequestDto.SORT_POPULARITY_DESC
-        }
+    ): Paged<Release> = filterApi.filter(page, filter.toFilterRequestDto()).toDomain { it.toDomain() }
 
     // ---- Cache-first чтение (P4.T7, S3) -------------------------------------------------
 

@@ -2,6 +2,8 @@ package com.aniko.app.feature.search
 
 import androidx.lifecycle.viewModelScope
 import com.aniko.app.mvi.BaseViewModel
+import com.aniko.app.navigation.PendingCatalogFilterLink
+import com.aniko.data.catalogfilter.LocalCatalogFilterStore
 import com.aniko.data.paging.Paginator
 import com.aniko.data.repository.LibraryRepository
 import com.aniko.data.repository.ReleaseRepository
@@ -51,6 +53,7 @@ import kotlinx.coroutines.launch
 class SearchViewModel(
     private val releaseRepository: ReleaseRepository,
     private val libraryRepository: LibraryRepository,
+    private val catalogFilterStore: LocalCatalogFilterStore,
 ) : BaseViewModel<SearchState, SearchIntent, SearchEffect>(initialState = SearchState()) {
     private val queryState = MutableStateFlow("")
     private val tabState = MutableStateFlow(CatalogTab.All)
@@ -60,6 +63,24 @@ class SearchViewModel(
     private var activePaginator: Paginator<Release>? = null
 
     init {
+        // «Моя вкладка» (P16.T2): сохранённый набор в состоянии экрана + реакция на изменение
+        // (пользователь может забыть вкладку на этом же экране).
+        catalogFilterStore
+            .myTab()
+            .onEach { saved -> updateState { copy(myTab = saved) } }
+            .launchIn(viewModelScope)
+
+        // Ссылка-набор-фильтров (P16.T2): применить и поглотить. Ссылка может прийти и до
+        // создания VM (холодный старт по ссылке — тогда `current` уже держит значение), и после
+        // (приложение открыто на каталоге) — поэтому и чтение при старте, и подписка.
+        PendingCatalogFilterLink.current
+            .onEach { link ->
+                if (link != null) {
+                    updateFilter { link }
+                    PendingCatalogFilterLink.consume()
+                }
+            }.launchIn(viewModelScope)
+
         val debouncedQuery =
             queryState
                 .debounce { raw -> if (raw.isBlank()) NO_DEBOUNCE_MILLIS else SEARCH_DEBOUNCE_MILLIS }
@@ -82,6 +103,11 @@ class SearchViewModel(
             .launchIn(viewModelScope)
     }
 
+    @Suppress("CyclomaticComplexMethod") // Плоский `when` по 13 вариантам `SearchIntent`
+    // (P16.T2 добавил 3 новых для «Моей вкладки») — каждая ветка тривиальна (dispatch в стор/
+    // обновление фильтра), выносить их в отдельные функции ради порога сложности означало бы
+    // косвенность ради счётчика, а не упрощение — тот же аргумент, что уже применяется в проекте
+    // для длинных, но плоских `when`.
     override suspend fun handleIntent(intent: SearchIntent) {
         when (intent) {
             is SearchIntent.QueryChanged -> {
@@ -94,6 +120,9 @@ class SearchViewModel(
                 tabState.value = intent.tab
             }
 
+            is SearchIntent.ContentTypeSelected ->
+                updateFilter { copy(contentType = intent.contentType) }
+
             is SearchIntent.StatusToggled ->
                 updateFilter {
                     copy(statusId = if (statusId == intent.statusId) null else intent.statusId)
@@ -105,6 +134,17 @@ class SearchViewModel(
                 }
 
             SearchIntent.FiltersReset -> updateFilter { CatalogFilter() }
+
+            SearchIntent.SaveMyTab ->
+                viewModelScope.launch { catalogFilterStore.save(state.value.filter) }
+
+            SearchIntent.ApplyMyTab -> {
+                val saved = state.value.myTab
+                if (saved != null) updateFilter { saved }
+            }
+
+            SearchIntent.ClearMyTab ->
+                viewModelScope.launch { catalogFilterStore.clear() }
 
             is SearchIntent.ViewModeChanged -> updateState { copy(viewMode = intent.viewMode) }
 

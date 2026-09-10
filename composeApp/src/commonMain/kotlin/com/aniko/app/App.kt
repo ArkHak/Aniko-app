@@ -49,8 +49,10 @@ import com.aniko.app.navigation.DetailPaneRoute
 import com.aniko.app.navigation.DetailPaneStack
 import com.aniko.app.navigation.ListDetailHost
 import com.aniko.app.navigation.LocalTitleNavigator
+import com.aniko.app.navigation.PendingCatalogFilterLink
 import com.aniko.app.navigation.TitleNavigator
 import com.aniko.app.navigation.navigateToTabRoot
+import com.aniko.app.navigation.parseCatalogFilterLink
 import com.aniko.app.navigation.parseDeepLink
 import com.aniko.app.navigation.rememberDetailPaneStack
 import com.aniko.app.navigation.rememberTitleNavigator
@@ -290,7 +292,15 @@ private fun AnixAppScaffold(
     LaunchedEffect(navController) {
         DeepLinkDispatcher.pending.collect { url ->
             if (url != null) {
-                parseDeepLink(url)?.let { destination -> navController.navigate(destination) }
+                // Порядок: сначала ссылка-набор-фильтров (P16.T2) — у неё свой хост `catalog` и
+                // своё назначение (состояние каталога, а не маршрут), затем обычные ссылки.
+                val catalogFilter = parseCatalogFilterLink(url)
+                if (catalogFilter != null) {
+                    PendingCatalogFilterLink.dispatch(catalogFilter)
+                    navController.navigateToTabRoot(AnixSection.Search.destination)
+                } else {
+                    parseDeepLink(url)?.let { destination -> navController.navigate(destination) }
+                }
                 DeepLinkDispatcher.consume()
             }
         }

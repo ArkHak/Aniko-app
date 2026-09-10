@@ -13,11 +13,27 @@ enum class CatalogSort {
 }
 
 /**
+ * Тип контента каталога (P16.T1) — верхние табы «Аниме»/«Дунхуа».
+ *
+ * В Anixart 10 это ровно два таба главной, и оба — пресет по стране релиза (декомпилированный
+ * `HomeFragment`: `tab_title_anime` → `country_japan`, `tab_title_donghua` → `country_china`),
+ * третьего варианта «всё» там нет. Страновая строка API (русскоязычная, как и значения
+ * `AnixGenres`) живёт в `shared/data` — рядом с остальным маппингом в `FilterRequestDto`, чтобы
+ * `shared/model` не знал про значения бэкенда.
+ */
+enum class CatalogContentType {
+    ANIME,
+    DONGHUA,
+}
+
+/**
  * Состояние фильтра каталога — UI-слой над `FilterRequestDto` (`POST filter/{page}`).
  * Маппинг в `FilterRequestDto` — в `shared/data` (`ReleaseRepository.filterPaginator`), чтобы
  * `shared/model` не знал про DTO/сериализацию.
  */
 data class CatalogFilter(
+    /** Таб «Аниме/Дунхуа» (P16.T1) — уезжает в `FilterRequestDto.country`. */
+    val contentType: CatalogContentType = CatalogContentType.ANIME,
     val sort: CatalogSort = CatalogSort.POPULARITY,
     /** `FilterRequestDto.statusId` — статус выхода релиза (`ReleaseStatus`-подобный id). */
     val statusId: Int? = null,

@@ -41,12 +41,15 @@
                  под контролем проекта для Digital Asset Links (см. KDoc `DeepLink.kt`).
                  `android:launchMode="singleTask"` на активити выше — без него каждый тап по deep
                  link создавал бы НОВЫЙ инстанс Activity вместо вызова `onNewIntent` на уже
-                 запущенном (см. `MainActivity.onNewIntent`). -->
+                 запущенном (см. `MainActivity.onNewIntent`). Второй `<data>` (`host="catalog"`,
+                 P16.T2) — ссылка на набор фильтров каталога («Моя вкладка»),
+                 `parseCatalogFilterLink` в том же `DeepLink.kt`. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="aniko" android:host="release" />
+                <data android:scheme="aniko" android:host="catalog" />
             </intent-filter>
         </activity>
 

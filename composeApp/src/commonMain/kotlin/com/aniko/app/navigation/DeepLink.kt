@@ -1,11 +1,18 @@
 package com.aniko.app.navigation
 
+import com.aniko.model.AnixGenres
+import com.aniko.model.CatalogContentType
+import com.aniko.model.CatalogFilter
+import com.aniko.model.CatalogSort
+
 /**
  * Разбор deep-link URL (P10.T7) в [AnixDestination] — единая точка, переиспользуемая всеми тремя
  * платформенными точками входа (Android `Intent.data`, iOS `.onOpenURL`, Desktop CLI-аргумент, см.
  * `MainActivity.kt`/`iosApp/iosApp/iOSApp.swift`/`Main.kt`).
  *
  * Схема (custom scheme, НЕ `https://` App Links): `aniko://release/{id}` — карточка тайтла;
+ * `aniko://catalog?...` — набор фильтров каталога («Моя вкладка», P16.T2, см.
+ * [formatCatalogFilterLink]/[parseCatalogFilterLink]);
  * `aniko://release/{id}/episode/{sourceId}/{position}` — карточка тайтла с попыткой сразу открыть
  * конкретную серию (см. KDoc [AnixDestination.ReleaseDetails] — почему это НЕ прямая ссылка на
  * [AnixDestination.Player]: `hostKey` неизвестен из URL, его резолвинг требует сетевой цепочки
@@ -78,3 +85,111 @@ private const val SEGMENT_INDEX_POSITION = 4
 
 /** `["release", "{id}", "episode", "{sourceId}", "{position}"]` — минимум 5 сегментов. */
 private const val EPISODE_SEGMENTS_MIN = 5
+
+// ---- Ссылка на набор фильтров каталога (P16.T2, «Моя вкладка») ------------------------------
+
+/**
+ * Собирает shareable-ссылку на набор фильтров каталога: `aniko://catalog?type=…&sort=…`.
+ *
+ * Почему своя схема параметров, а не серверная ссылка: у Anixart API нет shareable-фильтров —
+ * набор живёт целиком на клиенте, поэтому «поделиться» здесь означает «передать ссылку, которую
+ * понимает Aniko» (`parseCatalogFilterLink`), а не открыть что-то на сервере.
+ *
+ * Жанры кодируются ИНДЕКСАМИ в [AnixGenres.popular], а не текстом: в `commonMain` нет
+ * платформенного кодека percent-encoding, а выдумывать свой ради одной ссылки — лишний код и
+ * лишний класс ошибок; набор жанров у API фиксированный и уже захардкожен в клиенте
+ * (см. KDoc [AnixGenres]), так что индекс — устойчивый идентификатор внутри одной версии схемы.
+ * Значения по умолчанию в ссылку не попадают — короткая ссылка читаемее и диффуется глазами.
+ */
+fun formatCatalogFilterLink(filter: CatalogFilter): String {
+    val params = mutableListOf<String>()
+    if (filter.contentType != CatalogContentType.ANIME) {
+        params += "$PARAM_TYPE=${filter.contentType.name.lowercase()}"
+    }
+    if (filter.sort != CatalogSort.POPULARITY) {
+        params += "$PARAM_SORT=${filter.sort.name.lowercase()}"
+    }
+    filter.statusId?.let { params += "$PARAM_STATUS=$it" }
+    val genreIndexes =
+        filter.genres
+            .mapNotNull { genre -> AnixGenres.popular.indexOf(genre).takeIf { it >= 0 } }
+            .sorted()
+    if (genreIndexes.isNotEmpty()) {
+        params += "$PARAM_GENRES=${genreIndexes.joinToString(",")}"
+    }
+    if (filter.genresExcludeMode && genreIndexes.isNotEmpty()) {
+        params += "$PARAM_EXCLUDE=$PARAM_FLAG_TRUE"
+    }
+    filter.startYear?.let { params += "$PARAM_YEAR_FROM=$it" }
+    filter.endYear?.let { params += "$PARAM_YEAR_TO=$it" }
+    return if (params.isEmpty()) {
+        "$DEEP_LINK_SCHEME_PREFIX$SEGMENT_CATALOG"
+    } else {
+        "$DEEP_LINK_SCHEME_PREFIX$SEGMENT_CATALOG?${params.joinToString("&")}"
+    }
+}
+
+/**
+ * Разбирает ссылку `aniko://catalog?...` в набор фильтров. `null` — это не ссылка каталога
+ * (другой хост/схема/мусор).
+ *
+ * Отдельная функция, а не ветка [parseDeepLink]: результат здесь — не маршрут навигации, а
+ * СОСТОЯНИЕ каталога, которое применяет `SearchViewModel` (через `PendingCatalogFilterLink`).
+ * Возвращать вместо него «пустой» маршрут каталога значило бы врать навигации о том, что
+ * произошло.
+ *
+ * Границы (покрыты `DeepLinkTest`): неизвестные параметры игнорируются, битые значения
+ * (нечисловой статус, индекс жанра вне списка, год-не-число) отбрасываются по одному — кривое
+ * значение одного фильтра не отменяет остальные, потому что частично распознанная ссылка полезнее
+ * пустого каталога.
+ */
+@Suppress("ReturnCount") // Guard clauses по границам (схема/хост), тот же приём, что у parseDeepLink.
+fun parseCatalogFilterLink(url: String): CatalogFilter? {
+    val body = url.trim().removeSchemePrefixOrNull() ?: return null
+    val host = body.substringBefore('?').substringBefore('#').trim('/')
+    if (host != SEGMENT_CATALOG) return null
+    val query = body.substringAfter('?', missingDelimiterValue = "").substringBefore('#')
+    val params =
+        query
+            .split('&')
+            .mapNotNull { pair ->
+                val key = pair.substringBefore('=', missingDelimiterValue = "").trim().lowercase()
+                if (key.isEmpty()) null else key to pair.substringAfter('=', missingDelimiterValue = "")
+            }.toMap()
+
+    val genres =
+        params[PARAM_GENRES]
+            ?.split(',')
+            ?.mapNotNull { index -> AnixGenres.popular.getOrNull(index.trim().toIntOrNull() ?: -1) }
+            ?.toSet()
+            ?: emptySet()
+    val excludesGenres = params[PARAM_EXCLUDE].equals(PARAM_FLAG_TRUE, ignoreCase = true)
+
+    return CatalogFilter(
+        contentType =
+            when (params[PARAM_TYPE]?.lowercase()) {
+                PARAM_TYPE_DONGHUA -> CatalogContentType.DONGHUA
+                else -> CatalogContentType.ANIME
+            },
+        sort =
+            CatalogSort.entries.firstOrNull { it.name.equals(params[PARAM_SORT], ignoreCase = true) }
+                ?: CatalogSort.POPULARITY,
+        statusId = params[PARAM_STATUS]?.toIntOrNull()?.takeIf { it > 0 },
+        genres = genres,
+        // Режим исключения без выбранных жанров ничего не значит — не тащим его в состояние.
+        genresExcludeMode = excludesGenres && genres.isNotEmpty(),
+        startYear = params[PARAM_YEAR_FROM]?.toIntOrNull(),
+        endYear = params[PARAM_YEAR_TO]?.toIntOrNull(),
+    )
+}
+
+private const val SEGMENT_CATALOG = "catalog"
+private const val PARAM_TYPE = "type"
+private const val PARAM_TYPE_DONGHUA = "donghua"
+private const val PARAM_SORT = "sort"
+private const val PARAM_STATUS = "status"
+private const val PARAM_GENRES = "genres"
+private const val PARAM_EXCLUDE = "exclude"
+private const val PARAM_FLAG_TRUE = "1"
+private const val PARAM_YEAR_FROM = "year_from"
+private const val PARAM_YEAR_TO = "year_to"

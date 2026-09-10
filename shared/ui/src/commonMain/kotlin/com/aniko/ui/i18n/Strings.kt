@@ -339,6 +339,17 @@ interface Strings {
     // Catalog (P7.T3-T6)
     val catalogTabAll: String
     val catalogTabNew: String
+
+    // P16.T1 — верхние табы каталога «Аниме/Дунхуа»: пресет страны релиза, а не сортировка
+    // (см. `CatalogContentType`).
+    val catalogContentTypeAnime: String
+    val catalogContentTypeDonghua: String
+
+    // P16.T2 — «Моя вкладка»: сохранённый набор фильтров каталога и ссылка на него.
+    val catalogMyTabApply: String
+    val catalogMyTabSave: String
+    val catalogMyTabClear: String
+    val catalogFilterShare: String
     val catalogFiltersTitle: String
     val catalogFiltersReset: String
     val catalogFiltersApply: String

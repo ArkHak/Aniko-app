@@ -29,6 +29,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.mvi.CollectEffects
+import com.aniko.app.navigation.formatCatalogFilterLink
+import com.aniko.model.CatalogContentType
 import com.aniko.model.ListStatus
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
@@ -36,6 +38,7 @@ import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.ChipRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
+import com.aniko.ui.share.rememberShareController
 import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixDimens
 import com.aniko.ui.theme.AnixThemeTokens
@@ -70,6 +73,12 @@ fun SearchScreen(
     val strings = LocalStrings.current
     val isExpanded = LocalAnixWindowSize.current == AnixWindowSize.Expanded
 
+    // P16.T2 — «поделиться» набором фильтров: тот же `ShareController`, что и у релиза
+    // (`ReleaseDetailsScreen`), no snackbar-фидбэка на Desktop-фоллбэке — тот же пробел, что уже
+    // есть у релиза (см. его KDoc про снекбар, TODO не входит в периметр этой задачи).
+    val shareController = rememberShareController()
+    val onShareFilter: () -> Unit = { shareController.shareText(formatCatalogFilterLink(state.filter)) }
+
     // Catalog-меню «⋮» (сверка 2026-09-08): статусы списка через LibraryRepository, тот же
     // оптимистичный механизм, что в Library (см. SearchViewModel).
     val onSetListStatus: (Int, ListStatus) -> Unit = { id, status ->
@@ -96,9 +105,27 @@ fun SearchScreen(
         color = Color.Transparent,
     ) {
         if (isExpanded) {
-            ExpandedCatalogLayout(state, strings, dimens, viewModel, onReleaseClick, onSetListStatus, onRemoveFromList)
+            ExpandedCatalogLayout(
+                state,
+                strings,
+                dimens,
+                viewModel,
+                onReleaseClick,
+                onSetListStatus,
+                onRemoveFromList,
+                onShareFilter,
+            )
         } else {
-            CompactCatalogLayout(state, strings, dimens, viewModel, onReleaseClick, onSetListStatus, onRemoveFromList)
+            CompactCatalogLayout(
+                state,
+                strings,
+                dimens,
+                viewModel,
+                onReleaseClick,
+                onSetListStatus,
+                onRemoveFromList,
+                onShareFilter,
+            )
         }
     }
 }
@@ -114,6 +141,7 @@ private fun ExpandedCatalogLayout(
     onReleaseClick: (Int) -> Unit,
     onSetListStatus: (Int, ListStatus) -> Unit,
     onRemoveFromList: (Int) -> Unit,
+    onShareFilter: () -> Unit,
 ) {
     // P13.T7 [FIX]: сайдбар раньше держал фиксированные dimens.filterSidebarWidth (280dp)
     // независимо от реальной доступной ширины — на Desktop `ExpandedCatalogLayout` живёт внутри
@@ -128,9 +156,14 @@ private fun ExpandedCatalogLayout(
     Row(modifier = Modifier.fillMaxSize()) {
         CatalogFilterPanel(
             filter = state.filter,
+            myTab = state.myTab,
             onStatusToggle = { id -> viewModel.dispatch(SearchIntent.StatusToggled(id)) },
             onGenreToggle = { genre -> viewModel.dispatch(SearchIntent.GenreToggled(genre)) },
             onReset = { viewModel.dispatch(SearchIntent.FiltersReset) },
+            onApplyMyTab = { viewModel.dispatch(SearchIntent.ApplyMyTab) },
+            onSaveMyTab = { viewModel.dispatch(SearchIntent.SaveMyTab) },
+            onClearMyTab = { viewModel.dispatch(SearchIntent.ClearMyTab) },
+            onShareFilter = onShareFilter,
             modifier =
                 Modifier
                     .weight(FILTER_SIDEBAR_WEIGHT, fill = false)
@@ -149,6 +182,7 @@ private fun ExpandedCatalogLayout(
             strings = strings,
             dimens = dimens,
             onQueryChange = { q -> viewModel.dispatch(SearchIntent.QueryChanged(q)) },
+            onContentTypeSelected = { type -> viewModel.dispatch(SearchIntent.ContentTypeSelected(type)) },
             onTabSelected = { tab -> viewModel.dispatch(SearchIntent.TabSelected(tab)) },
             onViewModeChanged = { mode -> viewModel.dispatch(SearchIntent.ViewModeChanged(mode)) },
             onReleaseClick = onReleaseClick,
@@ -183,6 +217,7 @@ private fun CompactCatalogLayout(
     onReleaseClick: (Int) -> Unit,
     onSetListStatus: (Int, ListStatus) -> Unit,
     onRemoveFromList: (Int) -> Unit,
+    onShareFilter: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Сверка Catalog (phone-макет, 2026-09-08): заголовок экрана над поиском — только
@@ -203,6 +238,7 @@ private fun CompactCatalogLayout(
             strings = strings,
             dimens = dimens,
             onQueryChange = { q -> viewModel.dispatch(SearchIntent.QueryChanged(q)) },
+            onContentTypeSelected = { type -> viewModel.dispatch(SearchIntent.ContentTypeSelected(type)) },
             onTabSelected = { tab -> viewModel.dispatch(SearchIntent.TabSelected(tab)) },
             onViewModeChanged = { mode -> viewModel.dispatch(SearchIntent.ViewModeChanged(mode)) },
             onReleaseClick = onReleaseClick,
@@ -214,8 +250,13 @@ private fun CompactCatalogLayout(
             filtersContent = {
                 CatalogInlineFilterChips(
                     filter = state.filter,
+                    myTab = state.myTab,
                     onStatusToggle = { id -> viewModel.dispatch(SearchIntent.StatusToggled(id)) },
                     onGenreToggle = { genre -> viewModel.dispatch(SearchIntent.GenreToggled(genre)) },
+                    onApplyMyTab = { viewModel.dispatch(SearchIntent.ApplyMyTab) },
+                    onSaveMyTab = { viewModel.dispatch(SearchIntent.SaveMyTab) },
+                    onClearMyTab = { viewModel.dispatch(SearchIntent.ClearMyTab) },
+                    onShareFilter = onShareFilter,
                 )
             },
         )
@@ -242,6 +283,7 @@ private fun CatalogBody(
     strings: Strings,
     dimens: AnixDimens,
     onQueryChange: (String) -> Unit,
+    onContentTypeSelected: (CatalogContentType) -> Unit,
     onTabSelected: (CatalogTab) -> Unit,
     onViewModeChanged: (CatalogViewMode) -> Unit,
     onReleaseClick: (Int) -> Unit,
@@ -253,6 +295,20 @@ private fun CatalogBody(
     filtersContent: (@Composable () -> Unit)? = null,
 ) {
     Column(modifier = modifier.padding(horizontal = dimens.spaceM)) {
+        // P16.T1: табы «Аниме/Дунхуа» — самый верхний уровень каталога (в Anixart 10 они стоят
+        // над шапкой главной и переключают СТРАНУ релиза, а не сортировку, см. KDoc
+        // [CatalogContentType]). Ряд — тем же [ChipRow], что и остальные «табы» проекта
+        // (Library/Catalog); от ряда «Все/Новинки» ниже он отделён полем поиска, поэтому два
+        // ряда чипов подряд не читаются как один список.
+        ChipRow(
+            items = CatalogContentType.entries,
+            isSelected = { it == state.filter.contentType },
+            label = { type -> type.label(strings) },
+            onClick = onContentTypeSelected,
+            modifier = Modifier.fillMaxWidth().padding(top = dimens.spaceS),
+            selectedColor = MaterialTheme.colorScheme.primary,
+        )
+
         OutlinedTextField(
             value = state.query,
             onValueChange = onQueryChange,
@@ -352,6 +408,13 @@ private fun CatalogBody(
         )
     }
 }
+
+/** Подпись таба типа контента (P16.T1) — ключи из i18n, а не значения API (те живут в `shared/data`). */
+private fun CatalogContentType.label(strings: Strings): String =
+    when (this) {
+        CatalogContentType.ANIME -> strings.catalogContentTypeAnime
+        CatalogContentType.DONGHUA -> strings.catalogContentTypeDonghua
+    }
 
 private fun CatalogTab.label(strings: Strings): String =
     when (this) {
