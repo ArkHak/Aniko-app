@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.navigation.LocalTitleNavigator
 import com.aniko.model.VideoHost
@@ -301,11 +303,33 @@ fun PlayerScreen(
                                     animationSpec = tween(VIDEO_RESIZE_ANIMATION_MS),
                                     label = "playerVideoHeight",
                                 )
+                            // Вертикальное центрирование компактного блока (видео + название/
+                            // прогресс/чипы под ним) в портретном режиме (2026-09-11, живой
+                            // баг-репорт: «видео должно быть посередине» — раньше блок был прижат
+                            // к верху экрана, а остаток портретного экрана простаивал пустым чёрным
+                            // полем). `belowContentHeight` измеряется самим содержимым снизу видео
+                            // (см. [CompactPlayerChrome]/`onBelowContentHeightMeasured` —
+                            // прогресс-бар/чипы не имеют фиксированной высоты: прогресс-бар
+                            // появляется только после `loadedmetadata`, чипы переносятся по числу
+                            // озвучек). Fullscreen не центрируем — там видео и так занимает весь
+                            // экран (`targetVideoHeight = screenHeight`), смещение всегда 0.
+                            var belowContentHeight by remember { mutableStateOf(0.dp) }
+                            val topOffset =
+                                if (isFullscreen) {
+                                    0.dp
+                                } else {
+                                    ((screenHeight - videoHeight - belowContentHeight) / 2).coerceAtLeast(0.dp)
+                                }
                             EmbedPlayerView(
                                 url = source.url,
                                 referer = source.referer,
                                 controller = controller,
-                                modifier = Modifier.fillMaxWidth().height(videoHeight).align(Alignment.TopStart),
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(videoHeight)
+                                        .align(Alignment.TopStart)
+                                        .offset(y = topOffset),
                             )
                             if (isFullscreen && !pipActive) {
                                 PlayerOverlay(
@@ -336,6 +360,8 @@ fun PlayerScreen(
                             } else if (!pipActive) {
                                 CompactPlayerChrome(
                                     videoHeight = videoHeight,
+                                    topOffset = topOffset,
+                                    onBelowContentHeightMeasured = { belowContentHeight = it },
                                     state = videoState,
                                     controller = controller,
                                     onBack = onBack,

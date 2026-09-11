@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -29,6 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -70,6 +73,8 @@ import com.aniko.ui.theme.AnixThemeTokens
 @Composable
 fun BoxScope.CompactPlayerChrome(
     videoHeight: Dp,
+    topOffset: Dp,
+    onBelowContentHeightMeasured: (Dp) -> Unit,
     state: EmbedVideoState,
     controller: EmbedVideoController,
     onBack: () -> Unit,
@@ -84,6 +89,7 @@ fun BoxScope.CompactPlayerChrome(
 ) {
     CompactVideoOverlay(
         videoHeight = videoHeight,
+        topOffset = topOffset,
         isPlaying = state.isPlaying,
         videoFound = state.isVideoFound,
         controller = controller,
@@ -92,6 +98,8 @@ fun BoxScope.CompactPlayerChrome(
     )
     CompactBelowVideoContent(
         videoHeight = videoHeight,
+        topOffset = topOffset,
+        onHeightMeasured = onBelowContentHeightMeasured,
         state = state,
         controller = controller,
         voiceTypes = voiceTypes,
@@ -111,6 +119,7 @@ fun BoxScope.CompactPlayerChrome(
 @Composable
 private fun BoxScope.CompactVideoOverlay(
     videoHeight: Dp,
+    topOffset: Dp,
     isPlaying: Boolean,
     videoFound: Boolean,
     controller: EmbedVideoController,
@@ -120,7 +129,14 @@ private fun BoxScope.CompactVideoOverlay(
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
     val flash = rememberPlayerSeekFlash()
-    Box(modifier = Modifier.fillMaxWidth().height(videoHeight).align(Alignment.TopStart)) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(videoHeight)
+                .align(Alignment.TopStart)
+                .offset(y = topOffset),
+    ) {
         // P16 (2026-09-10): до нахождения <video> тапы НЕ перехватываем — старт выполняет
         // большой play хоста (trust-gesture, синтетический клик плеер игнорирует), он виден до
         // первого старта и скрывается классом `aniko-video-found`. После — перехват наш:
@@ -214,11 +230,23 @@ private fun CompactVideoGestureLayer(
 /** Название/прогресс/чипы под видео — не Column-обёртка вокруг видео (см. KDoc
  *  [CompactPlayerChrome] про единственный call site [com.aniko.player.EmbedPlayerView]), а
  *  отдельный узел, сдвинутый вниз на `videoHeight` через `padding(top = …)`. Вынесена отдельно
- *  (detekt `LongMethod`). */
+ *  (detekt `LongMethod`).
+ *
+ * [topOffset] — вертикальное центрирование компактного блока (2026-09-11, см. KDoc `PlayerScreen`
+ * про живой баг-репорт «видео должно быть посередине»): та же величина, что сдвигает само видео
+ * и оверлей над ним, добавляется поверх `videoHeight` в `padding(top = …)`. [onHeightMeasured]
+ * замыкает цикл измерения: реальная высота ЭТОГО блока (переменная — прогресс-бар появляется
+ * только после `loadedmetadata`, число чипов озвучки варьируется) нужна вызывающей стороне,
+ * чтобы посчитать [topOffset] для центрирования всего кластера (видео + этот блок) как единого
+ * целого — измеряется через `onGloballyPositioned`, а не читается заранее (высота неизвестна до
+ * первой реальной раскладки).
+ */
 @Suppress("LongParameterList") // Та же тройка состояние/контроллер/аудио-набор, что и у родителя.
 @Composable
 private fun BoxScope.CompactBelowVideoContent(
     videoHeight: Dp,
+    topOffset: Dp,
+    onHeightMeasured: (Dp) -> Unit,
     state: EmbedVideoState,
     controller: EmbedVideoController,
     voiceTypes: List<VoiceType>,
@@ -231,13 +259,16 @@ private fun BoxScope.CompactBelowVideoContent(
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
+    val density = LocalDensity.current
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopStart)
-                .padding(top = videoHeight)
-                .padding(dimens.spaceM),
+                .padding(top = videoHeight + topOffset)
+                .onGloballyPositioned { coordinates ->
+                    onHeightMeasured(with(density) { coordinates.size.height.toDp() })
+                }.padding(dimens.spaceM),
         verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
     ) {
         val duration = state.durationMs

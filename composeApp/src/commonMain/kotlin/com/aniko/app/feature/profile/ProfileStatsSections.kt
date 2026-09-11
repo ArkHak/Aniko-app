@@ -574,10 +574,17 @@ private fun ListsDonutSection(
  * сервер: локали это не касается, календарь пересчитывать не нужно.
  *
  * Track A (точное соответствие макету): столбики — accent/primary с альфой 0.8, скругление
- * сверху 5dp/снизу 2dp, ширина до 20dp, gap 7dp, высота контейнера 64dp, без видимой "подложки"
- * (`trackColor = Color.Transparent` — в отличие от дефолта [WeeklyBarChart], мокап не рисует
- * фоновую дорожку под столбиками). Все эти параметры уже существовали или добавлены аддитивно в
- * [WeeklyBarChart] (см. её KDoc) — сам компонент не переписан, изменился только вызов.
+ * сверху 5dp/снизу 2dp, ширина до 20dp, gap 7dp, высота контейнера 64dp. Все эти параметры уже
+ * существовали или добавлены аддитивно в [WeeklyBarChart] (см. её KDoc) — сам компонент не
+ * переписан, изменился только вызов.
+ *
+ * **2026-09-11 (живой баг-репорт пользователя, «белые полосы»/цветокор):** мокап рисовал
+ * `trackColor = Color.Transparent` (без видимой "подложки" под столбиками) — на аккаунте с
+ * низкой активностью за последние 7 дней [WeeklyBarChart.barHeightFractions] клэмпает почти все
+ * столбики к минимальному 6%-огрызку (см. её KDoc), и на прозрачной подложке это читается как
+ * пустая белая полоса, а не график — выглядит сломанным независимо от факта, что рендерится по
+ * спецификации. Заменено на едва заметную заливку от `primary` (8% альфы) — область графика
+ * теперь всегда читается как структура, даже при нулевой активности недели.
  */
 @Composable
 private fun WeeklyActivitySection(
@@ -600,7 +607,7 @@ private fun WeeklyActivitySection(
             WeeklyBarChart(
                 entries = points.map { BarEntry(label = it.day.toString(), value = it.count.toFloat()) },
                 barColor = MaterialTheme.colorScheme.primary.copy(alpha = ACTIVITY_BAR_ALPHA),
-                trackColor = Color.Transparent,
+                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = ACTIVITY_TRACK_ALPHA),
                 height = ACTIVITY_CHART_HEIGHT,
                 barShape = ACTIVITY_BAR_SHAPE,
                 gap = ACTIVITY_BAR_GAP,
@@ -681,6 +688,10 @@ private const val LEGEND_LABEL_ALPHA = 0.8f
 
 /** [WeeklyActivitySection] — accent-столбики альфа 0.8, скругление 5dp сверху/2dp снизу. */
 private const val ACTIVITY_BAR_ALPHA = 0.8f
+
+/** Едва заметная подложка под столбиками (2026-09-11, живой баг-репорт «белые полосы») — см.
+ * KDoc [WeeklyActivitySection]: без неё низкоактивная неделя выглядит пустой белой полосой. */
+private const val ACTIVITY_TRACK_ALPHA = 0.08f
 private val ACTIVITY_CHART_HEIGHT = 64.dp
 private val ACTIVITY_BAR_GAP = 7.dp
 private val ACTIVITY_BAR_MAX_WIDTH = 20.dp
