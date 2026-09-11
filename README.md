@@ -137,6 +137,27 @@ Aniko — независимый клиент, использующий прив
 open iosApp/iosApp.xcodeproj
 ```
 
+### Релизная подпись Android (`assembleRelease`/`bundleRelease`)
+
+`assembleDebug` подписи не требует (AGP сам генерирует debug-keystore). Для `assembleRelease`
+нужен собственный релизный ключ — репозиторий его не содержит (см. `.gitignore`: `*.jks`,
+`keystore.properties`).
+
+```bash
+cp keystore.properties.example keystore.properties
+keytool -genkeypair -v -keystore composeApp/release/aniko-release.jks \
+  -alias aniko-release -keyalg RSA -keysize 2048 -validity 10000
+# заполните storePassword/keyPassword в keystore.properties реальными значениями
+# (PKCS12 требует storePassword == keyPassword)
+
+./gradlew :composeApp:assembleRelease
+# результат: composeApp/build/outputs/apk/release/composeApp-release.apk
+```
+
+Без `keystore.properties` (или переменных окружения `ANIKO_KEYSTORE_PATH`/
+`ANIKO_KEYSTORE_PASSWORD`/`ANIKO_KEY_ALIAS`/`ANIKO_KEY_PASSWORD` — используются в CI) сборка
+релиза падает на этапе подписи, а не собирается неподписанной.
+
 ## Документация
 
 - [`docs/api/ANIXART_API.md`](docs/api/ANIXART_API.md) — полное описание используемого API Anixart

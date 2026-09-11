@@ -4,6 +4,8 @@
 
 import com.aniko.buildlogic.GenerateApiFixturesTask
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.io.FileInputStream
+import java.util.Properties
 
 plugins {
     id("aniko.kmp.application")
@@ -116,9 +118,48 @@ android {
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
     sourceSets["main"].res.srcDirs("src/androidMain/res")
 
+    // P12.T2 (docs/REELWAVE_PLAN.md): релизная подпись. Два источника значений — локальный
+    // `keystore.properties` (репо-корень, в .gitignore, см. `keystore.properties.example`) для
+    // разработки, переменные окружения ANIKO_KEYSTORE_*/ANIKO_KEY_* для CI (GitHub Secrets,
+    // P12.T3) — ни ключ, ни пароли никогда не попадают в git. Без обоих источников
+    // `assembleRelease`/`bundleRelease` падает на этапе подписи — намеренно: релиз без ключа не
+    // должен тихо собраться неподписанным. `assembleDebug` (CI, повседневная разработка) этот
+    // блок не трогает — debug использует автогенерируемый debug-keystore AGP, как раньше.
+    val keystorePropertiesFile = rootProject.file("keystore.properties")
+    val keystoreProperties =
+        Properties().apply {
+            if (keystorePropertiesFile.exists()) {
+                load(FileInputStream(keystorePropertiesFile))
+            }
+        }
+
+    fun keystoreValue(
+        propertyKey: String,
+        envKey: String,
+    ): String? = keystoreProperties.getProperty(propertyKey) ?: System.getenv(envKey)
+
+    signingConfigs {
+        create("release") {
+            keystoreValue("storeFile", "ANIKO_KEYSTORE_PATH")?.let { storeFile = rootProject.file(it) }
+            storePassword = keystoreValue("storePassword", "ANIKO_KEYSTORE_PASSWORD")
+            keyAlias = keystoreValue("keyAlias", "ANIKO_KEY_ALIAS")
+            keyPassword = keystoreValue("keyPassword", "ANIKO_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+            // P12.T2: включено осознанно (было `false`) — R8 сжимает и обфусцирует байткод,
+            // `proguard-rules.pro` держит явные keep-правила для reflection-зависимого кода
+            // (Koin DI, kotlinx.serialization). Проверено живым прогоном подписанного release-
+            // APK на эмуляторе после включения (см. отчёт задачи в docs/REELWAVE_PLAN.md).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
