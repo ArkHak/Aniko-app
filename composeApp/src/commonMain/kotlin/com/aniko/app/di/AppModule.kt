@@ -1,6 +1,7 @@
 package com.aniko.app.di
 
 import com.aniko.app.feature.auth.LoginViewModel
+import com.aniko.app.feature.collections.CollectionsViewModel
 import com.aniko.app.feature.comments.CommentsViewModel
 import com.aniko.app.feature.feed.FeedViewModel
 import com.aniko.app.feature.gallery.TokenGalleryViewModel
@@ -53,4 +54,5 @@ val appModule =
         viewModelOf(::CommentsViewModel)
         viewModelOf(::NotificationsViewModel)
         viewModelOf(::FeedViewModel)
+        viewModelOf(::CollectionsViewModel)
     }

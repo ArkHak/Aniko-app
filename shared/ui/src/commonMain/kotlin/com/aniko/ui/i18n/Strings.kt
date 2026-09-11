@@ -339,6 +339,7 @@ interface Strings {
     val homeQuickActionFilter: String
     val homeQuickActionRandom: String
     val homeQuickActionFeed: String
+    val homeQuickActionCollections: String
     val homeTopWeek: String
     val homeSectionNewEpisodes: String
 
@@ -472,6 +473,14 @@ interface Strings {
     val feedTitle: String
     val feedEmpty: String
     val feedLoadError: String
+
+    // --- Экран коллекций (P16.T16), AnixDestination.Collections — read-only MVP, публичный
+    // GET collection/all/{page}, см. KDoc CollectionDto (shared/data) ---
+    val collectionsTitle: String
+    val collectionsEmpty: String
+    val collectionsLoadError: String
+
+    fun collectionByCreator(login: String): String
 
     // --- Экран настроек: секция уведомлений (P10.T6) ---
     val settingsNotificationsSection: String

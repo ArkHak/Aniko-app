@@ -74,6 +74,7 @@ fun HomeScreen(
     onScheduleClick: () -> Unit = {},
     onFilterClick: () -> Unit = {},
     onFeedClick: () -> Unit = {},
+    onCollectionsClick: () -> Unit = {},
     viewModel: HomeViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -101,6 +102,7 @@ fun HomeScreen(
         onScheduleClick = onScheduleClick,
         onFilterClick = onFilterClick,
         onFeedClick = onFeedClick,
+        onCollectionsClick = onCollectionsClick,
     )
 }
 
@@ -116,6 +118,7 @@ private fun HomeContent(
     onScheduleClick: () -> Unit,
     onFilterClick: () -> Unit,
     onFeedClick: () -> Unit,
+    onCollectionsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -154,6 +157,7 @@ private fun HomeContent(
                         onFilterClick = onFilterClick,
                         onRandomClick = { viewModel.dispatch(HomeIntent.OpenRandomRelease) },
                         onFeedClick = onFeedClick,
+                        onCollectionsClick = onCollectionsClick,
                     )
                 }
 
@@ -295,6 +299,7 @@ private fun HomeHeroSection(
     onFilterClick: () -> Unit,
     onRandomClick: () -> Unit,
     onFeedClick: () -> Unit,
+    onCollectionsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -309,6 +314,7 @@ private fun HomeHeroSection(
                 onFilterClick = onFilterClick,
                 onRandomClick = onRandomClick,
                 onFeedClick = onFeedClick,
+                onCollectionsClick = onCollectionsClick,
             )
         }
     }

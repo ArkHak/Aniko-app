@@ -27,8 +27,8 @@ import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 
 /**
- * 5 плиток быстрых действий главного экрана (P7.T1, 5-я «Лента» — P16.T3 MVP) — чистая
- * навигация без сетевых данных, все колбэки опциональны (дефолт `{}`).
+ * 6 плиток быстрых действий главного экрана (P7.T1, 5-я «Лента» — P16.T3 MVP, 6-я «Коллекции» —
+ * P16.T16 MVP) — чистая навигация без сетевых данных, все колбэки опциональны (дефолт `{}`).
  *
  * Раскладка теперь измеряет СВОЮ ширину через [BoxWithConstraints], а не опирается на
  * полноэкранный window size class: в узкой Medium-панели ListDetailHost (~360dp) 4 колонки
@@ -57,8 +57,12 @@ import com.aniko.ui.theme.AnixThemeTokens
  * уже умела заполнять неполный последний ряд (см. комментарий у вызова [QuickActionTileView]
  * ниже) — пятая плитка просто становится единственной во третьем ряду 2-колоночной раскладки
  * без правок самого layout-алгоритма.
+ *
+ * 6-я плитка «Коллекции» (2026-09-11, P16.T16 MVP) — тот же приём, что у «Лента»: цвет из той же
+ * OKLCH-семьи (бирюзовый, см. [COLLECTIONS_TILE_COLOR]), заполняет теперь полный третий ряд
+ * 2-колоночной раскладки (2×3, как на Compact).
  */
-@Suppress("LongParameterList") // 5 независимых навигационных колбэков плиток + layout-настройки.
+@Suppress("LongParameterList") // 6 независимых навигационных колбэков плиток + layout-настройки.
 @Composable
 fun HomeQuickActions(
     modifier: Modifier = Modifier,
@@ -67,6 +71,7 @@ fun HomeQuickActions(
     onFilterClick: () -> Unit = {},
     onRandomClick: () -> Unit = {},
     onFeedClick: () -> Unit = {},
+    onCollectionsClick: () -> Unit = {},
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
@@ -78,6 +83,7 @@ fun HomeQuickActions(
             QuickActionTile(strings.homeQuickActionFilter, FILTERS_TILE_COLOR, onFilterClick),
             QuickActionTile(strings.homeQuickActionRandom, RANDOM_TILE_COLOR, onRandomClick),
             QuickActionTile(strings.homeQuickActionFeed, FEED_TILE_COLOR, onFeedClick),
+            QuickActionTile(strings.homeQuickActionCollections, COLLECTIONS_TILE_COLOR, onCollectionsClick),
         )
 
     // Измеряем именно ту ширину, которую займёт блок плиток в текущем контейнере:
@@ -192,6 +198,9 @@ private const val RANDOM_TILE_ALPHA = 0.26f
 // 2026-09-11 (P16.T3 MVP) — вне мокапа Claude Design, см. KDoc [HomeQuickActions] про метод.
 private const val FEED_TILE_ALPHA = 0.3f
 
+// 2026-09-11 (P16.T16 MVP) — та же логика, что у FEED_TILE_ALPHA: вне мокапа, новая плитка.
+private const val COLLECTIONS_TILE_ALPHA = 0.3f
+
 // oklch(0.32 0.1 22 / 0.32) — тёплый красно-коричневый.
 @Suppress("MagicNumber") // hex-литерал цвета — то же самое исключение, что и `AnixPalette` в
 // `Color.kt` (не трогаем сам файл): значение уже поимённано в KDoc/комментарии выше.
@@ -213,3 +222,7 @@ private val RANDOM_TILE_COLOR = Color(0xFF004013).copy(alpha = RANDOM_TILE_ALPHA
 // та же OKLCH-семья L/S, что у остальных четырёх плиток.
 @Suppress("MagicNumber")
 private val FEED_TILE_COLOR = Color(0xFF664D00).copy(alpha = FEED_TILE_ALPHA)
+
+// oklch(0.32 0.1 190 / 0.3) — бирюзовый, та же OKLCH-семья L/C, что у остальных пяти плиток.
+@Suppress("MagicNumber")
+private val COLLECTIONS_TILE_COLOR = Color(0xFF00413E).copy(alpha = COLLECTIONS_TILE_ALPHA)

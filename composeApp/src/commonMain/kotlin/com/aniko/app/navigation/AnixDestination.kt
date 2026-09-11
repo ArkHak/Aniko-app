@@ -63,6 +63,14 @@ sealed interface AnixDestination {
     data object Feed : AnixDestination
 
     /**
+     * Публичные коллекции (P16.T16, MVP), открывается с плитки "Коллекции" в `HomeQuickActions`.
+     * Read-only список, без открытия деталей коллекции (см. KDoc `CollectionsScreen`) — тот же
+     * приём, что у [Feed].
+     */
+    @Serializable
+    data object Collections : AnixDestination
+
+    /**
      * Экран-галерея дизайн-токенов (Фаза 2 плана, P2.T12): палитра/типографика/spacing/radius
      * с переключателем языка и темы для визуальной проверки. Debug-маршрут, открывается из
      * [Settings] — вне основной табовой навигации намеренно, не часть продуктового флоу.

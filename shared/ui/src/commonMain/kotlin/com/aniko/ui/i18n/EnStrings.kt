@@ -204,6 +204,7 @@ val EnStrings: Strings =
         override val homeQuickActionFilter = "Filters"
         override val homeQuickActionRandom = "Random Title"
         override val homeQuickActionFeed = "Feed"
+        override val homeQuickActionCollections = "Collections"
         override val homeTopWeek = "Top This Week"
         override val homeSectionNewEpisodes = "New Episodes"
         override val catalogTabAll = "All"
@@ -283,6 +284,12 @@ val EnStrings: Strings =
         override val feedTitle = "Feed"
         override val feedEmpty = "No posts yet"
         override val feedLoadError = "Could not load the feed"
+        override val collectionsTitle = "Collections"
+        override val collectionsEmpty = "No collections yet"
+        override val collectionsLoadError = "Could not load collections"
+
+        override fun collectionByCreator(login: String): String = "By $login"
+
         override val settingsNotificationsSection = "Notifications"
         override val settingsNotificationsPollingNote =
             "Aniko checks for updates periodically, so a notification may arrive with a delay"

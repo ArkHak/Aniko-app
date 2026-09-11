@@ -31,6 +31,7 @@ import androidx.navigation.toRoute
 import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
 import com.aniko.app.feature.auth.LoginScreen
+import com.aniko.app.feature.collections.CollectionsScreen
 import com.aniko.app.feature.comments.ReleaseCommentsScreen
 import com.aniko.app.feature.feed.FeedScreen
 import com.aniko.app.feature.gallery.TokenGalleryScreen
@@ -457,6 +458,7 @@ private fun NavGraphBuilder.listSectionRoutes(
                 // больше туда не ведёт, см. KDoc `HomeQuickActions`).
                 onFilterClick = { navController.navigateToTabRoot(AnixDestination.Search) },
                 onFeedClick = { navController.navigate(AnixDestination.Feed) },
+                onCollectionsClick = { navController.navigate(AnixDestination.Collections) },
             )
         }
     }
@@ -583,6 +585,9 @@ private fun NavGraphBuilder.chromeRoutes(
     }
     composable<AnixDestination.Feed> {
         FeedScreen(onBack = { navController.popBackStack() })
+    }
+    composable<AnixDestination.Collections> {
+        CollectionsScreen(onBack = { navController.popBackStack() })
     }
     composable<AnixDestination.TokenGallery> {
         TokenGalleryScreen(onBack = { navController.popBackStack() })

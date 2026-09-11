@@ -205,6 +205,7 @@ val RuStrings: Strings =
         override val homeQuickActionFilter = "Фильтры"
         override val homeQuickActionRandom = "Случайный тайтл"
         override val homeQuickActionFeed = "Лента"
+        override val homeQuickActionCollections = "Коллекции"
         override val homeTopWeek = "Топ недели"
         override val homeSectionNewEpisodes = "Новые серии"
         override val catalogTabAll = "Все"
@@ -284,6 +285,12 @@ val RuStrings: Strings =
         override val feedTitle = "Лента"
         override val feedEmpty = "Пока нет постов"
         override val feedLoadError = "Не удалось загрузить ленту"
+        override val collectionsTitle = "Коллекции"
+        override val collectionsEmpty = "Пока нет коллекций"
+        override val collectionsLoadError = "Не удалось загрузить коллекции"
+
+        override fun collectionByCreator(login: String): String = "Автор: $login"
+
         override val settingsNotificationsSection = "Уведомления"
         override val settingsNotificationsPollingNote =
             "Aniko проверяет обновления периодически, поэтому уведомление может прийти с задержкой"
