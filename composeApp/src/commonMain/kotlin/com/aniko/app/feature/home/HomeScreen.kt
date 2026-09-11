@@ -35,6 +35,7 @@ import com.aniko.model.InterestingBanner
 import com.aniko.model.Release
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
+import com.aniko.ui.adaptive.LocalGlassBottomInset
 import com.aniko.ui.component.AnixContentState
 import com.aniko.ui.component.HorizontalPosterRail
 import com.aniko.ui.component.TitleCard
@@ -133,7 +134,15 @@ private fun HomeContent(
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().widthIn(max = dimens.contentMaxWidth),
-                contentPadding = PaddingValues(vertical = dimens.spaceM),
+                // Liquid Glass (2026-09-11): нижний паддинг = обычный spaceM + фактическая высота
+                // плавающего таб-бара (`LocalGlassBottomInset`, `0.dp` вне Compact/до первого
+                // измерения бара) — иначе последний элемент рельсы прятался бы под баром вместо
+                // того, чтобы быть видимым СКВОЗЬ него (см. KDoc `LocalGlassBottomInset`/`App.kt`).
+                contentPadding =
+                    PaddingValues(
+                        top = dimens.spaceM,
+                        bottom = dimens.spaceM + LocalGlassBottomInset.current,
+                    ),
                 verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
             ) {
                 // Мобильный макет Claude Design (2026-09-08): на телефоне Home открывается

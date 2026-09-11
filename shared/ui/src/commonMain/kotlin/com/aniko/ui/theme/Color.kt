@@ -252,6 +252,14 @@ internal val AnixLightColors =
  *   Тёмная тема — белая подложка (`rgba(255,255,255,X)`), светлая — чёрная
  *   (`rgba(0,0,0,X)`) с ДРУГИМИ (не зеркальными) значениями alpha — так задано макетом, чтобы
  *   визуальный вес рамки/элевейшена был одинаковым на глаз в обеих темах.
+ * - [glassSpecular]/[glassRim]/[glassTintAlpha] (2026-09-11, feature/liquid-glass-tab-bar) —
+ *   токены материала [com.aniko.ui.glass.LiquidGlass]. [glassSpecular] сознательно НЕ переиспользует
+ *   [overlay03]..[overlay18]: тот ряд в светлой теме чёрный с альфой (подложка под тёмный текст/
+ *   тени), а specular-блик обязан быть БЕЛЫМ в обеих темах (свет, отражённый от стекла, не тень
+ *   под ним) — общего по смыслу токена под это в существующем наборе нет. [glassRim] —
+ *   производная от уже существующих [com.aniko.ui.theme.AnixPalette.DarkOutlineVariant]/
+ *   [com.aniko.ui.theme.AnixPalette.LightOutlineVariant] (тот же `outlineVariant`, что красит M3
+ *   `ColorScheme`), не новое магическое число.
  */
 @Immutable
 @Suppress("LongParameterList") // Токены design-системы — плоский список именованных полей с
@@ -305,6 +313,10 @@ data class AnixColors(
     val overlay12: Color = Color.White.copy(alpha = 0.12f),
     val overlay16: Color = Color.White.copy(alpha = 0.16f),
     val overlay18: Color = Color.White.copy(alpha = 0.18f),
+    /** Liquid Glass (2026-09-11) — см. KDoc класса. Дефолт — тёмная тема. */
+    val glassSpecular: Color = Color.White.copy(alpha = 0.22f),
+    val glassRim: Color = AnixPalette.DarkOutlineVariant,
+    val glassTintAlpha: Float = 0.62f,
 )
 
 internal val AnixDarkExtraColors =
@@ -339,6 +351,9 @@ internal val AnixDarkExtraColors =
         overlay12 = Color.White.copy(alpha = 0.12f),
         overlay16 = Color.White.copy(alpha = 0.16f),
         overlay18 = Color.White.copy(alpha = 0.18f),
+        glassSpecular = Color.White.copy(alpha = 0.22f),
+        glassRim = AnixPalette.DarkOutlineVariant,
+        glassTintAlpha = 0.62f,
     )
 
 internal val AnixLightExtraColors =
@@ -373,6 +388,9 @@ internal val AnixLightExtraColors =
         overlay12 = Color.Black.copy(alpha = 0.16f),
         overlay16 = Color.Black.copy(alpha = 0.2f),
         overlay18 = Color.Black.copy(alpha = 0.22f),
+        glassSpecular = Color.White.copy(alpha = 0.85f),
+        glassRim = AnixPalette.LightOutlineVariant,
+        glassTintAlpha = 0.55f,
     )
 
 val LocalAnixColors = staticCompositionLocalOf { AnixColors() }

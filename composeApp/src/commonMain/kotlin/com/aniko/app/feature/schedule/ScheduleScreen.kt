@@ -40,6 +40,7 @@ import com.aniko.model.Schedule
 import com.aniko.model.WeekDay
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
+import com.aniko.ui.adaptive.LocalGlassBottomInset
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.component.ChipRow
@@ -236,7 +237,18 @@ private fun ScheduleDaysList(
     val colors = AnixThemeTokens.colors
 
     LazyColumn(
-        contentPadding = PaddingValues(horizontal = dimens.spaceM, vertical = dimens.spaceS),
+        // Liquid Glass (2026-09-11): нижний паддинг учитывает высоту плавающего таб-бара — см.
+        // комментарий у аналогичного места в `HomeScreen.kt`/KDoc `LocalGlassBottomInset`. Это
+        // единственная ветка Compact (`ScheduleDaysList`, вызывается только не-`isTwoPane`) —
+        // колончатая Medium/Expanded-раскладка (`ScheduleColumns`/`DayColumn` ниже по файлу) не
+        // читает инсет, там нет bottom bar'а вообще (nav rail/sidebar).
+        contentPadding =
+            PaddingValues(
+                start = dimens.spaceM,
+                end = dimens.spaceM,
+                top = dimens.spaceS,
+                bottom = dimens.spaceS + LocalGlassBottomInset.current,
+            ),
         verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
         modifier = Modifier.fillMaxSize(),
     ) {

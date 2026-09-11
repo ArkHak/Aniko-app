@@ -29,6 +29,7 @@ import com.aniko.app.ui.toContentState
 import com.aniko.data.paging.PagingState
 import com.aniko.model.ListStatus
 import com.aniko.model.Release
+import com.aniko.ui.adaptive.LocalGlassBottomInset
 import com.aniko.ui.component.AnixContentSlot
 import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.component.TitleCard
@@ -102,7 +103,17 @@ private fun CatalogList(
 ) {
     val strings = LocalStrings.current
     LazyColumn(
-        contentPadding = PaddingValues(dimens.spaceM),
+        // Liquid Glass (2026-09-11): нижний паддинг учитывает высоту плавающего таб-бара — этот
+        // список рендерится и на Compact (где живёт bottom bar), и на Medium/Expanded (nav rail/
+        // sidebar, `LocalGlassBottomInset` там `0.dp` по умолчанию, см. её KDoc) — читать её
+        // безусловно безопасно на всех размерах окна. См. аналогичное место в `HomeScreen.kt`.
+        contentPadding =
+            PaddingValues(
+                start = dimens.spaceM,
+                end = dimens.spaceM,
+                top = dimens.spaceM,
+                bottom = dimens.spaceM + LocalGlassBottomInset.current,
+            ),
         verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
         modifier = Modifier.fillMaxSize(),
     ) {

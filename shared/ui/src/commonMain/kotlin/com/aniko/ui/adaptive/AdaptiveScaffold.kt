@@ -1,14 +1,24 @@
 package com.aniko.ui.adaptive
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.aniko.ui.glass.LocalGlassBackdrop
+import com.aniko.ui.glass.glassBackdropSource
+import com.aniko.ui.glass.rememberGlassBackdropState
 
 /**
  * Адаптивный каркас приложения (P5.T5): bottom bar на [AnixWindowSize.Compact], nav rail на
@@ -63,16 +73,41 @@ fun AdaptiveScaffold(
 
     when (windowSize) {
         AnixWindowSize.Compact -> {
-            Scaffold(
-                modifier = modifier,
-                // Track A (Foundation): фон приложения рисуется один раз на корне (`AppTheme`,
-                // iOS `systemGroupedBackground`) — непрозрачный дефолт Scaffold
-                // (`MaterialTheme.colorScheme.background`) перекрывал бы его плашкой сплошного
-                // цвета поверх всей области контента, поэтому здесь он явно прозрачный.
-                containerColor = Color.Transparent,
-                bottomBar = { AnixNavigationBar(items, selectedItemId, onItemClick) },
-                snackbarHost = snackbarHost,
-            ) { innerPadding -> movableContent(innerPadding) }
+            // Liquid Glass (2026-09-11, feature/liquid-glass-tab-bar): `backdropState` — общий
+            // источник фона для `AnixNavigationBar`, живёт на уровне AdaptiveScaffold (не внутри
+            // самого бара), т.к. просвечивать под стеклом должен КОНТЕНТ экрана
+            // (`movableContent`), а не сам бар. `CompositionLocalProvider` оборачивает весь
+            // `Scaffold` целиком — оба его слота (`bottomBar`/`content`) остаются потомками этой
+            // composition-области, даже вызываясь изнутри `Scaffold`, поэтому `LocalGlassBackdrop`
+            // виден обоим (тот же принцип, что `MaterialTheme` вокруг слотов `Scaffold`).
+            val backdropState = rememberGlassBackdropState()
+            CompositionLocalProvider(LocalGlassBackdrop provides backdropState) {
+                Scaffold(
+                    modifier = modifier,
+                    // Track A (Foundation): фон приложения рисуется один раз на корне (`AppTheme`,
+                    // iOS `systemGroupedBackground`) — непрозрачный дефолт Scaffold
+                    // (`MaterialTheme.colorScheme.background`) перекрывал бы его плашкой сплошного
+                    // цвета поверх всей области контента, поэтому здесь он явно прозрачный.
+                    containerColor = Color.Transparent,
+                    bottomBar = { AnixNavigationBar(items, selectedItemId, onItemClick) },
+                    snackbarHost = snackbarHost,
+                ) { innerPadding ->
+                    // `LocalGlassBottomInset` = именно та нижняя часть [innerPadding], которую
+                    // `Scaffold` посчитал под реально измеренный `bottomBar` (высота бара + системный
+                    // inset) — экраны читают её отдельно от `innerPadding`, когда сами решают НЕ
+                    // отступать от бара Modifier.padding'ом (см. KDoc [LocalGlassBottomInset] и
+                    // `App.kt`), а прокидывают её в `contentPadding` своих `LazyColumn`/
+                    // `LazyVerticalGrid`, чтобы контент физически продолжался под полупрозрачным
+                    // баром (иначе блюрить там нечего — сплошной фон уже обрезан снаружи).
+                    CompositionLocalProvider(
+                        LocalGlassBottomInset provides innerPadding.calculateBottomPadding(),
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().glassBackdropSource(backdropState)) {
+                            movableContent(innerPadding)
+                        }
+                    }
+                }
+            }
         }
 
         AnixWindowSize.Medium -> {
@@ -103,3 +138,23 @@ fun AdaptiveScaffold(
         }
     }
 }
+
+/**
+ * Высота нижнего плавающего Liquid Glass-бара (2026-09-11, feature/liquid-glass-tab-bar), которую
+ * [AdaptiveScaffold] отдельно от [PaddingValues] прокидывает вниз по дереву на
+ * [AnixWindowSize.Compact] — `0.dp` везде, где бара нет (Medium/Expanded, showNavigationChrome ==
+ * false), и на Compact ДО того, как `Scaffold` в первый раз измерит `bottomBar`.
+ *
+ * **Зачем отдельно от [PaddingValues], которые и так приходят в `content`.** До этой фичи
+ * `App.kt` применял `Modifier.padding(innerPadding)` целиком (включая нижнюю часть) поверх
+ * `AnixNavGraph` — экран физически обрывался НАД баром, блюрить под ним было нечего (там просто
+ * голая заливка фона `AppTheme`, а не реальный контент). Теперь `App.kt` применяет `innerPadding`
+ * БЕЗ нижней составляющей (контент идёт edge-to-edge ПОД бар, см. её KDoc), а высоту бара
+ * добавляют сами экраны через `contentPadding` своих `LazyColumn`/`LazyVerticalGrid` — иначе
+ * последний элемент списка визуально прятался бы под непрозрачной частью бара. Публичная
+ * сигнатура [AdaptiveScaffold] (`content: @Composable (PaddingValues) -> Unit`) при этом не
+ * меняется — тот, кто ЕЩЁ не переведён на этот `CompositionLocal`, продолжает получать полный
+ * [PaddingValues], как раньше (просто увидит непрозрачный, не блюрящий бар поверх своего контента,
+ * что не ломает раскладку).
+ */
+val LocalGlassBottomInset: ProvidableCompositionLocal<Dp> = staticCompositionLocalOf { 0.dp }

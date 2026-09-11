@@ -60,6 +60,7 @@ import com.aniko.model.PrivacyVisibility
 import com.aniko.model.ProfileDetails
 import com.aniko.model.ProfilePrivacy
 import com.aniko.ui.adaptive.LocalAnixWindowSize
+import com.aniko.ui.adaptive.LocalGlassBottomInset
 import com.aniko.ui.component.AnixAvatar
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixIcon
@@ -400,7 +401,11 @@ private fun ProfileContent(
                     .fillMaxSize()
                     .widthIn(max = dimens.contentMaxWidth)
                     .verticalScroll(rememberScrollState())
-                    .padding(vertical = dimens.spaceM),
+                    // Liquid Glass (2026-09-11): нижний паддинг учитывает высоту плавающего
+                    // таб-бара — см. KDoc `LocalGlassBottomInset`/аналогичное место в
+                    // `HomeScreen.kt`. Профиль — таб-рут (см. KDoc [ProfileScreen] про P13.T2),
+                    // поэтому у него тот же bottom bar под ним, что и у остальных корневых вкладок.
+                    .padding(top = dimens.spaceM, bottom = dimens.spaceM + LocalGlassBottomInset.current),
             verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
         ) {
             ProfileHeader(profile = profile, onOpenLists = onOpenLists, modifier = sectionPadding)

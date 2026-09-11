@@ -73,6 +73,13 @@ data class AnixDimens(
     val filterSidebarWidth: Dp = 280.dp,
     /** Высота плитки быстрого действия на главном экране (Фаза 7, P7.T1). */
     val quickActionTileHeight: Dp = 88.dp,
+    /** Радиус backdrop-blur материала Liquid Glass (2026-09-11, feature/liquid-glass-tab-bar) —
+     *  см. KDoc [com.aniko.ui.glass.LiquidGlass]/[com.aniko.ui.glass.LiquidGlassStyle.blurRadius]. */
+    val glassBlurRadius: Dp = 24.dp,
+    /** Высота светового блика по верхней кромке стекла, см. [com.aniko.ui.glass.LiquidGlassStyle.specularHeight]. */
+    val glassSpecularHeight: Dp = 0.5.dp,
+    /** Толщина волосяной обводки (rim) стекла, см. [com.aniko.ui.glass.LiquidGlassStyle.rimWidth]. */
+    val glassRimWidth: Dp = 0.5.dp,
 )
 
 val LocalAnixDimens = staticCompositionLocalOf { AnixDimens() }

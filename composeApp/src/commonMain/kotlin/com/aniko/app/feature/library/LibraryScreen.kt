@@ -45,6 +45,7 @@ import com.aniko.model.ProfileDetails
 import com.aniko.model.Release
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
+import com.aniko.ui.adaptive.LocalGlassBottomInset
 import com.aniko.ui.component.AnixEmptyBox
 import com.aniko.ui.component.AnixErrorBox
 import com.aniko.ui.component.AnixIcon
@@ -351,7 +352,17 @@ private fun LibraryRows(
     val colors = AnixThemeTokens.colors
 
     LazyColumn(
-        contentPadding = PaddingValues(vertical = dimens.spaceM, horizontal = dimens.spaceS),
+        // Liquid Glass (2026-09-11): нижний паддинг учитывает высоту плавающего таб-бара — эта
+        // функция рендерится только на Compact (см. её KDoc/call site выше), где сама и только
+        // сама живёт нижняя навигация; `LibraryGrid` (Medium/Expanded, nav rail/sidebar) инсет не
+        // читает. См. KDoc `LocalGlassBottomInset`/аналогичное место в `HomeScreen.kt`.
+        contentPadding =
+            PaddingValues(
+                start = dimens.spaceS,
+                end = dimens.spaceS,
+                top = dimens.spaceM,
+                bottom = dimens.spaceM + LocalGlassBottomInset.current,
+            ),
         verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
         modifier = Modifier.fillMaxSize(),
     ) {

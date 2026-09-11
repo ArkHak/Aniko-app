@@ -4,7 +4,10 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -18,6 +21,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -324,6 +329,25 @@ private fun AnixAppScaffold(
                 navController.navigateToTabRoot(AnixSection.valueOf(item.id).destination)
             },
         ) { innerPadding ->
+            // Liquid Glass (2026-09-11, feature/liquid-glass-tab-bar): нижняя часть innerPadding
+            // раньше физически обрезала контент НАД таб-баром — под полупрозрачным/блюрящим баром
+            // оставалась голая заливка фона `AppTheme`, блюрить было нечего. Теперь вниз идёт
+            // ТОЛЬКО top/start/end часть — контент продолжается edge-to-edge ПОД бар (это и есть
+            // источник фона для [com.aniko.ui.glass.LiquidGlass], подписанный в `AdaptiveScaffold`
+            // через `Modifier.glassBackdropSource`), а высоту бара учитывают сами корневые экраны
+            // через `LocalGlassBottomInset` в `contentPadding` своих `LazyColumn`/
+            // `LazyVerticalGrid` (Home/Catalog/Library/Schedule/Profile — см. их файлы). Экраны,
+            // ещё не переведённые на `LocalGlassBottomInset` (не корневые вкладки таб-бара —
+            // Feed/Collections/детали и т.п.), не ломаются: `AnixWindowSize.Medium/Expanded`,
+            // `showNavigationChrome == false` и не-таб-роуты внутри Compact просто не получают
+            // ничего, кроме нуля из дефолта `LocalGlassBottomInset` — прежнее поведение.
+            val contentPadding =
+                PaddingValues(
+                    start = innerPadding.calculateStartPadding(LocalLayoutDirection.current),
+                    top = innerPadding.calculateTopPadding(),
+                    end = innerPadding.calculateEndPadding(LocalLayoutDirection.current),
+                    bottom = 0.dp,
+                )
             AnixNavGraph(
                 navController = navController,
                 paneStack = paneStack,
@@ -339,8 +363,11 @@ private fun AnixAppScaffold(
                 // проверки: "шапка ниже верхней части экрана, как будто лишний отступ"). Тот же
                 // приём уже применён точечно у офлайн-баннера чуть выше по файлу (см. её комментарий
                 // про `onConsumedWindowInsetsChanged` в `Scaffold`) — здесь тот же механизм, но для
-                // всего `AnixNavGraph` целиком.
-                modifier = Modifier.fillMaxSize().padding(innerPadding).consumeWindowInsets(innerPadding),
+                // всего `AnixNavGraph` целиком. `contentPadding` (не полный `innerPadding`) — см.
+                // комментарий выше про Liquid Glass; `consumeWindowInsets` по-прежнему получает
+                // ПОЛНЫЙ `innerPadding`, а не урезанный `contentPadding` — низ всё ещё физически
+                // относится к системному/бар-инсету и не должен читаться экранами графа второй раз.
+                modifier = Modifier.fillMaxSize().padding(contentPadding).consumeWindowInsets(innerPadding),
             )
         }
     }
