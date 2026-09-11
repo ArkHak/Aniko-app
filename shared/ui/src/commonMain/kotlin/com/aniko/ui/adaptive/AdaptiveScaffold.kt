@@ -65,8 +65,8 @@ fun AdaptiveScaffold(
         AnixWindowSize.Compact -> {
             Scaffold(
                 modifier = modifier,
-                // Track A (Foundation): фон-градиент макета рисуется один раз на корне
-                // (`AppTheme`, `Modifier.anixAppBackground()`) — непрозрачный дефолт Scaffold
+                // Track A (Foundation): фон приложения рисуется один раз на корне (`AppTheme`,
+                // iOS `systemGroupedBackground`) — непрозрачный дефолт Scaffold
                 // (`MaterialTheme.colorScheme.background`) перекрывал бы его плашкой сплошного
                 // цвета поверх всей области контента, поэтому здесь он явно прозрачный.
                 containerColor = Color.Transparent,

@@ -571,6 +571,9 @@ private fun PlayerBottomPanel(
  * Тап по скриму закрывает пикер (тот же жест, что открывает/прячет контролы под ним в fullscreen-
  * режиме, только пикер физически выше в Z-порядке общего `Box` в [PlayerScreen]).
  */
+@Suppress("LongMethod") // iOS-like редизайн (2026-09-11) добавил grab handle (6 строк) поверх
+// уже существующего тела — разбиение ради счётчика строк добавило бы косвенность, тот же
+// аргумент, что уже применяется в проекте для линейных, но длинных composable.
 @Composable
 internal fun AudioPickerOverlay(
     voiceTypes: List<VoiceType>,
@@ -622,6 +625,18 @@ internal fun AudioPickerOverlay(
                 modifier = Modifier.padding(dimens.spaceM),
                 verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
             ) {
+                // iOS-like редизайн (2026-09-11, полный HIG-паттерн): grab handle — тот же
+                // приём, что [OptionSheetOverlay] в `QualityPicker.kt` (см. её KDoc).
+                Box(
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .size(width = AUDIO_PICKER_GRAB_HANDLE_WIDTH, height = AUDIO_PICKER_GRAB_HANDLE_HEIGHT)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = AUDIO_PICKER_GRAB_HANDLE_ALPHA),
+                                RoundedCornerShape(dimens.cornerPill),
+                            ),
+                )
                 AudioPickerHeader(title = strings.playerAudioLabel, onDismiss = onDismiss)
                 if (isSwitching) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -691,6 +706,9 @@ private fun AudioPickerHeader(
 private const val AUDIO_PICKER_MAX_HEIGHT_FRACTION = 0.6f
 private val AUDIO_PICKER_TITLE_FONT_SIZE = 17.sp
 private val AUDIO_PICKER_CLOSE_BUTTON_SIZE = 34.dp
+private val AUDIO_PICKER_GRAB_HANDLE_WIDTH = 36.dp
+private val AUDIO_PICKER_GRAB_HANDLE_HEIGHT = 5.dp
+private const val AUDIO_PICKER_GRAB_HANDLE_ALPHA = 0.4f
 
 /**
  * P8.T4 — баннер «следующая серия через Nс» с отменой.

@@ -50,7 +50,7 @@ fun LoginScreen(
     val strings = LocalStrings.current
 
     // color = Color.Transparent: без этого непрозрачный surface (bg-elevated) перекрывает
-    // фоновый радиальный градиент приложения (AppTheme.anixAppBackground()), Login — единственный
+    // фоновую заливку приложения (`AppTheme`, iOS `systemGroupedBackground`), Login — единственный
     // экран, который рисуется до AdaptiveScaffold (там containerColor уже Color.Transparent).
     Surface(
         modifier = modifier.fillMaxSize().testTag(AnixTestTags.LOGIN_SCREEN_ROOT),

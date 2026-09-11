@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -17,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.theme.AnixThemeTokens
 
@@ -111,6 +113,21 @@ internal fun OptionSheetOverlay(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(dimens.spaceM)) {
+                    // iOS-like редизайн (2026-09-11, полный HIG-паттерн): grab handle — короткая
+                    // горизонтальная полоска по центру над заголовком, подлинный iOS-маркер
+                    // перетаскиваемой шторки (сам жест перетаскивания не реализован — вне
+                    // объёма этой задачи, см. журнал плана).
+                    Box(
+                        modifier =
+                            Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .padding(bottom = dimens.spaceS)
+                                .size(width = SHEET_GRAB_HANDLE_WIDTH, height = SHEET_GRAB_HANDLE_HEIGHT)
+                                .background(
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = SHEET_GRAB_HANDLE_ALPHA),
+                                    RoundedCornerShape(dimens.cornerPill),
+                                ),
+                    )
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
@@ -128,3 +145,7 @@ internal fun OptionSheetOverlay(
         }
     }
 }
+
+private val SHEET_GRAB_HANDLE_WIDTH = 36.dp
+private val SHEET_GRAB_HANDLE_HEIGHT = 5.dp
+private const val SHEET_GRAB_HANDLE_ALPHA = 0.4f

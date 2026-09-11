@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.data.paging.PagingState
@@ -113,22 +112,21 @@ fun LibraryScreen(
     var menuReleaseId by remember { mutableStateOf<Int?>(null) }
 
     // Track A (сверка Compact-раскладки, 2026-09-04): дефолтный цвет M3 Surface непрозрачен и
-    // перекрывает корневой радиальный градиент приложения (anixAppBackground()) — Transparent
-    // делает фон/градиент видимым сквозь экран, как в макете.
+    // перекрывает корневую заливку приложения (`AppTheme`, iOS `systemGroupedBackground`) —
+    // Transparent делает фон видимым сквозь экран.
     Surface(
         modifier = modifier.fillMaxSize().testTag(AnixTestTags.LIBRARY_SCREEN_ROOT),
         color = Color.Transparent,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Сверка My Lists (phone-макет, 2026-09-08): заголовок страницы над вкладками —
-            // только Compact (тот же паттерн, что заголовок Catalog).
+            // только Compact (тот же паттерн, что заголовок Catalog). iOS-like редизайн
+            // (2026-09-11, полный HIG-паттерн): подлинный iOS Large Title (`displayLarge`,
+            // 34/41 Bold) — та же логика, что и `HomeGreetingHeader` (см. её KDoc).
             if (windowSize == AnixWindowSize.Compact) {
                 Text(
                     text = strings.navLibrary,
-                    style =
-                        MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                        ),
+                    style = MaterialTheme.typography.displayLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(horizontal = dimens.spaceM).padding(top = dimens.spaceM),
                 )

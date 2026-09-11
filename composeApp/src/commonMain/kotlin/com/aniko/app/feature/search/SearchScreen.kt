@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.mvi.CollectEffects
@@ -97,8 +96,8 @@ fun SearchScreen(
     }
 
     // Track A (сверка Compact-раскладки, 2026-09-04): дефолтный цвет M3 Surface непрозрачен и
-    // перекрывает корневой радиальный градиент приложения (anixAppBackground()) — Transparent
-    // делает фон/градиент видимым сквозь экран, как в макете.
+    // перекрывает корневую заливку приложения (`AppTheme`, iOS `systemGroupedBackground`) —
+    // Transparent делает фон видимым сквозь экран.
     Surface(
         modifier = modifier.fillMaxSize().testTag(AnixTestTags.SEARCH_SCREEN_ROOT),
         color = Color.Transparent,
@@ -209,14 +208,13 @@ private fun CompactCatalogLayout(
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Сверка Catalog (phone-макет, 2026-09-08): заголовок экрана над поиском — только
-        // Compact (на Medium/Expanded чипы/сайдбар идут без шапки).
+        // Compact (на Medium/Expanded чипы/сайдбар идут без шапки). iOS-like редизайн
+        // (2026-09-11, полный HIG-паттерн): подлинный iOS Large Title (`displayLarge`, 34/41
+        // Bold) — та же логика, что и `HomeGreetingHeader` (см. её KDoc).
         if (LocalAnixWindowSize.current == AnixWindowSize.Compact) {
             Text(
                 text = strings.navCatalog,
-                style =
-                    MaterialTheme.typography.headlineSmall.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                    ),
+                style = MaterialTheme.typography.displayLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(horizontal = dimens.spaceM).padding(top = dimens.spaceM),
             )
@@ -269,8 +267,15 @@ private fun CatalogBody(
     filtersContent: (@Composable () -> Unit)? = null,
 ) {
     Column(modifier = modifier.padding(horizontal = dimens.spaceM)) {
-        // Вкладки «Все/Новинки» ([CatalogTab]) — поднято выше поля поиска (сверка с дизайном,
+        // Вкладки «Все/Новинки» ([CatalogTab]) — подняты выше поля поиска (сверка с дизайном,
         // 2026-09-11): тот же слот, что "All/New Arrivals" в референсе, см. KDoc [SearchScreen].
+        // Попытка заменить на iOS `UISegmentedControl`-компонент ([AnixSegmentedControl])
+        // отменена: в связке с этим конкретным экраном `SearchFilterSmokeTest`
+        // (`composeApp/src/desktopTest/...`) стабильно падал на непрозрачную ошибку видимости
+        // поля поиска — root cause не установлен в бюджет этой задачи (не всплывающий стектрейс,
+        // а несовпадение visible-bounds в `ComposeUiTest`, воспроизводится только в связке с
+        // отсутствием/заменой именно этого ряда, не с самим `AnixSegmentedControl` в изоляции).
+        // Оставлен `ChipRow` — рабочий, проверенный вариант; `AnixSegmentedControl` — в бэклоге.
         ChipRow(
             items = CatalogTab.entries,
             isSelected = { it == state.tab },
@@ -297,14 +302,15 @@ private fun CatalogBody(
             // этой среде. Требует отдельного расследования, не блокирует остальную Фазу 11.
             placeholder = { Text(strings.searchPlaceholder) },
             singleLine = true,
-            // Сверка с дизайном (2026-09-11): заливка вместо рамки — светлая подложка
-            // `surfaceVariant`, бордер прозрачен в обоих состояниях (тот же `OutlinedTextField`,
-            // не новый компонент — второй конвенции поля ввода не заводим).
+            // iOS-like редизайн (2026-09-11): заливка вместо рамки — приглушённый серый трек
+            // (`outlineVariant`, iOS `systemGray6`-аналог, отличим от белых карточек вокруг),
+            // бордер прозрачен в обоих состояниях (тот же `OutlinedTextField`, не новый
+            // компонент — второй конвенции поля ввода не заводим).
             shape = RoundedCornerShape(dimens.cornerM),
             colors =
                 OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    focusedContainerColor = MaterialTheme.colorScheme.outlineVariant,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.outlineVariant,
                     focusedBorderColor = Color.Transparent,
                     unfocusedBorderColor = Color.Transparent,
                 ),

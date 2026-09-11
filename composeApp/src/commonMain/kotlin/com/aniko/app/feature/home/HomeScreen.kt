@@ -25,10 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.mvi.CollectEffects
 import com.aniko.app.ui.toContentState
@@ -343,30 +341,24 @@ private fun HomeGreetingHeader() {
         }
 
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
+        // iOS-like редизайн (2026-09-11, полный HIG-паттерн): "Aniko" теперь подлинный iOS
+        // Large Title (`displayLarge`, 34/41 Bold, см. KDoc `anixTypography`) — раньше стиль был
+        // захардкожен под 19sp/ExtraBold макета Claude Design (`HOME_HEADER_BRAND_FONT_SIZE`),
+        // заметно мельче настоящего iOS `UINavigationBar.prefersLargeTitles`. Дефолтный вес
+        // `displayLarge` (Bold) уже соответствует HIG — свой `fontWeight`/`fontSize` больше не
+        // переопределяем.
         Text(
             text = "Aniko", // бренд, не переводится (как notificationGenericTitle)
-            style =
-                MaterialTheme.typography.titleLarge.copy(
-                    fontSize = HOME_HEADER_BRAND_FONT_SIZE,
-                    fontWeight = FontWeight.ExtraBold,
-                ),
+            style = MaterialTheme.typography.displayLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = greeting,
-            style =
-                MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = HOME_HEADER_GREETING_FONT_SIZE,
-                    fontWeight = FontWeight.Normal,
-                ),
+            style = MaterialTheme.typography.bodyMedium,
             color = AnixThemeTokens.colors.textSecondary60,
         )
     }
 }
-
-// Размеры заголовка Home из CSS макета (light и dark одинаковы): бренд 19px/800, greeting 13px/400.
-private val HOME_HEADER_BRAND_FONT_SIZE = 19.sp
-private val HOME_HEADER_GREETING_FONT_SIZE = 13.sp
 
 /** См. KDoc `AnixError` — только `Network`/`Unauthorized` получают специфичный текст, остальное
  *  падает на общий `homeSectionLoadError` (как и раньше вело себя `HomeScreen`, до P7.T1). */

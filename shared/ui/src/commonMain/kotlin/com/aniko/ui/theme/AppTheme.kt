@@ -21,8 +21,10 @@ import androidx.compose.ui.Modifier
  * 2026-09-08 по скриншоту пользователя); системная тема macOS не учитывается. `App` передаёт
  * выбор явно из `ThemeStore` ("light"/"dark"/null → светлая); [TokenGalleryScreen] использует
  * собственный локальный переключатель. Тёмная тема (2026-09-10) объединена с прежним AMOLED-
- * вариантом — единственная тёмная тема темнее и без блобов, но НЕ чистый чёрный (см. KDoc
- * `AnixPalette` — ревью замечание #1: должна использовать оттенок иконки, не `#000000`).
+ * вариантом; iOS-like редизайн (2026-09-11) заменил её значения на подлинный iOS
+ * `systemGroupedBackground` (`#000000`/`#1C1C1E`, см. KDoc `AnixPalette`) — тёмная тема теперь
+ * ДЕЙСТВИТЕЛЬНО чистый чёрный на странице (осознанная отмена более раннего анти-АМОЛЕД решения,
+ * см. подробности там же).
  */
 @Composable
 fun AppTheme(
@@ -40,31 +42,24 @@ fun AppTheme(
             colorScheme = colorScheme,
             typography = anixTypography(),
         ) {
-            // Корневой фон приложения (Track A, Foundation) — bg-page текущей темы + два
-            // фиксированных радиальных блоба макета, см. KDoc [anixAppBackground]. Единственное
-            // место применения: всё дерево ниже (`content`) — все экраны, все платформы, а не
-            // только Home, потому что `App()` (composeApp/.../App.kt) вызывает [AppTheme] один
-            // раз на самом корне. Дочерние `Scaffold` внутри `AdaptiveScaffold` красят
-            // `containerColor = Color.Transparent`, чтобы не перекрывать этот фон своей
-            // непрозрачной плашкой.
+            // Корневой фон приложения (Track A, Foundation; iOS-like редизайн 2026-09-11 —
+            // см. KDoc [com.aniko.ui.theme.AnixPalette]) — сплошная заливка `background` текущей
+            // темы (iOS `systemGroupedBackground`), БЕЗ декоративных радиальных градиентов
+            // ("блобов" макета Claude Design, см. `BackgroundGradient.kt` в истории git) —
+            // подлинные iOS grouped-экраны (Settings/Mail/Notes) плоские, без цветных пятен под
+            // контентом. Единственное место применения: всё дерево ниже (`content`) — все
+            // экраны, все платформы, а не только Home, потому что `App()`
+            // (composeApp/.../App.kt) вызывает [AppTheme] один раз на самом корне. Дочерние
+            // `Scaffold` внутри `AdaptiveScaffold` красят `containerColor = Color.Transparent`,
+            // чтобы не перекрывать этот фон своей непрозрачной плашкой.
             // 2026-09-08 (баг тёмной темы «не видно текст тайтлов»): где-то в контенте
             // LocalContentColor деградировал в тёмный (вероятно, contentColorFor(Transparent) у
             // Scaffold-обёрток) — текст по умолчанию (заголовки карточек/строк без явного color)
             // рисовался тёмным на тёмном. Явно пиним контентный цвет на onSurface текущей схемы
             // для всего дерева приложения (проверено пиксельно: до — 0 белых пикселей в зоне
             // тайтлов, после — белые глифы на месте).
-            // Единая тёмная тема (2026-09-10, ревью замечание #1): блобы убираем (в отличие от
-            // светлой — контентный видео-центричный экран выигрывает от ровного тёмного фона),
-            // но фон — не хардкод, а `colorScheme.background` (см. KDoc `AnixPalette`: оттенок
-            // иконки, не чистый `#000000`).
             CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-                val backgroundModifier =
-                    if (darkTheme) {
-                        Modifier.background(colorScheme.background)
-                    } else {
-                        Modifier.anixAppBackground()
-                    }
-                Box(modifier = Modifier.fillMaxSize().then(backgroundModifier)) {
+                Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
                     content()
                 }
             }

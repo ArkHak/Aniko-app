@@ -1,9 +1,8 @@
 package com.aniko.ui.adaptive
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -12,16 +11,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -39,12 +35,14 @@ import com.aniko.ui.testing.AnixTestTags
 /**
  * Bottom bar на [AnixWindowSize.Compact].
  *
- * Сверен с мобильным артбордом макета Claude Design (2026-09-08): активная вкладка — тонкий
- * верхний маркер-полоска (28×3dp, `primary`) + filled-иконка; плашки-подложки M3
- * `NavigationBarItem` и цветового выделения (выбранный = тот же цвет, что невыбранный) в макете
- * нет. Рисуем собственные элементы вместо M3-компонента (M3 сам навешивает indicator-пилюлю и
- * перекрашивает selected-иконку).
- *
+ * iOS-like редизайн (2026-09-11, полный HIG-паттерн, пользовательский запрос): заменён
+ * Claude Design-паттерн (верхняя полоска-маркер 28×3dp + иконка/подпись одного цвета для обеих
+ * веток selected/unselected) на подлинный iOS Tab Bar:
+ * - НЕТ маркера/индикатора выше иконки — активность вкладки читается ТОЛЬКО через tint (iOS
+ *   красит саму иконку+подпись акцентным цветом активной вкладки, серым — неактивные; ни одна
+ *   версия iOS Tab Bar не рисует отдельную полоску-индикатор).
+ * - Контейнер отделён от контента тонкой волосяной линией сверху (`hairline`, `outlineVariant`,
+ *   1dp), а не `tonalElevation`-тенью M3 — iOS Tab Bar использует именно hairline-разделитель.
  * Контейнер — hand-rolled `Surface` + `Row` (2026-09-10, ревью замечание #2), НЕ M3
  * `NavigationBar`: M3-компонент навязывает `defaultMinSize(minHeight = 80.dp)` контентному `Row`
  * (M3 "Tall" navigation bar token) и центрирует наш 64dp-контент внутри — визуально это давало
@@ -61,7 +59,12 @@ internal fun AnixNavigationBar(
     Surface(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        modifier = Modifier.testTag(AnixTestTags.BOTTOM_NAV_BAR),
+        modifier =
+            Modifier
+                .border(
+                    width = BOTTOM_NAV_HAIRLINE_WIDTH,
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                ).testTag(AnixTestTags.BOTTOM_NAV_BAR),
     ) {
         Row(
             modifier =
@@ -90,7 +93,10 @@ private fun AnixBottomNavItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = MaterialTheme.colorScheme
+    // iOS Tab Bar tint: активная вкладка — акцентный цвет (`primary`), неактивная — приглушённый
+    // серый (`onSurfaceVariant`, iOS `secondaryLabel`-аналог). Единственный сигнал активности —
+    // цвет (+ filled-иконка), без отдельного индикатора (см. KDoc [AnixNavigationBar]).
+    val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Column(
         modifier =
             modifier
@@ -106,56 +112,32 @@ private fun AnixBottomNavItem(
                     this.selected = selected
                 },
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        // Тонкий верхний маркер активной вкладки (макет: 28×3dp полоса цвета primary).
-        Box(
-            modifier =
-                Modifier
-                    .width(BOTTOM_NAV_MARKER_WIDTH)
-                    .height(BOTTOM_NAV_MARKER_HEIGHT)
-                    .background(
-                        if (selected) {
-                            colors.primary
-                        } else {
-                            Color.Transparent
-                        },
-                        RoundedCornerShape(BOTTOM_NAV_MARKER_RADIUS),
-                    ),
+        AnixIcon(
+            name = item.icon,
+            contentDescription = null,
+            filled = selected,
+            tint = tint,
+            modifier = Modifier.size(BOTTOM_NAV_ICON_SIZE),
         )
-        // Иконка над подписью, вертикально по центру оставшейся высоты; цвет не меняется при
-        // выборе (в макете и активная, и неактивные иконки/подписи одного цвета) — отличие
-        // только в маркере и filled-иконке.
-        Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            AnixIcon(
-                name = item.icon,
-                contentDescription = null,
-                filled = selected,
-                modifier = Modifier.size(BOTTOM_NAV_ICON_SIZE),
-            )
-            Text(
-                text = item.label,
-                style =
-                    MaterialTheme.typography.labelSmall.copy(
-                        fontSize = BOTTOM_NAV_LABEL_SIZE,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                    ),
-                color = colors.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        Text(
+            text = item.label,
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = BOTTOM_NAV_LABEL_SIZE,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                ),
+            color = tint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
-// ---- Константы bottom bar, сверенные с макетом Claude Design (phone-артборд, 2026-09-08).
-private val BOTTOM_NAV_MARKER_WIDTH = 28.dp
-private val BOTTOM_NAV_MARKER_HEIGHT = 3.dp
-private val BOTTOM_NAV_MARKER_RADIUS = 2.dp
-private val BOTTOM_NAV_ICON_SIZE = 23.dp
-private val BOTTOM_NAV_LABEL_SIZE = 10.5.sp
+// ---- Константы bottom bar (iOS-like редизайн 2026-09-11 — см. KDoc [AnixNavigationBar]).
+private val BOTTOM_NAV_ICON_SIZE = 25.dp
+private val BOTTOM_NAV_LABEL_SIZE = 10.sp
 private val BOTTOM_NAV_BAR_HEIGHT = 64.dp
+private val BOTTOM_NAV_HAIRLINE_WIDTH = 0.5.dp

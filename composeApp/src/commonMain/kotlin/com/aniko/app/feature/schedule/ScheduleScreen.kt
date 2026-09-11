@@ -97,8 +97,8 @@ fun ScheduleScreen(
     val windowSize = LocalAnixWindowSize.current
 
     // Track A (сверка Compact-раскладки, 2026-09-04): дефолтный цвет M3 Surface непрозрачен и
-    // перекрывает корневой радиальный градиент приложения (anixAppBackground()) — Transparent
-    // делает фон/градиент видимым сквозь экран, как в макете.
+    // перекрывает корневую заливку приложения (`AppTheme`, iOS `systemGroupedBackground`) —
+    // Transparent делает фон видимым сквозь экран.
     Surface(
         modifier = modifier.fillMaxSize().testTag(AnixTestTags.SCHEDULE_SCREEN_ROOT),
         color = Color.Transparent,

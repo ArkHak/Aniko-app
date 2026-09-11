@@ -86,22 +86,22 @@ private fun textStyle(
 
 /**
  * Типографика приложения: `display*`/`headline*`/`title*` — Manrope (заголовки),
- * `body*`/`label*` — Inter (текст).
+ * `body*`/`label*` — Inter (текст). Сохраняем двухшрифтовую пару как есть (брендовая
+ * идентичность) — iOS-like редизайн (2026-09-11, полный HIG-паттерн) меняет ТОЛЬКО размерную
+ * шкалу и стартовый набор весов, подгоняя её к официальной iOS-шкале (Apple HIG «Typography»,
+ * Dynamic Type «Large» размер): Large Title 34/41, Title 1 28/34, Title 2 22/28, Title 3 20/25,
+ * Headline/Body 17/22, Callout 16/21, Subheadline 15/20, Footnote 13/18, Caption 1 12/16,
+ * Caption 2 11/13 — все веса Bold/Semibold/Regular по HIG. M3 [Typography] содержит 15 слотов
+ * против 11 стилей iOS — где своего размера у iOS нет, переиспользован ближайший сосед по
+ * иерархии (см. комментарии у каждого поля), а не выдуманное промежуточное значение.
  *
- * Фаза 2 фиксировала здесь стандартную Material3 size/lineHeight-шкалу, потому что точных
- * px/sp-значений в `docs/REELWAVE_PLAN.md` не было (план ссылался на недоступный на тот момент
- * архитектурный документ макета, `Reelwave Architecture.dc.html`, раздел «2. Design tokens —
- * `AppTheme`», `object Type`). По итогам сверки с макетом (Фаза design-check, 2026-08-23)
- * документ стал читаем через `claude_design` MCP — семь стилей ниже, для которых в нём есть явные
- * значения, приведены к ним точно (`displayLarge`/`titleLarge`/`titleMedium`/`bodyLarge`/
- * `bodyMedium`/`label`/`caption`). Остальные M3-слоты (`displayMedium/Small`, `headline*`,
- * `bodySmall`, `labelMedium`) в документе не описаны вовсе — оставлены как есть (без изменений),
- * а не досочинены по аналогии, по той же логике, что и [com.aniko.ui.theme.AnixColors.live]/
- * [com.aniko.ui.theme.AnixColors.warning] (не изобретать значения без дизайн-референса).
+ * Прежняя шкала (Фаза 2, привязана к `Reelwave Architecture.dc.html`, `object Type`) заменена
+ * целиком — то был ДРУГОЙ дизайн-референс (macOS-подобный дашборд), не HIG.
  *
- * Соответствие названиям из плана (`displayLarge/titleLarge/titleMedium/bodyLarge/bodyMedium/
- * label/caption`) для полей, которых нет буквально в M3 [Typography] (`label`, `caption` — это
- * терминология Material2): `label` → [Typography.labelLarge], `caption` → [Typography.labelSmall].
+ * Трекинг (letterSpacing) не заведён: точных iOS-значений трекинга по размеру шкалы (Apple
+ * публикует их для San Francisco, не для Manrope/Inter) без визуальной калибровки на реальном
+ * шрифте — не срисовывать вслепую, тот же принцип «не изобретать без референса», что и у
+ * [com.aniko.ui.theme.AnixColors.live]/[warning].
  */
 @Composable
 internal fun anixTypography(): Typography {
@@ -109,29 +109,40 @@ internal fun anixTypography(): Typography {
     val inter = interFontFamily()
 
     return Typography(
-        // Manrope — заголовки, крупные акценты.
-        // displayLarge: 30/36 ExtraBold — Reelwave Architecture.dc.html, §2 object Type.
-        displayLarge = textStyle(manrope, FontWeight.ExtraBold, size = 30.0, lineHeight = 36.0),
-        displayMedium = textStyle(manrope, FontWeight.ExtraBold, size = 45.0, lineHeight = 52.0),
-        displaySmall = textStyle(manrope, FontWeight.Bold, size = 36.0, lineHeight = 44.0),
-        headlineLarge = textStyle(manrope, FontWeight.Bold, size = 32.0, lineHeight = 40.0),
-        headlineMedium = textStyle(manrope, FontWeight.Bold, size = 28.0, lineHeight = 36.0),
-        headlineSmall = textStyle(manrope, FontWeight.Bold, size = 24.0, lineHeight = 32.0),
-        // titleLarge: 22/28 Bold — совпадало со стандартной M3-шкалой и до этой правки.
-        titleLarge = textStyle(manrope, FontWeight.Bold, size = 22.0, lineHeight = 28.0),
-        // titleMedium: 16/22 Bold — Reelwave Architecture.dc.html, §2 object Type.
-        titleMedium = textStyle(manrope, FontWeight.Bold, size = 16.0, lineHeight = 22.0),
-        titleSmall = textStyle(manrope, FontWeight.SemiBold, size = 14.0, lineHeight = 20.0, letterSpacing = 0.1),
-        // Inter — текст, лейблы.
-        // bodyLarge: 15/22 Normal — Reelwave Architecture.dc.html, §2 object Type.
-        bodyLarge = textStyle(inter, FontWeight.Normal, size = 15.0, lineHeight = 22.0),
-        // bodyMedium: 13/19 Normal — Reelwave Architecture.dc.html, §2 object Type.
-        bodyMedium = textStyle(inter, FontWeight.Normal, size = 13.0, lineHeight = 19.0),
-        bodySmall = textStyle(inter, FontWeight.Normal, size = 12.0, lineHeight = 16.0, letterSpacing = 0.4),
-        // "label" из плана: 12/16 SemiBold — Reelwave Architecture.dc.html, §2 object Type.
-        labelLarge = textStyle(inter, FontWeight.SemiBold, size = 12.0, lineHeight = 16.0),
-        labelMedium = textStyle(inter, FontWeight.Medium, size = 12.0, lineHeight = 16.0, letterSpacing = 0.5),
-        // "caption" из плана: 11/14 Medium — Reelwave Architecture.dc.html, §2 object Type.
-        labelSmall = textStyle(inter, FontWeight.Medium, size = 11.0, lineHeight = 14.0),
+        // Manrope — заголовки, крупные акценты (iOS Title-регистр).
+        // displayLarge: Large Title 34/41 Bold.
+        displayLarge = textStyle(manrope, FontWeight.Bold, size = 34.0, lineHeight = 41.0),
+        // displayMedium: Title 1 28/34 Bold.
+        displayMedium = textStyle(manrope, FontWeight.Bold, size = 28.0, lineHeight = 34.0),
+        // displaySmall: Title 2 22/28 Bold.
+        displaySmall = textStyle(manrope, FontWeight.Bold, size = 22.0, lineHeight = 28.0),
+        // headlineLarge: тот же Title 2 — у iOS нет отдельного "ещё одного" уровня между
+        // Title 2 и Title 3, повтор соседнего стиля честнее выдуманного промежуточного размера.
+        headlineLarge = textStyle(manrope, FontWeight.Bold, size = 22.0, lineHeight = 28.0),
+        // headlineMedium/headlineSmall: Title 3 20/25 Semibold (M3 даёт 3 headline-слота, iOS —
+        // один Title 3, поэтому оба слота получают одно и то же значение).
+        headlineMedium = textStyle(manrope, FontWeight.SemiBold, size = 20.0, lineHeight = 25.0),
+        headlineSmall = textStyle(manrope, FontWeight.SemiBold, size = 20.0, lineHeight = 25.0),
+        // titleLarge/titleMedium: Headline 17/22 Semibold (iOS Headline — самый частый стиль
+        // заголовков карточек/строк; titleMedium уже используется по всему приложению как
+        // подпись карточки — тот же слот, только новый размер).
+        titleLarge = textStyle(manrope, FontWeight.SemiBold, size = 17.0, lineHeight = 22.0),
+        titleMedium = textStyle(manrope, FontWeight.SemiBold, size = 17.0, lineHeight = 22.0),
+        // titleSmall: Subheadline 15/20 Semibold.
+        titleSmall = textStyle(manrope, FontWeight.SemiBold, size = 15.0, lineHeight = 20.0),
+        // Inter — текст, лейблы (iOS Body-регистр).
+        // bodyLarge: Body 17/22 Regular — основной текст (описания, длинные абзацы).
+        bodyLarge = textStyle(inter, FontWeight.Normal, size = 17.0, lineHeight = 22.0),
+        // bodyMedium: Callout 16/21 Regular.
+        bodyMedium = textStyle(inter, FontWeight.Normal, size = 16.0, lineHeight = 21.0),
+        // bodySmall: Subheadline 15/20 Regular.
+        bodySmall = textStyle(inter, FontWeight.Normal, size = 15.0, lineHeight = 20.0),
+        // labelLarge: Footnote 13/18 Semibold — кнопки/чипы часто требуют более плотный вес,
+        // чем обычный текст той же величины (тот же приём, что и в исходной шкале Фазы 2).
+        labelLarge = textStyle(inter, FontWeight.SemiBold, size = 13.0, lineHeight = 18.0),
+        // labelMedium: Caption 1 12/16 Regular.
+        labelMedium = textStyle(inter, FontWeight.Normal, size = 12.0, lineHeight = 16.0),
+        // labelSmall: Caption 2 11/13 Regular.
+        labelSmall = textStyle(inter, FontWeight.Normal, size = 11.0, lineHeight = 13.0),
     )
 }
