@@ -65,7 +65,7 @@ import org.koin.compose.viewmodel.koinViewModel
  * `HomeEffect.NavigateToRelease`), т.к. это асинхронная операция с сетевым вызовом, а не чистая
  * навигация — экран сам вызывает уже переданный [onReleaseClick].
  */
-@Suppress("LongParameterList") // Координирующий блок: экран + 4 навигационных колбэка + viewModel.
+@Suppress("LongParameterList") // Координирующий блок: экран + 5 навигационных колбэков + viewModel.
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
@@ -73,6 +73,7 @@ fun HomeScreen(
     onCatalogClick: () -> Unit = {},
     onScheduleClick: () -> Unit = {},
     onFilterClick: () -> Unit = {},
+    onFeedClick: () -> Unit = {},
     viewModel: HomeViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -99,6 +100,7 @@ fun HomeScreen(
         onCatalogClick = onCatalogClick,
         onScheduleClick = onScheduleClick,
         onFilterClick = onFilterClick,
+        onFeedClick = onFeedClick,
     )
 }
 
@@ -113,6 +115,7 @@ private fun HomeContent(
     onCatalogClick: () -> Unit,
     onScheduleClick: () -> Unit,
     onFilterClick: () -> Unit,
+    onFeedClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -150,6 +153,7 @@ private fun HomeContent(
                         onScheduleClick = onScheduleClick,
                         onFilterClick = onFilterClick,
                         onRandomClick = { viewModel.dispatch(HomeIntent.OpenRandomRelease) },
+                        onFeedClick = onFeedClick,
                     )
                 }
 
@@ -280,7 +284,7 @@ private val NEW_EPISODE_BORDER_WIDTH = 1.dp
  * quick actions (сверка 2026-09-08, «убрать» по решению пользователя) — секции идут сразу за
  * баннером. Плитки остаются на Compact/Medium (мобильный/таблетный макет их показывает).
  */
-@Suppress("LongParameterList") // Координирующий блок: состояние баннера + 4 колбэка плиток + 2 колбэка баннера.
+@Suppress("LongParameterList") // Координирующий блок: состояние баннера + 5 колбэков плиток + 2 колбэка баннера.
 @Composable
 private fun HomeHeroSection(
     bannerState: AnixContentState<InterestingBanner>,
@@ -290,6 +294,7 @@ private fun HomeHeroSection(
     onScheduleClick: () -> Unit,
     onFilterClick: () -> Unit,
     onRandomClick: () -> Unit,
+    onFeedClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -303,6 +308,7 @@ private fun HomeHeroSection(
                 onScheduleClick = onScheduleClick,
                 onFilterClick = onFilterClick,
                 onRandomClick = onRandomClick,
+                onFeedClick = onFeedClick,
             )
         }
     }

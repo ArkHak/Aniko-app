@@ -55,6 +55,9 @@ object AnixTestTags {
     /** Корень [com.aniko.app.feature.notifications.NotificationsScreen]. */
     const val NOTIFICATIONS_SCREEN_ROOT: String = "notifications_screen_root"
 
+    /** Корень [com.aniko.app.feature.feed.FeedScreen] (P16.T3, MVP). */
+    const val FEED_SCREEN_ROOT: String = "feed_screen_root"
+
     /** Корень [com.aniko.app.feature.player.PlayerScreen]. */
     const val PLAYER_SCREEN_ROOT: String = "player_screen_root"
 

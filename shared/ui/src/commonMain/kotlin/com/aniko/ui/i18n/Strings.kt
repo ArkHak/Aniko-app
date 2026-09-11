@@ -338,6 +338,7 @@ interface Strings {
     val homeQuickActionSchedule: String
     val homeQuickActionFilter: String
     val homeQuickActionRandom: String
+    val homeQuickActionFeed: String
     val homeTopWeek: String
     val homeSectionNewEpisodes: String
 
@@ -465,6 +466,12 @@ interface Strings {
     val notificationsTitle: String
     val notificationsEmpty: String
     val notificationsLoadError: String
+
+    // --- Экран ленты (P16.T3), AnixDestination.Feed — read-only MVP, см. отчёт задачи в
+    // docs/REELWAVE_PLAN.md: без постинга/голосования/полного rich-контента ---
+    val feedTitle: String
+    val feedEmpty: String
+    val feedLoadError: String
 
     // --- Экран настроек: секция уведомлений (P10.T6) ---
     val settingsNotificationsSection: String

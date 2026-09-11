@@ -55,6 +55,14 @@ sealed interface AnixDestination {
     data object Notifications : AnixDestination
 
     /**
+     * Лента постов каналов/блогов (P16.T3, MVP), открывается с плитки "Лента" в
+     * `HomeQuickActions`. Read-only список, без открытия отдельной статьи/постинга (см. KDoc
+     * `FeedScreen`) — поэтому маршрут без параметров, как [Notifications].
+     */
+    @Serializable
+    data object Feed : AnixDestination
+
+    /**
      * Экран-галерея дизайн-токенов (Фаза 2 плана, P2.T12): палитра/типографика/spacing/radius
      * с переключателем языка и темы для визуальной проверки. Debug-маршрут, открывается из
      * [Settings] — вне основной табовой навигации намеренно, не часть продуктового флоу.

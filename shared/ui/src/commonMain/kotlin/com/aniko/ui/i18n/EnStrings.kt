@@ -203,6 +203,7 @@ val EnStrings: Strings =
         override val homeQuickActionSchedule = "Schedule"
         override val homeQuickActionFilter = "Filters"
         override val homeQuickActionRandom = "Random Title"
+        override val homeQuickActionFeed = "Feed"
         override val homeTopWeek = "Top This Week"
         override val homeSectionNewEpisodes = "New Episodes"
         override val catalogTabAll = "All"
@@ -279,6 +280,9 @@ val EnStrings: Strings =
         override val notificationsTitle = "Notifications"
         override val notificationsEmpty = "No notifications yet"
         override val notificationsLoadError = "Could not load notifications"
+        override val feedTitle = "Feed"
+        override val feedEmpty = "No posts yet"
+        override val feedLoadError = "Could not load the feed"
         override val settingsNotificationsSection = "Notifications"
         override val settingsNotificationsPollingNote =
             "Aniko checks for updates periodically, so a notification may arrive with a delay"

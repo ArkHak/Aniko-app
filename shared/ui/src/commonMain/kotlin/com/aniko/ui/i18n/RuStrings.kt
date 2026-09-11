@@ -204,6 +204,7 @@ val RuStrings: Strings =
         override val homeQuickActionSchedule = "Расписание"
         override val homeQuickActionFilter = "Фильтры"
         override val homeQuickActionRandom = "Случайный тайтл"
+        override val homeQuickActionFeed = "Лента"
         override val homeTopWeek = "Топ недели"
         override val homeSectionNewEpisodes = "Новые серии"
         override val catalogTabAll = "Все"
@@ -280,6 +281,9 @@ val RuStrings: Strings =
         override val notificationsTitle = "Уведомления"
         override val notificationsEmpty = "Пока нет уведомлений"
         override val notificationsLoadError = "Не удалось загрузить уведомления"
+        override val feedTitle = "Лента"
+        override val feedEmpty = "Пока нет постов"
+        override val feedLoadError = "Не удалось загрузить ленту"
         override val settingsNotificationsSection = "Уведомления"
         override val settingsNotificationsPollingNote =
             "Aniko проверяет обновления периодически, поэтому уведомление может прийти с задержкой"

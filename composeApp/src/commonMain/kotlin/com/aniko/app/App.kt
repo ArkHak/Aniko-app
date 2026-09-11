@@ -32,6 +32,7 @@ import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
 import com.aniko.app.feature.auth.LoginScreen
 import com.aniko.app.feature.comments.ReleaseCommentsScreen
+import com.aniko.app.feature.feed.FeedScreen
 import com.aniko.app.feature.gallery.TokenGalleryScreen
 import com.aniko.app.feature.home.HomeScreen
 import com.aniko.app.feature.library.LibraryScreen
@@ -455,6 +456,7 @@ private fun NavGraphBuilder.listSectionRoutes(
                 // через нижнюю навигацию, вкладка "Мои списки", просто эта конкретная плитка Home
                 // больше туда не ведёт, см. KDoc `HomeQuickActions`).
                 onFilterClick = { navController.navigateToTabRoot(AnixDestination.Search) },
+                onFeedClick = { navController.navigate(AnixDestination.Feed) },
             )
         }
     }
@@ -578,6 +580,9 @@ private fun NavGraphBuilder.chromeRoutes(
             onBack = { navController.popBackStack() },
             onReleaseClick = { releaseId -> navController.navigate(AnixDestination.ReleaseDetails(releaseId)) },
         )
+    }
+    composable<AnixDestination.Feed> {
+        FeedScreen(onBack = { navController.popBackStack() })
     }
     composable<AnixDestination.TokenGallery> {
         TokenGalleryScreen(onBack = { navController.popBackStack() })

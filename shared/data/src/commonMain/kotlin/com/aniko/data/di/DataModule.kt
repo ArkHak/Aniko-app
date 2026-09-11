@@ -3,6 +3,7 @@ package com.aniko.data.di
 import com.aniko.data.api.AuthApi
 import com.aniko.data.api.EpisodeApi
 import com.aniko.data.api.FavoriteApi
+import com.aniko.data.api.FeedApi
 import com.aniko.data.api.FilterApi
 import com.aniko.data.api.HistoryApi
 import com.aniko.data.api.NotificationApi
@@ -23,6 +24,7 @@ import com.aniko.data.profileshowcase.LocalProfilePinnedSectionStore
 import com.aniko.data.repository.AuthRepository
 import com.aniko.data.repository.CommentRepository
 import com.aniko.data.repository.EpisodeRepository
+import com.aniko.data.repository.FeedRepository
 import com.aniko.data.repository.LibraryRepository
 import com.aniko.data.repository.NotificationPreferenceRepository
 import com.aniko.data.repository.NotificationRepository
@@ -112,6 +114,7 @@ val dataModule =
         single { FilterApi(client = get()) }
         single { NotificationApi(client = get()) }
         single { NotificationPreferenceApi(client = get()) }
+        single { FeedApi(client = get()) }
 
         // P10.T6 — опрос уведомлений. `LocalNotificationPresenter` и `NotificationContentFactory`
         // приходят снаружи: первый платформенный (`platformModule()`), второй живёт в `composeApp`,
@@ -128,6 +131,7 @@ val dataModule =
         }
         single { NotificationPreferenceRepository(api = get()) }
         single { NotificationRepository(api = get(), syncStore = get()) }
+        single { FeedRepository(api = get()) }
 
         single {
             SyncQueueWorker(
