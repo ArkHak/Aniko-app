@@ -5,7 +5,6 @@ import com.aniko.app.mvi.UiIntent
 import com.aniko.app.mvi.UiState
 import com.aniko.data.paging.PagingState
 import com.aniko.model.AnixError
-import com.aniko.model.CatalogContentType
 import com.aniko.model.CatalogFilter
 import com.aniko.model.CatalogSort
 import com.aniko.model.ListStatus
@@ -32,12 +31,6 @@ enum class CatalogTab {
             }
 }
 
-/** Переключатель раскладки результатов — чистый UI-стейт (P0.T3: "переключатель grid/list" — API). */
-enum class CatalogViewMode {
-    Grid,
-    List,
-}
-
 /**
  * Состояние экрана Catalog/Search (P7.T3-T6).
  *
@@ -51,9 +44,6 @@ data class SearchState(
     val query: String = "",
     val tab: CatalogTab = CatalogTab.All,
     val filter: CatalogFilter = CatalogFilter(),
-    /** Сохранённый набор фильтров («Моя вкладка», P16.T2) или `null`, если его ещё нет. */
-    val myTab: CatalogFilter? = null,
-    val viewMode: CatalogViewMode = CatalogViewMode.List,
     val pagingState: PagingState<Release> = PagingState(),
 ) : UiState {
     /**
@@ -75,14 +65,6 @@ sealed interface SearchIntent : UiIntent {
         val tab: CatalogTab,
     ) : SearchIntent
 
-    /**
-     * Таб «Аниме/Дунхуа» (P16.T1) — не снятие выбора, а переключение: один из двух табов выбран
-     * всегда (в Anixart 10 третьего варианта «всё» нет, см. KDoc [CatalogContentType]).
-     */
-    data class ContentTypeSelected(
-        val contentType: CatalogContentType,
-    ) : SearchIntent
-
     /** Клик по статус-чипу — повторный клик по уже выбранному статусу снимает выбор. */
     data class StatusToggled(
         val statusId: Int,
@@ -94,19 +76,6 @@ sealed interface SearchIntent : UiIntent {
     ) : SearchIntent
 
     data object FiltersReset : SearchIntent
-
-    /** Сохранить текущий набор фильтров как «Мою вкладку» (P16.T2). */
-    data object SaveMyTab : SearchIntent
-
-    /** Применить сохранённую «Мою вкладку» (P16.T2); no-op, если её нет. */
-    data object ApplyMyTab : SearchIntent
-
-    /** Забыть сохранённую «Мою вкладку» (P16.T2). */
-    data object ClearMyTab : SearchIntent
-
-    data class ViewModeChanged(
-        val viewMode: CatalogViewMode,
-    ) : SearchIntent
 
     /** Catalog-меню «⋮» (сверка 2026-09-08): поставить релиз в список/сменить статус. */
     data class SetListStatus(

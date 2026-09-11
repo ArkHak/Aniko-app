@@ -11,8 +11,9 @@ import com.aniko.model.CatalogSort
  * `MainActivity.kt`/`iosApp/iosApp/iOSApp.swift`/`Main.kt`).
  *
  * Схема (custom scheme, НЕ `https://` App Links): `aniko://release/{id}` — карточка тайтла;
- * `aniko://catalog?...` — набор фильтров каталога («Моя вкладка», P16.T2, см.
- * [formatCatalogFilterLink]/[parseCatalogFilterLink]);
+ * `aniko://catalog?...` — набор фильтров каталога (см. [parseCatalogFilterLink]; UI «Моей
+ * вкладки»/шаринга ссылки, P16.T2, убран с экрана каталога 2026-09-11 — сама схема ссылки
+ * оставлена: входящие ссылки старого формата продолжают открывать каталог с нужным фильтром);
  * `aniko://release/{id}/episode/{sourceId}/{position}` — карточка тайтла с попыткой сразу открыть
  * конкретную серию (см. KDoc [AnixDestination.ReleaseDetails] — почему это НЕ прямая ссылка на
  * [AnixDestination.Player]: `hostKey` неизвестен из URL, его резолвинг требует сетевой цепочки
@@ -86,48 +87,7 @@ private const val SEGMENT_INDEX_POSITION = 4
 /** `["release", "{id}", "episode", "{sourceId}", "{position}"]` — минимум 5 сегментов. */
 private const val EPISODE_SEGMENTS_MIN = 5
 
-// ---- Ссылка на набор фильтров каталога (P16.T2, «Моя вкладка») ------------------------------
-
-/**
- * Собирает shareable-ссылку на набор фильтров каталога: `aniko://catalog?type=…&sort=…`.
- *
- * Почему своя схема параметров, а не серверная ссылка: у Anixart API нет shareable-фильтров —
- * набор живёт целиком на клиенте, поэтому «поделиться» здесь означает «передать ссылку, которую
- * понимает Aniko» (`parseCatalogFilterLink`), а не открыть что-то на сервере.
- *
- * Жанры кодируются ИНДЕКСАМИ в [AnixGenres.popular], а не текстом: в `commonMain` нет
- * платформенного кодека percent-encoding, а выдумывать свой ради одной ссылки — лишний код и
- * лишний класс ошибок; набор жанров у API фиксированный и уже захардкожен в клиенте
- * (см. KDoc [AnixGenres]), так что индекс — устойчивый идентификатор внутри одной версии схемы.
- * Значения по умолчанию в ссылку не попадают — короткая ссылка читаемее и диффуется глазами.
- */
-fun formatCatalogFilterLink(filter: CatalogFilter): String {
-    val params = mutableListOf<String>()
-    if (filter.contentType != CatalogContentType.ANIME) {
-        params += "$PARAM_TYPE=${filter.contentType.name.lowercase()}"
-    }
-    if (filter.sort != CatalogSort.POPULARITY) {
-        params += "$PARAM_SORT=${filter.sort.name.lowercase()}"
-    }
-    filter.statusId?.let { params += "$PARAM_STATUS=$it" }
-    val genreIndexes =
-        filter.genres
-            .mapNotNull { genre -> AnixGenres.popular.indexOf(genre).takeIf { it >= 0 } }
-            .sorted()
-    if (genreIndexes.isNotEmpty()) {
-        params += "$PARAM_GENRES=${genreIndexes.joinToString(",")}"
-    }
-    if (filter.genresExcludeMode && genreIndexes.isNotEmpty()) {
-        params += "$PARAM_EXCLUDE=$PARAM_FLAG_TRUE"
-    }
-    filter.startYear?.let { params += "$PARAM_YEAR_FROM=$it" }
-    filter.endYear?.let { params += "$PARAM_YEAR_TO=$it" }
-    return if (params.isEmpty()) {
-        "$DEEP_LINK_SCHEME_PREFIX$SEGMENT_CATALOG"
-    } else {
-        "$DEEP_LINK_SCHEME_PREFIX$SEGMENT_CATALOG?${params.joinToString("&")}"
-    }
-}
+// ---- Ссылка на набор фильтров каталога (P16.T2) — только входящий разбор, см. KDoc файла ----
 
 /**
  * Разбирает ссылку `aniko://catalog?...` в набор фильтров. `null` — это не ссылка каталога

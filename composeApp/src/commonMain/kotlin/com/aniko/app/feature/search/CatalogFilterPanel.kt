@@ -31,20 +31,12 @@ import com.aniko.ui.theme.AnixThemeTokens
  * Год/кол-во серий/длительность/возраст (строка "Доп. фильтры" в аудите P0.T3) — вне объёма
  * P7.T3-T6 (не запрошены брифом трека B), сюда не добавлены.
  */
-@Suppress("LongParameterList") // filter + myTab + 2 колбэка чипов + 4 колбэка «Моей вкладки»
-// (P16.T2, см. KDoc [CatalogMyTabActions]) + сброс + modifier — та же группа действий, что и в
-// [CatalogInlineFilterChips].
 @Composable
 fun CatalogFilterPanel(
     filter: CatalogFilter,
-    myTab: CatalogFilter?,
     onStatusToggle: (Int) -> Unit,
     onGenreToggle: (String) -> Unit,
     onReset: () -> Unit,
-    onApplyMyTab: () -> Unit,
-    onSaveMyTab: () -> Unit,
-    onClearMyTab: () -> Unit,
-    onShareFilter: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -78,14 +70,6 @@ fun CatalogFilterPanel(
                 Text(text = strings.catalogFiltersReset, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-
-        CatalogMyTabActions(
-            myTab = myTab,
-            onApplyMyTab = onApplyMyTab,
-            onSaveMyTab = onSaveMyTab,
-            onClearMyTab = onClearMyTab,
-            onShareFilter = onShareFilter,
-        )
 
         // Track A (сверка Compact-раскладки, 2026-09-04): статус-чипы и жанр-чипы разведены на
         // РАЗНЫЕ акценты (статус — secondary, жанр — primary) в [CatalogInlineFilterChips] ниже;
@@ -123,19 +107,11 @@ fun CatalogFilterPanel(
  * `SearchViewModel.updateFilter`), и без вертикального скролла — Compact-раскладка сама скроллит
  * весь экран, а не только панель фильтров.
  */
-@Suppress("LongParameterList") // filter + myTab + 2 колбэка чипов + 4 колбэка «Моей вкладки» —
-// та же группа действий (P16.T2), что и в CatalogFilterPanel, дробить на объект ради счётчика
-// параметров означало бы косвенность ради самого счётчика (тот же аргумент, что у ChipRow).
 @Composable
 fun CatalogInlineFilterChips(
     filter: CatalogFilter,
-    myTab: CatalogFilter?,
     onStatusToggle: (Int) -> Unit,
     onGenreToggle: (String) -> Unit,
-    onApplyMyTab: () -> Unit,
-    onSaveMyTab: () -> Unit,
-    onClearMyTab: () -> Unit,
-    onShareFilter: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -163,14 +139,6 @@ fun CatalogInlineFilterChips(
             label = { genre -> genre },
             onToggle = onGenreToggle,
             selectedColor = MaterialTheme.colorScheme.primary,
-        )
-
-        CatalogMyTabActions(
-            myTab = myTab,
-            onApplyMyTab = onApplyMyTab,
-            onSaveMyTab = onSaveMyTab,
-            onClearMyTab = onClearMyTab,
-            onShareFilter = onShareFilter,
         )
     }
 }

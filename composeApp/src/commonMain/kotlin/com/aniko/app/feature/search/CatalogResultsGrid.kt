@@ -10,9 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
@@ -42,23 +39,24 @@ import com.aniko.ui.i18n.displayName
 import com.aniko.ui.theme.AnixDimens
 import com.aniko.ui.theme.AnixThemeTokens
 import kotlin.math.roundToInt
-import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 
 /**
- * Сетка/список результатов Catalog/Search (P7.T3-T6) поверх [PagingState] — общая для обоих
- * режимов выдачи (поиск по строке / фильтр каталога, см. KDoc `SearchViewModel`), т.к. экран не
+ * Список результатов Catalog/Search (P7.T3-T6) поверх [PagingState] — общая для обоих режимов
+ * выдачи (поиск по строке / фильтр каталога, см. KDoc `SearchViewModel`), т.к. экран не
  * различает их источник. Мост `PagingState -> AnixContentState` — [toContentState]
  * (`composeApp/.../ui/PagingStateAdapter.kt`, Фаза 6).
+ *
+ * Единственный режим выдачи — список (раньше был переключатель Сетка/Список, убран 2026-09-11 —
+ * решение зафиксировано в `docs/REELWAVE_PLAN.md`, catalog-экран сверен с дизайном без него).
  *
  * Пагинация "вперёд" — тот же паттерн, что в `LibraryScreen`/старой `SearchScreen`
  * (`itemsIndexed` + проверка индекса относительно конца списка на каждый видимый элемент, без
  * отдельного `LazyGridState`/`snapshotFlow`) — сознательно не переизобретается.
  */
-@Suppress("LongParameterList") // Координирующий блок: пагинированное состояние + режим + 5 колбэков.
+@Suppress("LongParameterList") // Координирующий блок: пагинированное состояние + 5 колбэков.
 @Composable
 fun CatalogResultsGrid(
     pagingState: PagingState<Release>,
-    viewMode: CatalogViewMode,
     onReleaseClick: (Int) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
@@ -79,48 +77,15 @@ fun CatalogResultsGrid(
         emptyMessage = strings.catalogEmptyResults,
         onRetry = onRetry,
     ) { items ->
-        when (viewMode) {
-            CatalogViewMode.Grid ->
-                CatalogGrid(items, contentState.isLoading, onReleaseClick, onLoadMore, dimens)
-            CatalogViewMode.List ->
-                CatalogList(
-                    items = items,
-                    isLoadingMore = contentState.isLoading,
-                    onReleaseClick = onReleaseClick,
-                    onLoadMore = onLoadMore,
-                    dimens = dimens,
-                    onSetListStatus = onSetListStatus,
-                    onRemoveFromList = onRemoveFromList,
-                )
-        }
-    }
-}
-
-@Composable
-private fun CatalogGrid(
-    items: List<Release>,
-    isLoadingMore: Boolean,
-    onReleaseClick: (Int) -> Unit,
-    onLoadMore: () -> Unit,
-    dimens: AnixDimens,
-) {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = dimens.posterWidth),
-        contentPadding = PaddingValues(dimens.spaceM),
-        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-        verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        gridItemsIndexed(items, key = { _, release -> release.id }) { index, release ->
-            if (index >= items.size - PREFETCH_THRESHOLD) onLoadMore()
-            TitleCard(release = release, onClick = { onReleaseClick(release.id) }, layout = TitleCardLayout.Grid)
-        }
-
-        if (isLoadingMore) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                AnixLoadingState(Modifier.fillMaxWidth().padding(dimens.spaceM))
-            }
-        }
+        CatalogList(
+            items = items,
+            isLoadingMore = contentState.isLoading,
+            onReleaseClick = onReleaseClick,
+            onLoadMore = onLoadMore,
+            dimens = dimens,
+            onSetListStatus = onSetListStatus,
+            onRemoveFromList = onRemoveFromList,
+        )
     }
 }
 

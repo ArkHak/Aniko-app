@@ -110,22 +110,25 @@ class DeepLinkTest {
         assertEquals(AnixDestination.ReleaseDetails(releaseId = 42), destination)
     }
 
-    // ---- Ссылка на набор фильтров каталога (P16.T2, «Моя вкладка») -----------------------------
+    // ---- Ссылка на набор фильтров каталога (P16.T2) — только входящий разбор (см. KDoc
+    // `DeepLink.kt`: генерация ссылки/шаринг убраны с экрана каталога 2026-09-11, старые
+    // ссылки продолжают открывать каталог с нужным фильтром) --------------------------------
 
     @Test
-    fun parseCatalogFilterLink_defaultFilter_roundTripsThroughFormat() {
-        val filter = CatalogFilter()
+    fun parseCatalogFilterLink_defaultFilter_matchesBareCatalogLink() {
+        val parsed = parseCatalogFilterLink("aniko://catalog")
 
-        val link = formatCatalogFilterLink(filter)
-        val parsed = parseCatalogFilterLink(link)
-
-        assertEquals("aniko://catalog", link)
-        assertEquals(filter, parsed)
+        assertEquals(CatalogFilter(), parsed)
     }
 
     @Test
-    fun parseCatalogFilterLink_fullFilter_roundTripsThroughFormat() {
-        val filter =
+    fun parseCatalogFilterLink_fullFilter_parsesAllParams() {
+        val parsed =
+            parseCatalogFilterLink(
+                "aniko://catalog?type=donghua&sort=rating&status=2&genres=0,3&exclude=1&year_from=2010&year_to=2020",
+            )
+
+        assertEquals(
             CatalogFilter(
                 contentType = CatalogContentType.DONGHUA,
                 sort = CatalogSort.RATING,
@@ -134,11 +137,9 @@ class DeepLinkTest {
                 genresExcludeMode = true,
                 startYear = 2010,
                 endYear = 2020,
-            )
-
-        val parsed = parseCatalogFilterLink(formatCatalogFilterLink(filter))
-
-        assertEquals(filter, parsed)
+            ),
+            parsed,
+        )
     }
 
     @Test
