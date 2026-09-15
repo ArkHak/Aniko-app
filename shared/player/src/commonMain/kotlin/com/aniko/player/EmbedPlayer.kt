@@ -16,8 +16,9 @@ import androidx.compose.ui.Modifier
  * Платформенные реализации:
  * - Android — `android.webkit.WebView` в `AndroidView`.
  * - iOS — `WKWebView` в `UIKitView`.
- * - Desktop — полноценного WebView в Compose Desktop без тяжёлых зависимостей (JCEF/KCEF) нет,
- *   поэтому осознанно упрощаем: открываем URL в системном браузере и показываем заглушку.
+ * - Desktop (пересмотрено на `feature/desktop-video-player`, Step 2/3 P8.T1) — не WebView вовсе:
+ *   [DesktopStreamResolver] чистым HTTP резолвит прямой поток за embed-страницей, а сам поток
+ *   играет нативный VLCJ `MediaPlayer` (libVLC) — см. `EmbedPlayer.desktop.kt`.
  */
 
 /**

@@ -1,101 +1,167 @@
 package com.aniko.player
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.awt.SwingPanel
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.unit.dp
-import java.awt.Desktop
-import java.net.URI
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.WindowState
+import uk.co.caprica.vlcj.player.component.CallbackMediaPlayerComponent
 
 /**
- * Desktop: полноценного WebView в Compose Desktop без тяжёлых зависимостей (JCEF/KCEF) нет —
- * осознанно упрощаем (согласовано в плане фазы 5/8: JCEF физически рисуется поверх Compose,
- * баг JetBrains CMP-6001, — не тащим). Открываем не сам исходный [url] напрямую, а локальную
- * обёртку [KodikProxyServer] в системном браузере через [Desktop.browse] — источники вроде
- * Kodik сверяют в своём JS, что страница загружена внутри `<iframe>` (см. KDoc
- * `EmbedPlayer.android.kt`/`KodikProxyServer.kt`), иначе рисуют «данной страницы не существует»
- * независимо от Referer. [referer] сознательно не используется: живой тест (2026-08-23) показал,
- * что попытка подделать его на сервере (переотдавая содержимое страницы с локального порта)
- * ломает собственные same-origin XHR-запросы страницы (CORS) — простой `<iframe src="url">`
- * без переотдачи содержимого работает корректно и без Referer. На месте плеера показываем
- * заглушку с кнопкой «Открыть ещё раз» на случай, если пользователь закрыл вкладку браузера.
+ * Desktop: VLCJ (`uk.co.caprica:vlcj`, libVLC-биндинг) вместо встроенного Chromium как РЕНДЕРЕРА
+ * (Step 2/3 пересмотра P8.T1, см. журнал `docs/REELWAVE_PLAN.md`) — JCEF не тянет кодеки H.264/AAC
+ * (`me.friwi:jcefmaven`, подтверждено `canPlayType()` внутри реальной embed-страницы), libVLC тянет
+ * оба. [DesktopStreamResolver] резолвит реальный URL потока за embed-страницей чистым HTTP (Step 3
+ * пересмотра, `feature/desktop-video-player`, см. её KDoc) — JCEF/headless-браузер для этого
+ * больше не поднимается вовсе, поэтому этот composable запускает [DesktopVlcjPlayer] сразу, не
+ * дожидаясь готовности никакого браузерного движка.
  *
- * Используется `BasicText` из `compose.foundation`, а не Material `Text`/`Button` — модуль
- * `:shared:player` намеренно не тянет зависимость на compose.material3 ради одной заглушки.
+ * **Топология трёх слоёв** (см. отчёт задачи за разбором альтернатив, которые не сработали —
+ * `CallbackMediaPlayerComponent` внутри `SwingPanel` с Compose-соседями, `EmbeddedMediaPlayerComponent`
+ * — обе на этой ветке подтверждённые вживую тупики):
+ * 1. Главное окно приложения (`Main.kt`) — здесь этот composable рисует только чёрный placeholder
+ *    (сам видео-кадр сюда не попадает никак, ни как heavyweight-компонент, ни как что-либо ещё).
+ * 2. Видео-окно — ОТДЕЛЬНЫЙ top-level `Window` (не `SwingPanel` внутри главного — см. следующий
+ *    абзац), хостит ровно один Swing-компонент — [CallbackMediaPlayerComponent] — без единого
+ *    Compose-соседа в том же дереве.
+ * 3. Оверлей-окно — ещё один top-level `Window`, ТРАНСПАРЕНТНЫЙ, поверх видео-окна, заведён
+ *    `composeApp` (`PlayerOverlayHost` desktop actual, `:shared:player` не видит `PlayerOverlay`/
+ *    `CompactPlayerChrome` — граница модулей, `composeApp` зависит от `:shared:player`, не наоборот).
+ *    Оба вторых окна синхронизируют границы через один и тот же [trackScreenBounds].
+ *
+ * **Почему видео — отдельный `Window`, а не `SwingPanel` в этом же дереве, как раньше JCEF.**
+ * Живые спайки этой ветки (`661b1a2`, `f0efa47`) подтвердили: `CallbackMediaPlayerComponent`
+ * активно перерисовывает себя поверх ЛЮБОГО Compose/Swing-соседа в ОДНОМ дереве компонентов —
+ * `compose.interop.blending=true`, которое чинило это же для JCEF, для VLCJ не работает вообще
+ * (проверено вживую с реальным frontmost-кликом). Отдельное top-level окно обходит эту проблему
+ * ПОЛНОСТЬЮ, а не боком: у видео-окна нет ни одного соседа, конкурировать за z-order не с кем.
+ * Это тот же принцип, что у штатного класса vlcj `AbstractJWindowOverlayComponent`
+ * (см. `VlcjJWindowOverlaySpike.kt`, удалён этой веткой как исчерпавший роль чекпойнта) — тут просто
+ * используется готовый Compose Desktop примитив (`Window(...)` composable — легитимно вызываемый из
+ * любой точки композиции, не только из `application {}`) вместо ручного AWT/`JWindow`.
  */
 @Composable
 actual fun EmbedPlayerView(
     url: String,
-    // Не используется намеренно — см. KDoc класса выше и KDoc `KodikProxyServer`.
-    @Suppress("UNUSED_PARAMETER") referer: String?,
-    // Не используется намеренно: на Desktop нет видео-поверхности под контролем приложения,
-    // JS-мост здесь физически некуда ставить — см. KDoc `EmbedVideoController` (desktopMain).
-    @Suppress("UNUSED_PARAMETER") controller: EmbedVideoController?,
+    referer: String?,
+    controller: EmbedVideoController?,
     modifier: Modifier,
 ) {
-    var reopenSignal by remember(url) { mutableIntStateOf(0) }
-
-    LaunchedEffect(url, reopenSignal) {
-        val wrapperUrl = KodikProxyServer.wrapperUrl(url)
-        openUrlInSystemBrowser(wrapperUrl)
-    }
-
-    Box(
-        modifier = modifier.fillMaxSize().background(Color.Black),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            // P2.T10: намеренно английский текст, не через Strings/Lyricist. `:shared:player`
-            // не зависит от `:shared:ui` (там живёт i18n-слой) — заводить эту зависимость ради
-            // двух подписей заглушки не входит в объём этой задачи (см. KDoc класса выше:
-            // desktop-плеер — уже задокументированная упрощённая заглушка Фазы 5, полноценный
-            // WebView не тащим). Полная локализация этого экрана — будущая задача.
-            BasicText(
-                text = "Opened in the system browser",
-                style = TextStyle(color = Color.White),
-            )
-            Box(
-                modifier =
-                    Modifier
-                        .border(width = 1.dp, color = Color.White, shape = RoundedCornerShape(8.dp))
-                        .clickable { reopenSignal++ }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                BasicText(
-                    text = "Open again",
-                    style = TextStyle(color = Color.White),
-                )
-            }
-        }
+    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
+        DesktopVlcjPlayer(url = url, referer = referer, controller = controller, modifier = Modifier.fillMaxSize())
     }
 }
 
-private fun openUrlInSystemBrowser(url: String) {
-    // Untrusted URL из ответа API — открываем в браузере только http/https (см. код-ревью Фазы 5).
-    if (!isSafeEmbedUrl(url)) return
-    runCatching {
-        if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-            Desktop.getDesktop().browse(URI(url))
+/**
+ * Владеет [CallbackMediaPlayerComponent] на время жизни композиции этого узла — переживает смену
+ * [url]/[referer] (переключение аудиодорожки не должно пересоздавать плеер/видео-окно), тот же
+ * принцип, что раньше был у `DesktopEmbedSession` с `CefBrowser`.
+ *
+ * Placeholder в основном дереве composition — ТОЛЬКО ради [trackScreenBounds] (главное окно должно
+ * знать, где реально сейчас видео-область, чтобы синхронизировать видео-окно и, через
+ * `composeApp`, оверлей-окно) — сам он ничего не рисует поверх фона.
+ */
+@Composable
+private fun DesktopVlcjPlayer(
+    url: String,
+    referer: String?,
+    controller: EmbedVideoController?,
+    modifier: Modifier,
+) {
+    var bounds by remember { mutableStateOf<Rect?>(null) }
+    Box(modifier = modifier.trackScreenBounds { bounds = it })
+
+    val mediaPlayerComponent = remember { CallbackMediaPlayerComponent() }
+    DisposableEffect(mediaPlayerComponent) {
+        controller?.attach(mediaPlayerComponent.mediaPlayer())
+        onDispose {
+            controller?.detach()
+            runCatching { mediaPlayerComponent.mediaPlayer().controls().stop() }
+            runCatching { mediaPlayerComponent.release() }
+        }
+    }
+
+    // Резолв — один раз на КАЖДУЮ смену url/referer (аудиодорожка/эпизод), не при каждой
+    // рекомпозиции: `LaunchedEffect(url, referer)` перезапускается только когда реально сменился
+    // адрес — тот же принцип, что раньше был у `LaunchedEffect(url, referer)` в JCEF-версии.
+    LaunchedEffect(url, referer) {
+        controller?.setExpectedSource(url)
+        val resolved = DesktopStreamResolver.resolve(url, referer)
+        if (resolved != null) {
+            // `:http-referrer=` — media-опция libVLC (модуль access/http) для ФИНАЛЬНОГО запроса
+            // потока самим libVLC. `resolved.referer`, а НЕ внешний параметр `referer` этой
+            // функции — они могут не совпадать (Kodik: партнёрский Referer нужен только чтобы
+            // получить страницу, а CDN-хост потока ждёт свой собственный, см. KDoc
+            // [DesktopStreamResolver.Resolved.referer] за разбором). Явное ветвление вместо
+            // vararg-спреда из пустого/одноэлементного массива — так проще читается, чем собирать
+            // массив ради одного опционального аргумента (заодно не ловит detekt `SpreadOperator`).
+            val media = mediaPlayerComponent.mediaPlayer().media()
+            val streamReferer = resolved.referer
+            if (streamReferer != null) {
+                media.play(resolved.streamUrl, ":http-referrer=$streamReferer")
+            } else {
+                media.play(resolved.streamUrl)
+            }
+        }
+        // resolved == null — резолв не нашёл поток (мёртвая ссылка/неподдерживаемый хост/таймаут
+        // сети): остаёмся с isVideoFound=false, PlayerOverlay честно деградирует до одной кнопки
+        // "назад" (см. её KDoc про bridgeActive) вместо притворства, что видео есть.
+    }
+
+    val currentBounds = bounds
+    if (currentBounds != null) {
+        val density = LocalDensity.current
+        // `remember { ... }` БЕЗ ключа, инициализированный УЖЕ верным размером/позицией из первого
+        // известного `currentBounds` — та же живая находка, что и в `PlayerOverlayHost.desktop.kt`
+        // (см. её KDoc за полным разбором): `remember { WindowState() }` (дефолт 800×600) +
+        // последующая мутация в `LaunchedEffect` создавали вырожденный первый кадр AWT-окна, Skia-
+        // поверхность которого затем никогда не переинициализировалась под реальный размер — окно
+        // оставалось на экране, но не презентовало ни одного валидного кадра (сплошной чёрный,
+        // подтверждено даже с хардкодным непрозрачным фоном вместо контента). Конструирование
+        // `WindowState` сразу с верными значениями убирает сам вырожденный первый кадр.
+        val windowState =
+            remember {
+                with(density) {
+                    WindowState(
+                        position = WindowPosition(currentBounds.left.toDp(), currentBounds.top.toDp()),
+                        size = DpSize(currentBounds.width.toDp(), currentBounds.height.toDp()),
+                    )
+                }
+            }
+        // Последующие изменения границ (анимация `videoHeight` compact↔fullscreen, P13) — окно уже
+        // существует, `windowState.size`/`.position` мутируются как обычно.
+        LaunchedEffect(currentBounds) {
+            with(density) {
+                windowState.position = WindowPosition(currentBounds.left.toDp(), currentBounds.top.toDp())
+                windowState.size = DpSize(currentBounds.width.toDp(), currentBounds.height.toDp())
+            }
+        }
+        Window(
+            onCloseRequest = {},
+            state = windowState,
+            undecorated = true,
+            resizable = false,
+            // Видео не должно перехватывать клавиатурный фокус у главного окна — иначе
+            // `PlayerKeyboardShortcuts.desktop.kt` (слушает на главном окне) перестал бы получать
+            // space/←→/↑↓ после того, как это окно однажды стало бы активным.
+            focusable = false,
+            alwaysOnTop = true,
+        ) {
+            SwingPanel(modifier = Modifier.fillMaxSize(), factory = { mediaPlayerComponent })
         }
     }
 }

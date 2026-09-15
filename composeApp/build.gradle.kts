@@ -87,6 +87,9 @@ kotlin {
         getByName("desktopMain").dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.swing)
+            // VLCJ (Step 2/3, P8.T1 пересмотр) живёт целиком в `:shared:player`
+            // (`EmbedPlayer.desktop.kt`) как `implementation`-зависимость — composeApp сам не
+            // ссылается ни на один тип `uk.co.caprica.*`, отдельная зависимость здесь не нужна.
         }
 
         // F2/F3 (Фаза 11): смоук-harness — см. KDoc `composeApp/src/desktopTest/.../smoke/`.

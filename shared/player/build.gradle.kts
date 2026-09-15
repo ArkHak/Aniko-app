@@ -29,12 +29,24 @@ kotlin {
         }
 
         desktopMain.dependencies {
-            // Локальный сервер (`KodikProxyServer.kt`) — отдаёт статическую HTML-обёртку с
-            // `<iframe src="реальный URL источника">`. Только эта обёртка нужна, чтобы Kodik
-            // прошёл свою проверку isIframe() (см. KDoc класса) — самого содержимого страницы
-            // сервер не трогает, поэтому HTTP-клиент здесь не нужен, только сервер.
-            implementation(libs.ktor.server.core)
-            implementation(libs.ktor.server.cio)
+            // libVLC-биндинг — рендерер видео (Step 2/3 пересмотра P8.T1). `implementation`, не
+            // `api` — наружу не торчит ни одного типа uk.co.caprica.
+            implementation(libs.vlcj)
+            // Пересмотр `feature/desktop-video-player` (см. журнал `docs/REELWAVE_PLAN.md`):
+            // headless JCEF ([DesktopStreamResolver] раньше сниффил сетевой трафик реальным
+            // Chromium) заменён на прямой HTTP-парсинг embed-страниц (Kodik `/ftor`, Sibnet
+            // редиректы, AniLibria HTML) — тот же подход, что у эталонного клиента
+            // github.com/Maks1mio/anixapp (`electron/kodik-direct.js`,
+            // `electron/lib/direct-video-link.js`). Быстрее (секунды вместо ~15 с таймаута) и без
+            // риска нативного краша JVM, который headless JCEF уже давал на этой ветке. `jcefmaven`
+            // и весь модуль `DesktopWebEngine` удалены как мёртвый код — ничего в модуле больше не
+            // грузит embed-страницу через браузерный движок.
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.okhttp)
+            // Только `JsonElement`/`JsonObject` навигация рантаймом (Kodik `/ftor` отдаёт плоский
+            // JSON `{"links": {...}}`) — без `@Serializable`-классов и без подключения
+            // kotlin("plugin.serialization") в этом модуле, он здесь не нужен.
+            implementation(libs.kotlinx.serialization.json)
         }
     }
 }

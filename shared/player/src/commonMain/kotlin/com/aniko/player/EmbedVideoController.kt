@@ -37,20 +37,24 @@ data class EmbedVideoState(
  * - **не даёт** качество, субтитры и аудиодорожку: это внутренний UI чужого плеера,
  *   единого DOM-контракта под ним нет (см. «находку №1» в `docs/REELWAVE_PLAN.md`).
  *
- * Платформы:
+ * Платформы (пересмотрено на `feature/desktop-video-player` — Desktop больше не CUT):
  * - Android — `androidx.webkit` (`addDocumentStartJavaScript` + `addWebMessageListener`);
  * - iOS — `WKUserScript(forMainFrameOnly = false)` + `WKScriptMessageHandler`;
- * - Desktop — **не поддержан** ([isSupported] == `false`), все методы no-op: там нет
- *   видео-поверхности под контролем приложения, видео играет в системном браузере
- *   (P8.T1, см. `EmbedPlayer.desktop.kt`).
+ * - Desktop — здесь у "моста" вообще нет JS/DOM (Step 2/3 пересмотра P8.T1): видео — родной VLCJ
+ *   `MediaPlayer` (libVLC), играющий уже резолвнутый прямой поток
+ *   ([com.aniko.player.DesktopStreamResolver], чистый HTTP, без браузерного движка), поэтому
+ *   состояние приходит нативными событиями `MediaPlayerEventListener`
+ *   (`playing`/`buffering`/`timeChanged`/...), не DOM-событиями чужой страницы — см.
+ *   `EmbedVideoController.desktop.kt`.
  *
  * Создавать напрямую не нужно — есть [rememberEmbedVideoController].
  */
 expect class EmbedVideoController() {
     /**
-     * `false` — платформа без JS-моста (Desktop) либо системный WebView без нужных фич
-     * `androidx.webkit`. UI обязан проверять это перед отрисовкой оверлея: при `false`
-     * состояние навсегда останется дефолтным, а команды ничего не сделают.
+     * `false` — платформа без работающего JS-моста (например, системный WebView без нужных
+     * фич `androidx.webkit` на Android). UI обязан проверять это перед отрисовкой оверлея: при
+     * `false` состояние навсегда останется дефолтным, а команды ничего не сделают. На Desktop
+     * это статическая (не runtime) `true` — механизм моста есть всегда; см. KDoc actual-класса.
      */
     val isSupported: Boolean
 

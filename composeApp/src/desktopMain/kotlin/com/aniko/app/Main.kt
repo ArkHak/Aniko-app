@@ -1,5 +1,6 @@
 package com.aniko.app
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,6 +16,7 @@ import com.aniko.app.navigation.DeepLinkDispatcher
 import com.aniko.app.window.AnikoDesktopChrome
 import com.aniko.app.window.AnixMenuBar
 import com.aniko.data.locale.LocaleStore
+import com.aniko.player.LocalDesktopWindow
 import org.koin.compose.koinInject
 
 /**
@@ -43,6 +45,28 @@ private const val USE_CUSTOM_CHROME = true
  * единого кросс-платформенного API для приёма такого события без второй инстанции процесса.
  */
 fun main(args: Array<String>) {
+    runAnikoApp(args)
+}
+
+private fun runAnikoApp(args: Array<String>) {
+    // УБРАНО (Step 2/3 пересмотра P8.T1, живая проверка feature/desktop-video-player, см. журнал
+    // `docs/REELWAVE_PLAN.md`): `compose.interop.blending=true` исторически чинил z-order JCEF-
+    // `SwingPanel` под Compose-оверлеем (баг JetBrains CMP-6001) — актуально было только пока JCEF
+    // сам РЕНДЕРИЛ видео. После Step 2/3 (`EmbedPlayer.desktop.kt`) единственный оставшийся
+    // `SwingPanel` (VLCJ `CallbackMediaPlayerComponent`) живёт в СОБСТВЕННОМ top-level `Window` без
+    // единого Compose-соседа — компоузить там нечего, флаг для него больше не нужен.
+    // ПРОВЕРЕНО живьём (тот же эпизод, повторный прогон после удаления флага): чёрный экран
+    // видео-/оверлей-окон НЕ исчез — это НЕ было причиной черноты (гипотеза отклонена, не
+    // подтверждена). Оставлено удалённым как честная уборка мёртвой настройки (единственный
+    // адресат флага — SwingPanel в общем дереве с Compose — для него не осталось ни одного
+    // случая с Step 2/3), а не как претензия на фикс самой черноты. Настоящая причина и фикс — см.
+    // KDoc [PlayerOverlayHost.desktop.kt] (desktop-actual, `composeApp`).
+    //
+    // Step 3 пересмотра (`feature/desktop-video-player`, см. `DesktopStreamResolver.kt` в
+    // `:shared:player`): headless-JCEF резолвер, который раньше запускался здесь на старте
+    // приложения (`DesktopWebEngine.initialize()`/`.dispose()`), заменён на чистый HTTP и удалён
+    // целиком — на Desktop с этого момента браузерный движок не поднимается вообще ни для чего.
+
     // Должно быть выставлено ДО старта Compose/AWT — иначе Swing JMenuBar рисуется как часть
     // окна, а не в системной менюбаре сверху экрана macOS.
     System.setProperty("apple.laf.useScreenMenuBar", "true")
@@ -76,16 +100,25 @@ fun main(args: Array<String>) {
                 currentLanguageTag = languageTag,
                 onLanguageTagChange = localeStore::setLanguageTag,
             )
-            if (USE_CUSTOM_CHROME) {
-                AnikoDesktopChrome(
-                    windowState = windowState,
-                    onClose = ::exitApplication,
-                    onMinimize = { windowState.isMinimized = true },
-                ) {
+            // Step 2/3 (P8.T1 пересмотр, `feature/desktop-video-player`): видео-/оверлей-окна
+            // VLCJ-плеера (`EmbedPlayer.desktop.kt`/`PlayerOverlayHost.desktop.kt`) — отдельные
+            // top-level `Window`, синхронизирующие свои границы с местом видео-области в ЭТОМ
+            // окне через `trackScreenBounds` (`:shared:player`, `DesktopWindowLocal.kt`) — ему
+            // нужна ссылка на само это окно (`ComponentListener` на перемещение/ресайз, см. её
+            // KDoc), которую `androidx.compose.ui.window.LocalWindow` не отдаёт (`internal` в
+            // модуле `compose-ui`, недоступен отсюда) — заводим свой публичный аналог.
+            CompositionLocalProvider(LocalDesktopWindow provides window) {
+                if (USE_CUSTOM_CHROME) {
+                    AnikoDesktopChrome(
+                        windowState = windowState,
+                        onClose = ::exitApplication,
+                        onMinimize = { windowState.isMinimized = true },
+                    ) {
+                        App(onBackHandlerReady = { backHandler = it })
+                    }
+                } else {
                     App(onBackHandlerReady = { backHandler = it })
                 }
-            } else {
-                App(onBackHandlerReady = { backHandler = it })
             }
         }
     }

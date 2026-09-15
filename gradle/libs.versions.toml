@@ -59,6 +59,11 @@ detekt = "1.23.8"
 # --- Local storage (P4.S0) ---
 sqldelight = "2.3.2"
 
+# --- Desktop-only — libVLC-биндинг, рендерер видео Desktop-плеера (P8.T1 Step 2/3 пересмотр,
+# см. журнал docs/REELWAVE_PLAN.md). Заменил встроенный Chromium (JCEF): JCEF-сборка не тянет
+# H.264/AAC. 4.11.0 — последняя стабильная (5.0.0-M4 на Maven Central — milestone, не релиз).
+vlcj = "4.11.0"
+
 # --- Adaptive layout (P5.T3/P5.T4) ---
 # ВНИМАНИЕ: группа org.jetbrains.compose.material3.adaptive версионируется НЕЗАВИСИМО и от плагина
 # Compose Multiplatform (1.11.1), и от material3 (compose.material3 резолвится в 1.9.0 — версии
@@ -142,6 +147,9 @@ sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", versi
 # (UPSERT, ReleaseCacheStore.upsert) — он появился в SQLite 3.24. Все реальные драйверы проекта
 # (Android SQLite, JDBC sqlite-driver на Desktop, native SQLite на iOS) давно новее 3.24.
 sqldelight-dialect-sqlite338 = { module = "app.cash.sqldelight:sqlite-3-38-dialect", version.ref = "sqldelight" }
+
+# Desktop-only — video renderer (P8.T1 Step 2/3, see docs/REELWAVE_PLAN.md)
+vlcj = { module = "uk.co.caprica:vlcj", version.ref = "vlcj" }
 
 # Adaptive layout (P5.T3/P5.T4)
 material3-adaptive = { module = "org.jetbrains.compose.material3.adaptive:adaptive", version.ref = "material3Adaptive" }

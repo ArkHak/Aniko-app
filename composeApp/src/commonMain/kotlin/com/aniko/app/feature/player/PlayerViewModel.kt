@@ -99,10 +99,10 @@ sealed interface PlayerError {
  * «успешный резолв ссылки = серия просмотрена»: отметка ставилась сразу после загрузки, ещё до
  * единого кадра. Теперь этого нет — отметку ставит тот, кто действительно знает, досмотрели ли
  * серию:
- * - Android/iOS — экран, по общему порогу `EmbedVideoState.isNearEnd()` (`:shared:player`),
- *   тем же самым, что поднимает баннер P8.T4;
- * - Desktop — пользователь вручную, кнопкой (там `EmbedVideoController.isSupported == false`,
- *   позиции воспроизведения не существует в принципе, см. P8.T1).
+ * - при работающем мосте (`isSupported == true` — Android/iOS/Desktop) — экран, по общему порогу
+ *   `EmbedVideoState.isNearEnd()` (`:shared:player`), тем же самым, что поднимает баннер P8.T4;
+ * - без моста (`isSupported == false`, фолбэк — см. `PlayerDesktopControls`) — пользователь
+ *   вручную, кнопкой: позиции воспроизведения не существует в принципе.
  *
  * История просмотра (`addHistory`) осталась на месте по факту открытия: «продолжить смотреть»
  * — это про «начал», а не про «досмотрел», и её семантику P8.T8 не трогает.
@@ -416,7 +416,7 @@ class PlayerViewModel(
         }
     }
 
-    /** P8.T8 — ручной toggle для Desktop, где позиции воспроизведения нет (P8.T1). */
+    /** P8.T8 — ручной toggle для фолбэка без моста (`PlayerDesktopControls`), где позиции воспроизведения нет. */
     fun toggleWatched() {
         val key = loadedKey ?: return
         val target = !_uiState.value.isWatched

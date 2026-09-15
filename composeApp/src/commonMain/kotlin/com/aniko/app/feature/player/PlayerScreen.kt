@@ -49,9 +49,9 @@ import org.koin.compose.viewmodel.koinViewModel
  * используются — это задел на будущее.
  *
  * Фаза 8 добавила поверх embed'а JS-мост (`rememberEmbedVideoController`): он даёт
- * play/pause/seek/скорость и состояние `<video>` внутри чужой страницы на Android и iOS.
- * На Desktop `controller.isSupported == false` — там видео играет в системном браузере, и
- * никакого элемента под нашим контролем нет.
+ * play/pause/seek/скорость и состояние `<video>` внутри чужой страницы. С ветки
+ * `feature/desktop-video-player` — на всех трёх платформах (Android/iOS через `androidx.webkit`/
+ * `WKWebView`, Desktop через встроенный JCEF, см. `EmbedPlayer.desktop.kt`).
  *
  * **P13 — компактный режим по умолчанию + переключение на fullscreen.** Сверка с мокапом Claude
  * Design (`showPlayer`) показала, что референс НЕ полноэкранный: видео закреплено сверху
@@ -70,16 +70,24 @@ import org.koin.compose.viewmodel.koinViewModel
  * embed-страницу за жестовым слоем `CompactVideoGestureLayer`, поэтому back в no-bridge
  * fullscreen должен оставаться выходом из экрана, а не collapse.
  *
- * **Единственная развилка платформ на этом экране** — обычный `if` по `controller.isSupported`,
- * без `expect/actual`: сам флаг уже разруливает платформу за нас (см. его KDoc).
- * - `isSupported == true` (Android/iOS) → компактный режим по умолчанию + [PlayerOverlay] по
- *   кнопке "На весь экран": назад/PiP/тап-зона play-pause/прогресс-бар с seek (P8.T3), баннер
- *   «следующая серия через Nс» (P8.T4), скорость 1.0–2.0 (P8.T5) и авто-отметка «просмотрено» на
- *   подходе к концу серии (P8.T8);
- * - `isSupported == false` (Desktop) → [PlayerDesktopControls]: только две кнопки, «следующая
- *   серия» и ручная отметка просмотра, потому что позиции воспроизведения там не существует
- *   (P8.T1). Компактный режим/fullscreen-кнопка на Desktop не показываются вовсе — там и так
- *   видео играет в системном браузере, а не в этом окне (P8.T1).
+ * **Единственная развилка на этом экране** — обычный `if` по `controller.isSupported`, без
+ * `expect/actual`: сам флаг уже разруливает окружение за нас (см. его KDoc). На всех трёх
+ * платформах он теперь `true` в штатном случае (на Desktop — безусловно, статически, см. KDoc
+ * `EmbedVideoController.desktop.kt`) — ветка `isSupported == false` остаётся честным
+ * деградационным путём для случаев вроде старого системного WebView на Android без нужных фич
+ * `androidx.webkit` (тогда видео физически не появится, и полноценный оверлей был бы враньём).
+ * Провал резолва конкретного потока (мёртвая ссылка/неподдерживаемый хост на Desktop) — другой,
+ * менее суровый случай: `isSupported` остаётся `true`, деградирует только
+ * `EmbedVideoState.isVideoFound` внутри уже показанного [PlayerOverlay] (см. её KDoc про
+ * `bridgeActive`), эта развилка сюда не относится.
+ * - `isSupported == true` → компактный режим по умолчанию + [PlayerOverlay] по кнопке "На весь
+ *   экран": назад/PiP (Android)/тап-зона play-pause/прогресс-бар с seek (P8.T3), баннер
+ *   «следующая серия через Nс» (P8.T4), скорость 1.0–2.0 (P8.T5), клавиатурные шорткаты
+ *   (`playerKeyboardShortcuts`, Desktop-only, P8.T7) и авто-отметка «просмотрено» на подходе к
+ *   концу серии (P8.T8);
+ * - `isSupported == false` → [PlayerDesktopControls]: только две кнопки, «следующая серия» и
+ *   ручная отметка просмотра — честный фолбэк без позиции воспроизведения, когда моста в
+ *   принципе нет (а не Desktop-специфичная ветка, как было до пересмотра P8.T1).
  *
  * @param onBack закрыть плеер. Приходит параметром, а не берётся из
  * [com.aniko.app.navigation.LocalTitleNavigator]: `TitleNavigator.back()` на wide-экранах сначала
@@ -167,8 +175,7 @@ fun PlayerScreen(
                 val source = state.source
                 if (source is PlaybackSource.Embed) {
                     // Мост к `<video>` внутри чужой embed-страницы: даёт play/pause/seek/скорость
-                    // на Android и iOS, на Desktop `controller.isSupported == false` и все методы
-                    // no-op (P8.T1).
+                    // на Android, iOS и Desktop (JCEF, `feature/desktop-video-player`).
                     val controller = rememberEmbedVideoController(source.url)
                     val videoState by controller.state.collectAsStateWithLifecycle()
                     val pictureInPicture = rememberPlayerPictureInPicture(controller)
@@ -289,7 +296,14 @@ fun PlayerScreen(
                         // проблему не воспроизводит.
                         val screenWidth = LocalWindowInfo.current.containerDpSize.width
                         val screenHeight = LocalWindowInfo.current.containerDpSize.height
-                        Box(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    // P8.T7 — space/←→/↑↓, только Desktop (см. KDoc
+                                    // `playerKeyboardShortcuts`); на Android/iOS — no-op.
+                                    .playerKeyboardShortcuts(controller, enabled = controller.isSupported),
+                        ) {
                             val targetVideoHeight =
                                 if (isFullscreen) screenHeight else screenWidth / COMPACT_VIDEO_ASPECT_RATIO
                             // Анимированный переход, а не мгновенный скачок высоты: резкий ресайз
@@ -331,108 +345,121 @@ fun PlayerScreen(
                                         .align(Alignment.TopStart)
                                         .offset(y = topOffset),
                             )
-                            if (isFullscreen && !pipActive) {
-                                PlayerOverlay(
-                                    state = videoState,
-                                    controller = controller,
-                                    hasNextEpisode = state.hasNextEpisode,
-                                    onBack = onBack,
-                                    onCollapseFullscreen = { viewModel.setFullscreen(false) },
-                                    onNextEpisode = openNextEpisode,
-                                    onEpisodeNearEnd = viewModel::markWatchedIfNeeded,
-                                    voiceTypes = state.voiceTypes,
-                                    currentVoiceType = state.currentVoiceType,
-                                    onOpenAudioPicker = { showAudioPicker = true },
-                                    qualityLabel = currentQuality.takeIf { qualityOptions.isNotEmpty() },
-                                    onOpenQualityPicker = {
-                                        if (qualityOptions.isNotEmpty()) showQualityPicker = true
-                                    },
-                                    speedLabel = strings.playerSpeedValue(speedRate.formatRate()),
-                                    onOpenSpeedPicker = { showSpeedPicker = true },
-                                    // Кнопка PiP — только когда есть чем управлять: без найденного
-                                    // `<video>` окно «картинка в картинке» показывало бы пустую
-                                    // страницу, поэтому в no-bridge fullscreen её нет вовсе.
-                                    onEnterPictureInPicture =
-                                        pictureInPicture
-                                            .takeIf { it.isSupported && videoState.isVideoFound }
-                                            ?.let { pip -> { pip.enter() } },
-                                )
-                            } else if (!pipActive) {
-                                CompactPlayerChrome(
-                                    videoHeight = videoHeight,
-                                    topOffset = topOffset,
-                                    onBelowContentHeightMeasured = { belowContentHeight = it },
-                                    state = videoState,
-                                    controller = controller,
-                                    onBack = onBack,
-                                    onEnterFullscreen = { viewModel.setFullscreen(true) },
-                                    voiceTypes = state.voiceTypes,
-                                    currentVoiceType = state.currentVoiceType,
-                                    onOpenAudioPicker = { showAudioPicker = true },
-                                    qualityLabel = currentQuality.takeIf { qualityOptions.isNotEmpty() },
-                                    onOpenQualityPicker = {
-                                        if (qualityOptions.isNotEmpty()) showQualityPicker = true
-                                    },
-                                    speedLabel = strings.playerSpeedValue(speedRate.formatRate()),
-                                    onOpenSpeedPicker = { showSpeedPicker = true },
-                                )
-                            }
+                            // PlayerOverlayHost (P8.T1 Step 2/3, expect/actual `composeApp/.../
+                            // feature/player/PlayerOverlayHost.kt`): passthrough на Android/iOS
+                            // (рисует [content] здесь же, как и раньше), но на Desktop реально
+                            // переносит его в ОДНО отдельное top-level окно — см. её KDoc за
+                            // причиной (VLCJ-рендер видео теперь тоже отдельное окно, инлайновый
+                            // Compose под ним был бы невидим и некликабелен). ВСЁ, что должно
+                            // визуально лежать поверх кадра видео — оверлей/compact-chrome,
+                            // пикеры озвучки/качества/скорости, resume-диалог — заведено ОДНИМ
+                            // вызовом хоста, а не отдельным на каждый: несколько независимых
+                            // `alwaysOnTop`-окон конкурировали бы друг с другом за то, какое
+                            // из них реально самое верхнее.
+                            PlayerOverlayHost(modifier = Modifier.fillMaxSize()) {
+                                if (isFullscreen && !pipActive) {
+                                    PlayerOverlay(
+                                        state = videoState,
+                                        controller = controller,
+                                        hasNextEpisode = state.hasNextEpisode,
+                                        onBack = onBack,
+                                        onCollapseFullscreen = { viewModel.setFullscreen(false) },
+                                        onNextEpisode = openNextEpisode,
+                                        onEpisodeNearEnd = viewModel::markWatchedIfNeeded,
+                                        voiceTypes = state.voiceTypes,
+                                        currentVoiceType = state.currentVoiceType,
+                                        onOpenAudioPicker = { showAudioPicker = true },
+                                        qualityLabel = currentQuality.takeIf { qualityOptions.isNotEmpty() },
+                                        onOpenQualityPicker = {
+                                            if (qualityOptions.isNotEmpty()) showQualityPicker = true
+                                        },
+                                        speedLabel = strings.playerSpeedValue(speedRate.formatRate()),
+                                        onOpenSpeedPicker = { showSpeedPicker = true },
+                                        // Кнопка PiP — только когда есть чем управлять: без найденного
+                                        // `<video>` окно «картинка в картинке» показывало бы пустую
+                                        // страницу, поэтому в no-bridge fullscreen её нет вовсе.
+                                        onEnterPictureInPicture =
+                                            pictureInPicture
+                                                .takeIf { it.isSupported && videoState.isVideoFound }
+                                                ?.let { pip -> { pip.enter() } },
+                                    )
+                                } else if (!pipActive) {
+                                    CompactPlayerChrome(
+                                        videoHeight = videoHeight,
+                                        topOffset = topOffset,
+                                        onBelowContentHeightMeasured = { belowContentHeight = it },
+                                        state = videoState,
+                                        controller = controller,
+                                        onBack = onBack,
+                                        onEnterFullscreen = { viewModel.setFullscreen(true) },
+                                        voiceTypes = state.voiceTypes,
+                                        currentVoiceType = state.currentVoiceType,
+                                        onOpenAudioPicker = { showAudioPicker = true },
+                                        qualityLabel = currentQuality.takeIf { qualityOptions.isNotEmpty() },
+                                        onOpenQualityPicker = {
+                                            if (qualityOptions.isNotEmpty()) showQualityPicker = true
+                                        },
+                                        speedLabel = strings.playerSpeedValue(speedRate.formatRate()),
+                                        onOpenSpeedPicker = { showSpeedPicker = true },
+                                    )
+                                }
 
-                            if (showAudioPicker) {
-                                AudioPickerOverlay(
-                                    voiceTypes = state.voiceTypes,
-                                    currentVoiceType = state.currentVoiceType,
-                                    isSwitching = state.isAudioSwitching,
-                                    onSelect = { typeId ->
-                                        viewModel.selectVoiceType(typeId)
-                                        showAudioPicker = false
-                                    },
-                                    onDismiss = { showAudioPicker = false },
-                                )
-                            }
+                                if (showAudioPicker) {
+                                    AudioPickerOverlay(
+                                        voiceTypes = state.voiceTypes,
+                                        currentVoiceType = state.currentVoiceType,
+                                        isSwitching = state.isAudioSwitching,
+                                        onSelect = { typeId ->
+                                            viewModel.selectVoiceType(typeId)
+                                            showAudioPicker = false
+                                        },
+                                        onDismiss = { showAudioPicker = false },
+                                    )
+                                }
 
-                            if (showQualityPicker) {
-                                OptionSheetOverlay(
-                                    title = strings.playerQualityTitle,
-                                    options = qualityOptions,
-                                    current = currentQuality,
-                                    onSelect = { quality ->
-                                        controller.setQuality(quality)
-                                        manualQuality = quality
-                                        showQualityPicker = false
-                                    },
-                                    onDismiss = { showQualityPicker = false },
-                                )
-                            }
+                                if (showQualityPicker) {
+                                    OptionSheetOverlay(
+                                        title = strings.playerQualityTitle,
+                                        options = qualityOptions,
+                                        current = currentQuality,
+                                        onSelect = { quality ->
+                                            controller.setQuality(quality)
+                                            manualQuality = quality
+                                            showQualityPicker = false
+                                        },
+                                        onDismiss = { showQualityPicker = false },
+                                    )
+                                }
 
-                            if (showSpeedPicker) {
-                                val speedLabels = PLAYBACK_RATES.map { strings.playerSpeedValue(it.formatRate()) }
-                                OptionSheetOverlay(
-                                    title = strings.playerSpeedTitle,
-                                    options = speedLabels,
-                                    current = strings.playerSpeedValue(speedRate.formatRate()),
-                                    onSelect = { label ->
-                                        PLAYBACK_RATES
-                                            .firstOrNull { strings.playerSpeedValue(it.formatRate()) == label }
-                                            ?.let { controller.setPlaybackRate(it) }
-                                        showSpeedPicker = false
-                                    },
-                                    onDismiss = { showSpeedPicker = false },
-                                )
-                            }
+                                if (showSpeedPicker) {
+                                    val speedLabels = PLAYBACK_RATES.map { strings.playerSpeedValue(it.formatRate()) }
+                                    OptionSheetOverlay(
+                                        title = strings.playerSpeedTitle,
+                                        options = speedLabels,
+                                        current = strings.playerSpeedValue(speedRate.formatRate()),
+                                        onSelect = { label ->
+                                            PLAYBACK_RATES
+                                                .firstOrNull { strings.playerSpeedValue(it.formatRate()) == label }
+                                                ?.let { controller.setPlaybackRate(it) }
+                                            showSpeedPicker = false
+                                        },
+                                        onDismiss = { showSpeedPicker = false },
+                                    )
+                                }
 
-                            // P16.T7 — resume-диалог «Продолжить с M:SS / С начала», по одному
-                            // разу на переоткрытие серии ([PlayerUiState.resumePositionMs]
-                            // сбрасывается обоими выборами).
-                            val resumePositionMs = state.resumePositionMs
-                            if (resumePositionMs != null) {
-                                ResumePlaybackDialog(
-                                    positionMs = resumePositionMs,
-                                    strings = strings,
-                                    onContinue = viewModel::onResumeContinue,
-                                    onStartOver = viewModel::onResumeStartOver,
-                                    onDismiss = viewModel::onResumeDismiss,
-                                )
+                                // P16.T7 — resume-диалог «Продолжить с M:SS / С начала», по одному
+                                // разу на переоткрытие серии ([PlayerUiState.resumePositionMs]
+                                // сбрасывается обоими выборами).
+                                val resumePositionMs = state.resumePositionMs
+                                if (resumePositionMs != null) {
+                                    ResumePlaybackDialog(
+                                        positionMs = resumePositionMs,
+                                        strings = strings,
+                                        onContinue = viewModel::onResumeContinue,
+                                        onStartOver = viewModel::onResumeStartOver,
+                                        onDismiss = viewModel::onResumeDismiss,
+                                    )
+                                }
                             }
                         }
                     } else {
