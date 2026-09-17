@@ -28,6 +28,10 @@ import com.aniko.ui.glass.rememberGlassBackdropState
  * Чистый UI-компонент: не знает про `AnixDestination`/Koin/`NavController` — вызывающая сторона
  * (composeApp) передаёт список [items] и обрабатывает клики через [onItemClick].
  *
+ * @param sidebarHeader Слот в верхней части постоянного sidebar на [AnixWindowSize.Expanded]
+ *   (например, кнопки управления окном). См. [AnixSidebar].
+ * @param sidebarFooter Слот в нижней части постоянного sidebar на [AnixWindowSize.Expanded]
+ *   (например, переключатель языка). См. [AnixSidebar].
  * @param showNavigationChrome `false` полностью убирает bottomBar/rail/sidebar, отдавая [content]
  * весь экран (P13, найдено живой проверкой) — нужен маршрутам, которые обязаны быть "поверх"
  * каркаса (плеер, см. KDoc `PlayerScreen`): `content` и раньше получал `PaddingValues` без
@@ -61,6 +65,7 @@ fun AdaptiveScaffold(
     windowSize: AnixWindowSize = LocalAnixWindowSize.current,
     showNavigationChrome: Boolean = true,
     sidebarHeader: @Composable ColumnScope.() -> Unit = {},
+    sidebarFooter: @Composable ColumnScope.() -> Unit = {},
     snackbarHost: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
@@ -128,6 +133,7 @@ fun AdaptiveScaffold(
                     selectedItemId = selectedItemId,
                     onItemClick = onItemClick,
                     header = sidebarHeader,
+                    footer = sidebarFooter,
                 )
                 Scaffold(
                     modifier = Modifier.weight(1f),

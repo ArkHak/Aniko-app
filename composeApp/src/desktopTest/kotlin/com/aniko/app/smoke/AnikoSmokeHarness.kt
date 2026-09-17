@@ -2,8 +2,8 @@ package com.aniko.app.smoke
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SkikoComposeUiTest
 import androidx.compose.ui.test.v2.runSkikoComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.Lifecycle
@@ -37,7 +37,7 @@ import org.koin.dsl.KoinAppDeclaration
  * так переключались корректно, ломался только teardown).
  *
  * Явно подставляем свой [LifecycleRegistry], доводим до [Lifecycle.State.RESUMED] перед
- * [ComposeUiTest.setContent] и обратно до [Lifecycle.State.DESTROYED] сразу после [body] — то
+ * [SkikoComposeUiTest.setContent] и обратно до [Lifecycle.State.DESTROYED] сразу после [body] — то
  * есть ПОКА тест ещё владеет управлением, а не полагаемся на `closeScene`. `LifecycleRegistry`
  * сам проходит промежуточные состояния (`RESUMED → STARTED → CREATED → DESTROYED`), поэтому
  * `NavBackStackEntry` каждой записи бэкстека получает корректную последовательность событий, и
@@ -130,14 +130,23 @@ fun noOpImageLoader(context: PlatformContext): ImageLoader = ImageLoader.Builder
  * с экрана логина.
  * @param koinDeclaration точка расширения для конкретного сценария (например, свой `single<X>`
  * поверх дефолтного графа) — применяется ПОСЛЕ [fakeInfraModule], поэтому переопределяет её.
- * @param body тело теста — обычный код [ComposeUiTest] (`onNodeWithTag`, `onNodeWithText`, …).
+ * @param windowSize размер виртуального окна в px при `density = 1f` (то есть в dp) — по умолчанию
+ * [COMPACT_WINDOW_SIZE] (телефон). Меняется для сценариев, зависящих от `AnixWindowSize`: широкое
+ * окно (`Expanded`, >840dp) рисует постоянный сайдбар вместо `NavigationBar`, и навигация в таких
+ * сценариях ищется по видимому тексту лейбла, а не по [com.aniko.ui.testing.AnixTestTags.bottomNavItem].
+ * @param body тело теста — обычный код [SkikoComposeUiTest] (`onNodeWithTag`, `onNodeWithText`, …).
+ * Приёмник — конкретный класс [SkikoComposeUiTest], а не интерфейс `ComposeUiTest`: последний не
+ * умеет снимать пиксели (`captureToImage()` для скриншот-проверок раскладки объявлен именно на
+ * классе, `ComposeUiTest.skiko.kt`), а все боевые сценарии Фазы 11 пользуются только общими
+ * методами интерфейса, поэтому сужение приёмника ничего не ломает.
  */
 @OptIn(ExperimentalTestApi::class)
 fun runAnikoSmokeTest(
     apiRoutes: Map<String, () -> String> = emptyMap(),
     initialToken: String? = null,
     koinDeclaration: KoinAppDeclaration? = null,
-    body: ComposeUiTest.() -> Unit,
+    windowSize: Size = COMPACT_WINDOW_SIZE,
+    body: SkikoComposeUiTest.() -> Unit,
 ) {
     startKoin {
         modules(databaseModule, dataModule, appModule, fakeInfraModule(apiRoutes, initialToken))
@@ -147,7 +156,7 @@ fun runAnikoSmokeTest(
     val lifecycleOwner = SmokeTestLifecycleOwner()
     try {
         SingletonImageLoader.setSafe { context -> noOpImageLoader(context) }
-        runSkikoComposeUiTest(size = COMPACT_WINDOW_SIZE, density = Density(1f)) {
+        runSkikoComposeUiTest(size = windowSize, density = Density(1f)) {
             lifecycleOwner.setState(Lifecycle.State.RESUMED)
             setContent {
                 CompositionLocalProvider(LocalLifecycleOwner provides lifecycleOwner) {

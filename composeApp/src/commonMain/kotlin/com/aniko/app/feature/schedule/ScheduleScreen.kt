@@ -72,21 +72,19 @@ import org.koin.compose.viewmodel.koinViewModel
  * надпись `bodySmall 12sp textSecondary45` — без контейнера и центрирования. Работает
  * одинаково что в [ScheduleDaysList] на Compact, что в [DayColumn] на Medium/Expanded.
  *
- * ## Навигация по дням + подсветка "сегодня" (P9.T5, сужено до Medium/Expanded в P13.T5)
- * На Medium/Expanded чипы [ChipRow] — способ прокрутить колонки к нужному дню (см. ниже); на
- * Compact дня-селектора больше нет — все дни и так на экране, скроллить к нужному можно пальцем,
- * отдельный контрол избыточен. День "сегодня" помечен точкой после названия — сравнение с
- * [WeekDay] сегодняшнего дня уже есть в [ScheduleViewModel] (используется и `HomeViewModel` для
- * секции "Новые серии"); тот же маркер используется и в заголовках секций [DaySectionHeader].
+ * ## Навигация по дням + подсветка "сегодня" (P9.T5, сужено до Medium в P13.T7)
+ * На Medium чипы [ChipRow] — способ прокрутить колонки к нужному дню; на Expanded сетка из
+ * 7 дней показывается сразу ([ScheduleExpandedGrid]), селектор не нужен. На Compact дня-
+ * селектора тоже нет — все дни и так на экране. День "сегодня" помечен точкой после названия —
+ * сравнение с [WeekDay] сегодняшнего дня уже есть в [ScheduleViewModel] (используется и
+ * `HomeViewModel` для секции "Новые серии"); тот же маркер используется и в заголовках секций
+ * [DaySectionHeader].
  *
- * ## Wide-экраны: колонки на Medium и Expanded (P9.T6, гейт расширен с Expanded в P13.T5)
- * Мокап показал, что мульти-колоночная сетка дней нужна не только на Expanded, а на любой
- * [AnixWindowSize.isTwoPane]-ширине (то есть и на Medium/tablet тоже) — раньше здесь стояла
- * жёсткая проверка `== Expanded`, из-за чего Medium ошибочно показывал Compact-раскладку с
- * табами. Под селектором показываются колонки сразу нескольких дней (все 7, горизонтальный
- * скролл) — тап по чипу не фильтрует контент (он и так весь на экране), а прокручивает колонки
- * до нужного дня. Сама визуальная доводка сетки под desktop-ширину (P13.T7) — отдельная задача,
- * этот файл только расширяет условие её показа.
+ * ## Wide-экраны: 7 колонок на Expanded, горизонтальный скролл на Medium (P13.T7)
+ * На Expanded 7 дней отрисовываются одной сеткой, занимающей всю ширину контента, без
+ * дублирующего ряда чипов и без фиксированной ширины колонки. На Medium сохраняется прежняя
+ * логика [DaySelector] + [ScheduleColumns] с горизонтальной прокруткой колонок фиксированной
+ * ширины. Compact — сплошной вертикальный список [ScheduleDaysList].
  */
 @Composable
 fun ScheduleScreen(
@@ -163,31 +161,42 @@ private fun ScheduleContent(
             modifier = Modifier.padding(horizontal = dimens.spaceM),
         )
 
-        if (windowSize.isTwoPane) {
-            DaySelector(
-                selectedDay = selectedDay,
-                today = today,
-                strings = strings,
-                onDaySelected = { day ->
-                    onDaySelected(day)
-                    val index = WeekDay.entries.indexOf(day)
-                    coroutineScope.launch { columnsListState.animateScrollToItem(index) }
-                },
-            )
-            ScheduleColumns(
-                schedule = schedule,
-                strings = strings,
-                listState = columnsListState,
-                today = today,
-                onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
-            )
-        } else {
-            ScheduleDaysList(
-                schedule = schedule,
-                strings = strings,
-                today = today,
-                onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
-            )
+        when (windowSize) {
+            AnixWindowSize.Expanded ->
+                ScheduleExpandedGrid(
+                    schedule = schedule,
+                    strings = strings,
+                    today = today,
+                    onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
+                )
+
+            AnixWindowSize.Medium -> {
+                DaySelector(
+                    selectedDay = selectedDay,
+                    today = today,
+                    strings = strings,
+                    onDaySelected = { day ->
+                        onDaySelected(day)
+                        val index = WeekDay.entries.indexOf(day)
+                        coroutineScope.launch { columnsListState.animateScrollToItem(index) }
+                    },
+                )
+                ScheduleColumns(
+                    schedule = schedule,
+                    strings = strings,
+                    listState = columnsListState,
+                    today = today,
+                    onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
+                )
+            }
+
+            AnixWindowSize.Compact ->
+                ScheduleDaysList(
+                    schedule = schedule,
+                    strings = strings,
+                    today = today,
+                    onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
+                )
         }
     }
 }
@@ -210,10 +219,10 @@ private fun DaySelector(
     )
 }
 
-/** "•" после названия — маркер "сегодня", общий и для чипов [DaySelector] (Medium/Expanded), и
+/** "•" после названия — маркер "сегодня", общий и для чипов [DaySelector] (Medium), и
  *  для заголовков секций [DaySectionHeader] (Compact, P13.T5) — не отдельная иконка, чтобы не
  *  тянуть Material Icons Extended ради одного значка точки, см. KDoc [ChipRow]. */
-private fun WeekDay.chipLabel(
+internal fun WeekDay.chipLabel(
     today: WeekDay,
     strings: Strings,
 ): String {

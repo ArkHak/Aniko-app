@@ -8,58 +8,58 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.window.WindowDraggableArea
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowScope
-import androidx.compose.ui.window.WindowState
+import com.aniko.player.LocalDesktopWindow
+import java.awt.Frame
 
 private val TitleBarHeight = 38.dp
 
-/** Переключает между `Maximized` и `Floating` — общая логика для двойного клика и zoom-кнопки. */
-private fun WindowState.toggleMaximized() {
-    placement = if (placement == WindowPlacement.Maximized) WindowPlacement.Floating else WindowPlacement.Maximized
-}
-
 /**
  * Кастомный оконный хром для `undecorated = true` Window (P5.T6): своя draggable-полоса сверху
- * с [TrafficLightButtons] вместо нативных macOS-кнопок (которые `undecorated = true` убирает
- * вместе с системным заголовком).
+ * (системный заголовок `undecorated = true` убирает вместе с кнопками).
+ *
+ * **Кнопки окна здесь больше не рисуются** (desktop-проход 2026-09-15/16). Desktop-артборд мокапа
+ * Claude Design кладёт traffic lights ВНУТРЬ сайдбара (`MacTrafficLights` в его шапке, строка 738),
+ * и приложение теперь рисует их там же — [com.aniko.app.AppSidebarTrafficLights]. Полоса остаётся
+ * только как область перетаскивания: без неё `undecorated`-окно не сдвинуть с места. Живая
+ * проверка 2026-09-16 на реальном окне показала ДВА набора кнопок одновременно (полоса + сайдбар) —
+ * это и было причиной убрать их отсюда, а не из сайдбара.
  *
  * Двойной клик по полосе разворачивает/восстанавливает окно — стандартное поведение заголовка
  * окна в macOS, которое при `undecorated = true` тоже приходится реализовывать вручную:
  * [WindowDraggableArea] сама по себе двойной клик не обрабатывает, только перетаскивание.
  *
- * @param windowState состояние окна из `rememberWindowState()` в `Main.kt` — читаем/пишем
- *   [WindowState.placement] напрямую для toggle maximize/restore.
+ * **Единый путь управления окном — AWT `Frame`** (2026-09-17, ревью F1): toggle делается через
+ * [LocalDesktopWindow] тем же `extendedState xor MAXIMIZED_BOTH`, что и кнопки сайдбара
+ * ([com.aniko.app.AppSidebarTrafficLights]) — иначе две «конкурирующие» системы рассинхронизируют
+ * друг друга (Compose `WindowState.placement` не узнает о прямом изменении `Frame`).
+ *
+ * @param content контент приложения под полосой.
  */
 @Composable
-fun WindowScope.AnikoDesktopChrome(
-    windowState: WindowState,
-    onClose: () -> Unit,
-    onMinimize: () -> Unit,
-    content: @Composable () -> Unit,
-) {
+fun WindowScope.AnikoDesktopChrome(content: @Composable () -> Unit) {
+    val window = LocalDesktopWindow.current
     Column(modifier = Modifier.fillMaxSize()) {
         WindowDraggableArea(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .height(TitleBarHeight)
-                    .pointerInput(windowState) {
-                        detectTapGestures(onDoubleTap = { windowState.toggleMaximized() })
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onDoubleTap = {
+                                val frame = window as? Frame
+                                if (frame != null) {
+                                    frame.extendedState = frame.extendedState xor Frame.MAXIMIZED_BOTH
+                                }
+                            },
+                        )
                     },
         ) {
-            Box(modifier = Modifier.fillMaxWidth().height(TitleBarHeight)) {
-                TrafficLightButtons(
-                    onClose = onClose,
-                    onMinimize = onMinimize,
-                    onToggleMaximize = { windowState.toggleMaximized() },
-                    modifier = Modifier.align(Alignment.CenterStart),
-                )
-            }
+            Box(modifier = Modifier.fillMaxWidth().height(TitleBarHeight))
         }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             content()

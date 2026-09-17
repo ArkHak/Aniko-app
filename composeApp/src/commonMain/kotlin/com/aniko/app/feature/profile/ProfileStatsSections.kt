@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -275,26 +276,59 @@ internal fun FavoriteGenresSection(
 internal fun AchievementsSection(
     achievements: List<Achievement>,
     pinState: ProfilePinState,
+    windowSize: AnixWindowSize,
     modifier: Modifier = Modifier,
 ) {
     if (achievements.isEmpty()) return
 
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
+    val isExpanded = windowSize == AnixWindowSize.Expanded
+    val titleModifier = if (isExpanded) Modifier else Modifier.padding(horizontal = dimens.spaceM)
 
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
-        ProfileSectionTitleRow(
-            title = strings.profileAchievementsTitle,
-            section = ProfileShowcaseSection.ACHIEVEMENTS,
-            pinState = pinState,
-            modifier = Modifier.padding(horizontal = dimens.spaceM),
-        )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(dimens.spaceM),
-            contentPadding = PaddingValues(horizontal = dimens.spaceM),
-        ) {
-            items(items = achievements, key = { it.id }) { achievement ->
-                AchievementBadge(achievement = achievement)
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement =
+            if (isExpanded) {
+                Arrangement.spacedBy(ACHIEVEMENT_TITLE_GAP)
+            } else {
+                Arrangement.spacedBy(dimens.spaceS)
+            },
+    ) {
+        if (isExpanded) {
+            Text(
+                text = strings.profileAchievementsTitle,
+                modifier = titleModifier,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = ACHIEVEMENT_TITLE_FONT_SIZE),
+                fontWeight = FontWeight.Bold,
+            )
+        } else {
+            ProfileSectionTitleRow(
+                title = strings.profileAchievementsTitle,
+                section = ProfileShowcaseSection.ACHIEVEMENTS,
+                pinState = pinState,
+                modifier = titleModifier,
+            )
+        }
+
+        if (isExpanded) {
+            FlowRow(
+                modifier = titleModifier,
+                horizontalArrangement = Arrangement.spacedBy(ACHIEVEMENT_CHIP_GAP),
+                verticalArrangement = Arrangement.spacedBy(ACHIEVEMENT_CHIP_GAP),
+            ) {
+                achievements.forEach { achievement ->
+                    AchievementChip(label = achievement.name)
+                }
+            }
+        } else {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(dimens.spaceM),
+                contentPadding = PaddingValues(horizontal = dimens.spaceM),
+            ) {
+                items(items = achievements, key = { it.id }) { achievement ->
+                    AchievementBadge(achievement = achievement)
+                }
             }
         }
     }
@@ -328,8 +362,52 @@ private fun AchievementBadge(achievement: Achievement) {
     }
 }
 
+@Composable
+private fun AchievementChip(label: String) {
+    val primary = MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(ACHIEVEMENT_CHIP_RADIUS)
+    // Сервер отдаёт только полученные бейджи (см. KDoc `Achievement`) — неполученных состояний
+    // нет, параметр `selected` был мёртвым (ревью F12, 2026-09-17): активный стиль зашит.
+    val containerColor = primary.copy(alpha = ACHIEVEMENT_SELECTED_CONTAINER_ALPHA)
+    val borderColor = primary.copy(alpha = ACHIEVEMENT_SELECTED_BORDER_ALPHA)
+
+    Box(
+        modifier =
+            Modifier
+                .clip(shape)
+                .background(containerColor, shape)
+                .border(BorderStroke(ACHIEVEMENT_CHIP_BORDER_WIDTH, borderColor), shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            modifier =
+                Modifier.padding(
+                    horizontal = ACHIEVEMENT_CHIP_HORIZONTAL_PADDING,
+                    vertical = ACHIEVEMENT_CHIP_VERTICAL_PADDING,
+                ),
+            style =
+                MaterialTheme.typography.labelMedium.copy(
+                    fontSize = ACHIEVEMENT_CHIP_FONT_SIZE,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
 private val ACHIEVEMENT_BADGE_SIZE = 56.dp
 private val ACHIEVEMENT_BADGE_WIDTH = 72.dp
+private val ACHIEVEMENT_CHIP_RADIUS = 20.dp
+private val ACHIEVEMENT_CHIP_BORDER_WIDTH = 1.dp
+private val ACHIEVEMENT_CHIP_HORIZONTAL_PADDING = 16.dp
+private val ACHIEVEMENT_CHIP_VERTICAL_PADDING = 9.dp
+private val ACHIEVEMENT_CHIP_GAP = 8.dp
+private val ACHIEVEMENT_TITLE_FONT_SIZE = 15.sp
+private val ACHIEVEMENT_TITLE_GAP = 10.dp
+private val ACHIEVEMENT_CHIP_FONT_SIZE = 12.5.sp
+private const val ACHIEVEMENT_SELECTED_CONTAINER_ALPHA = 0.2f
+private const val ACHIEVEMENT_SELECTED_BORDER_ALPHA = 0.5f
 
 /**
  * Сетка статистики — Track A (точное соответствие макету): мокап рисует ровно 4 плитки в сетке
@@ -349,6 +427,7 @@ private val ACHIEVEMENT_BADGE_WIDTH = 72.dp
 @Composable
 internal fun StatsGrid(
     profile: ProfileDetails,
+    windowSize: AnixWindowSize,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -365,14 +444,26 @@ internal fun StatsGrid(
             StatTileData(profile.commentCount.toString(), strings.profileCommentsLabel),
         )
 
+    val isExpanded = windowSize == AnixWindowSize.Expanded
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val gap = dimens.spaceS
-        val columns = maxOf(MIN_STAT_GRID_COLUMNS, ceil((maxWidth + gap) / (STAT_CARD_MAX_WIDTH + gap)).toInt())
+        val gap = if (isExpanded) STAT_GRID_GAP_EXPANDED else dimens.spaceS
+        val columns =
+            if (isExpanded) {
+                STAT_GRID_COLUMNS_EXPANDED
+            } else {
+                maxOf(MIN_STAT_GRID_COLUMNS, ceil((maxWidth + gap) / (STAT_CARD_MAX_WIDTH + gap)).toInt())
+            }
 
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(gap)) {
             tiles.chunked(columns).forEach { rowTiles ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    rowTiles.forEach { tile -> ProfileStatCard(tile = tile, modifier = Modifier.weight(1f)) }
+                    rowTiles.forEach { tile ->
+                        ProfileStatCard(
+                            tile = tile,
+                            useExpandedStyle = isExpanded,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                     // Последний ряд короче остальных (8 плиток не делится на 3/5 колонок) —
                     // заполняем пустыми весами, чтобы карточки не растягивались на всю ширину ряда
                     // (тот же приём, что в HomeQuickActions).
@@ -387,12 +478,16 @@ internal fun StatsGrid(
 @Composable
 private fun ProfileStatCard(
     tile: StatTileData,
+    useExpandedStyle: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colors = AnixThemeTokens.colors
-    val shape = RoundedCornerShape(PROFILE_CARD_RADIUS)
+    val shape = RoundedCornerShape(if (useExpandedStyle) STAT_CARD_RADIUS_EXPANDED else PROFILE_CARD_RADIUS)
     val onClick = tile.onClick
     val clickModifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+    val padding = if (useExpandedStyle) STAT_CARD_PADDING_EXPANDED else PROFILE_CARD_PADDING
+    val valueFontSize = if (useExpandedStyle) STAT_VALUE_FONT_SIZE_EXPANDED else STAT_VALUE_FONT_SIZE
+    val labelFontSize = if (useExpandedStyle) STAT_LABEL_FONT_SIZE_EXPANDED else null
 
     Column(
         modifier =
@@ -401,16 +496,27 @@ private fun ProfileStatCard(
                 .background(colors.overlay045, shape)
                 .border(BorderStroke(PROFILE_CARD_BORDER_WIDTH, colors.overlay07), shape)
                 .then(clickModifier)
-                .padding(PROFILE_CARD_PADDING),
+                .padding(padding),
+        verticalArrangement =
+            if (useExpandedStyle) {
+                Arrangement.spacedBy(STAT_CARD_INNER_GAP_EXPANDED)
+            } else {
+                Arrangement.Top
+            },
     ) {
         Text(
             text = tile.value,
-            style = MaterialTheme.typography.titleLarge.copy(fontSize = STAT_VALUE_FONT_SIZE),
+            style = MaterialTheme.typography.titleLarge.copy(fontSize = valueFontSize),
             fontWeight = FontWeight.ExtraBold,
         )
         Text(
             text = tile.label,
-            style = MaterialTheme.typography.labelSmall,
+            style =
+                if (labelFontSize != null) {
+                    MaterialTheme.typography.labelSmall.copy(fontSize = labelFontSize)
+                } else {
+                    MaterialTheme.typography.labelSmall
+                },
             color = colors.textSecondary60,
         )
     }
@@ -434,7 +540,7 @@ internal fun ProfileChartsSection(
             modifier = modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(dimens.spaceL),
         ) {
-            ListsDonutSection(profile = profile, modifier = Modifier.weight(1f))
+            ListsDonutSection(profile = profile, windowSize = windowSize, modifier = Modifier.weight(1f))
             WeeklyActivitySection(profile = profile, modifier = Modifier.weight(1f))
         }
     } else {
@@ -442,7 +548,7 @@ internal fun ProfileChartsSection(
             modifier = modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
         ) {
-            ListsDonutSection(profile = profile)
+            ListsDonutSection(profile = profile, windowSize = windowSize)
             WeeklyActivitySection(profile = profile)
         }
     }
@@ -471,6 +577,7 @@ internal fun ProfileChartsSection(
 @Composable
 private fun ListsDonutSection(
     profile: ProfileDetails,
+    windowSize: AnixWindowSize,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -487,8 +594,13 @@ private fun ListsDonutSection(
     val slices = counts.map { (name, count) -> ChartSlice(label = name, value = count.toFloat()) }
     val total = counts.sumOf { it.second }
     val palette = colors.chartSeries
-    val cardShape = RoundedCornerShape(PROFILE_CARD_RADIUS)
-    val holeSize = DONUT_RING_SIZE - DONUT_RING_STROKE * 2
+    val isExpanded = windowSize == AnixWindowSize.Expanded
+    val cardShape = RoundedCornerShape(if (isExpanded) DONUT_CARD_RADIUS_EXPANDED else PROFILE_CARD_RADIUS)
+    val cardPadding = if (isExpanded) DONUT_CARD_PADDING_EXPANDED else PROFILE_CARD_PADDING
+    val ringSize = if (isExpanded) DONUT_RING_SIZE_EXPANDED else DONUT_RING_SIZE
+    val strokeWidth = if (isExpanded) DONUT_RING_STROKE_EXPANDED else DONUT_RING_STROKE
+    val legendGap = if (isExpanded) DONUT_LEGEND_GAP_EXPANDED else DONUT_LEGEND_GAP
+    val holeSize = ringSize - strokeWidth * 2
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
         Text(
@@ -503,15 +615,15 @@ private fun ListsDonutSection(
                     .clip(cardShape)
                     .background(colors.overlay045, cardShape)
                     .border(BorderStroke(PROFILE_CARD_BORDER_WIDTH, colors.overlay07), cardShape)
-                    .padding(PROFILE_CARD_PADDING),
+                    .padding(cardPadding),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(DONUT_LEGEND_GAP),
+            horizontalArrangement = Arrangement.spacedBy(legendGap),
         ) {
             DonutChart(
                 slices = slices,
-                modifier = Modifier.size(DONUT_RING_SIZE),
-                size = DONUT_RING_SIZE,
-                strokeWidth = DONUT_RING_STROKE,
+                modifier = Modifier.size(ringSize),
+                size = ringSize,
+                strokeWidth = strokeWidth,
                 legend = false,
                 centerContent = {
                     Box(
@@ -540,6 +652,13 @@ private fun ListsDonutSection(
             Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
                 counts.forEachIndexed { index, (name, count) ->
                     val color = palette[index % palette.size]
+                    val swatchSize = if (isExpanded) LEGEND_SWATCH_SIZE_EXPANDED else LEGEND_SWATCH_SIZE
+                    val labelStyle =
+                        if (isExpanded) {
+                            MaterialTheme.typography.bodySmall.copy(fontSize = LEGEND_LABEL_FONT_SIZE_EXPANDED)
+                        } else {
+                            MaterialTheme.typography.bodySmall
+                        }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(dimens.spaceXs),
@@ -547,17 +666,23 @@ private fun ListsDonutSection(
                         Box(
                             modifier =
                                 Modifier
-                                    .size(LEGEND_SWATCH_SIZE)
+                                    .size(swatchSize)
                                     .background(color, RoundedCornerShape(LEGEND_SWATCH_RADIUS)),
                         )
                         Text(
                             text = name,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = LEGEND_LABEL_ALPHA),
+                            style = labelStyle,
+                            color =
+                                if (isExpanded) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = LEGEND_LABEL_ALPHA)
+                                },
+                            modifier = Modifier.weight(1f),
                         )
                         Text(
                             text = count.toString(),
-                            style = MaterialTheme.typography.bodySmall,
+                            style = labelStyle,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -631,30 +756,32 @@ internal fun RecentlyWatchedSection(
     profile: ProfileDetails,
     onReleaseClick: (Int) -> Unit,
     pinState: ProfilePinState,
+    windowSize: AnixWindowSize,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
     val colors = AnixThemeTokens.colors
     val strings = LocalStrings.current
+    val edgePadding = if (windowSize == AnixWindowSize.Expanded) 0.dp else dimens.spaceM
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
         ProfileSectionTitleRow(
             title = strings.profileRecentlyWatchedTitle,
             section = ProfileShowcaseSection.RECENTLY_WATCHED,
             pinState = pinState,
-            modifier = Modifier.padding(horizontal = dimens.spaceM),
+            modifier = Modifier.padding(horizontal = edgePadding),
         )
         if (profile.recentlyWatched.isEmpty()) {
             Text(
                 text = strings.profileRecentlyWatchedEmpty,
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.textSecondary60,
-                modifier = Modifier.padding(horizontal = dimens.spaceM),
+                modifier = Modifier.padding(horizontal = edgePadding),
             )
         } else {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                contentPadding = PaddingValues(horizontal = dimens.spaceM),
+                contentPadding = PaddingValues(horizontal = edgePadding),
             ) {
                 items(items = profile.recentlyWatched, key = { it.id }) { release ->
                     TitleCard(release = release, onClick = { onReleaseClick(release.id) })
@@ -670,10 +797,19 @@ internal fun RecentlyWatchedSection(
 
 /** [StatsGrid] — сетка карточек. */
 private const val MIN_STAT_GRID_COLUMNS = 2
+private const val STAT_GRID_COLUMNS_EXPANDED = 4
+private val STAT_GRID_GAP_EXPANDED = 16.dp
 private val PROFILE_CARD_RADIUS = 14.dp
 private val PROFILE_CARD_PADDING = 14.dp
 private val PROFILE_CARD_BORDER_WIDTH = 1.dp
 private val STAT_VALUE_FONT_SIZE = 20.sp
+
+/** Desktop-вариант [StatsGrid]: карточки крупнее, жирнее и плотнее к макету (строка 875). */
+private val STAT_CARD_RADIUS_EXPANDED = 16.dp
+private val STAT_CARD_PADDING_EXPANDED = 18.dp
+private val STAT_VALUE_FONT_SIZE_EXPANDED = 26.sp
+private val STAT_LABEL_FONT_SIZE_EXPANDED = 12.sp
+private val STAT_CARD_INNER_GAP_EXPANDED = 6.dp
 
 /** Максимальная комфортная ширина плитки статистики; при превышении добавляются колонки. */
 private val STAT_CARD_MAX_WIDTH = 240.dp
@@ -685,6 +821,15 @@ private val DONUT_LEGEND_GAP = 18.dp
 private val LEGEND_SWATCH_SIZE = 8.dp
 private val LEGEND_SWATCH_RADIUS = 3.dp
 private const val LEGEND_LABEL_ALPHA = 0.8f
+
+/** Desktop-вариант [ListsDonutSection]: кольцо 104dp/15dp, gap 24, легенда крупнее (строка 875). */
+private val DONUT_CARD_RADIUS_EXPANDED = 16.dp
+private val DONUT_CARD_PADDING_EXPANDED = 20.dp
+private val DONUT_RING_SIZE_EXPANDED = 104.dp
+private val DONUT_RING_STROKE_EXPANDED = 15.dp
+private val DONUT_LEGEND_GAP_EXPANDED = 24.dp
+private val LEGEND_SWATCH_SIZE_EXPANDED = 9.dp
+private val LEGEND_LABEL_FONT_SIZE_EXPANDED = 12.5.sp
 
 /** [WeeklyActivitySection] — accent-столбики альфа 0.8, скругление 5dp сверху/2dp снизу. */
 private const val ACTIVITY_BAR_ALPHA = 0.8f

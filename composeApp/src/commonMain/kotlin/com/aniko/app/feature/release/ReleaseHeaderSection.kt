@@ -50,6 +50,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -75,9 +76,10 @@ import com.aniko.ui.theme.AnixThemeTokens
  * Track A (design-match-remaining-screens, 2026-09-04): на phone Compact (см.
  * [com.aniko.ui.adaptive.AnixWindowSize]) точная разметка макета Claude Design (`showDetail`) —
  * обложка-hero 260dp с градиентом, круглая кнопка "назад" поверх неё, карточка контента внахлёст
- * (см. [CompactHeroHeader]) — заменяет прежнюю раскладку "постер+инфо в ряд". На Medium/Expanded
- * (детейл-панель `ListDetailHost`, P5.T3/P13.T13 — раскладку НЕ трогаем) рисуется прежняя
- * [WideHeaderLayout] без изменений.
+ * (см. [CompactHeroHeader]) — заменяет прежнюю раскладку "постер+инфо в ряд". Desktop-проход
+ * (2026-09-15): на Expanded — [ExpandedDrawerHeader] (hero 230dp правого ящика 520dp мокапа
+ * `showDetail`, кнопка "назад" тоже на обложке, `TopAppBar` экрана на этом размере отключён).
+ * На Medium рисуется прежняя [WideHeaderLayout] без изменений.
  *
  * [details] может быть `null` (ещё грузится или упала независимо от базового [release], см. D1 в
  * KDoc [ReleaseDetailsUiState]) — секции, целиком зависящие от неё (расширенные метаданные,
@@ -101,39 +103,56 @@ fun ReleaseHeaderSection(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (LocalAnixWindowSize.current == AnixWindowSize.Compact) {
-        CompactHeroHeader(
-            release = release,
-            details = details,
-            detailsError = detailsError,
-            isResolvingPlay = isResolvingPlay,
-            onWatchClick = onWatchClick,
-            onChangeListStatus = onChangeListStatus,
-            onToggleFavorite = onToggleFavorite,
-            onRetryDetails = onRetryDetails,
-            onShareClick = onShareClick,
-            onBackClick = onBackClick,
-            modifier = modifier,
-        )
-    } else {
-        WideHeaderLayout(
-            release = release,
-            details = details,
-            detailsError = detailsError,
-            isResolvingPlay = isResolvingPlay,
-            onWatchClick = onWatchClick,
-            onChangeListStatus = onChangeListStatus,
-            onToggleFavorite = onToggleFavorite,
-            onRetryDetails = onRetryDetails,
-            onShareClick = onShareClick,
-            modifier = modifier,
-        )
+    when (LocalAnixWindowSize.current) {
+        AnixWindowSize.Compact ->
+            CompactHeroHeader(
+                release = release,
+                details = details,
+                detailsError = detailsError,
+                isResolvingPlay = isResolvingPlay,
+                onWatchClick = onWatchClick,
+                onChangeListStatus = onChangeListStatus,
+                onToggleFavorite = onToggleFavorite,
+                onRetryDetails = onRetryDetails,
+                onShareClick = onShareClick,
+                onBackClick = onBackClick,
+                modifier = modifier,
+            )
+
+        AnixWindowSize.Expanded ->
+            ExpandedDrawerHeader(
+                release = release,
+                details = details,
+                detailsError = detailsError,
+                isResolvingPlay = isResolvingPlay,
+                onWatchClick = onWatchClick,
+                onChangeListStatus = onChangeListStatus,
+                onToggleFavorite = onToggleFavorite,
+                onRetryDetails = onRetryDetails,
+                onShareClick = onShareClick,
+                onBackClick = onBackClick,
+                modifier = modifier,
+            )
+
+        AnixWindowSize.Medium ->
+            WideHeaderLayout(
+                release = release,
+                details = details,
+                detailsError = detailsError,
+                isResolvingPlay = isResolvingPlay,
+                onWatchClick = onWatchClick,
+                onChangeListStatus = onChangeListStatus,
+                onToggleFavorite = onToggleFavorite,
+                onRetryDetails = onRetryDetails,
+                onShareClick = onShareClick,
+                modifier = modifier,
+            )
     }
 }
 
 // ============================================================================================
-// Medium/Expanded (P13.T13/P5.T3 — раскладка зафиксирована, не трогаем): прежняя структура,
-// но цвета/типографика/кнопки/чипы ретокенизированы под те же конвенции, что и phone Compact.
+// Medium (P13.T13/P5.T3 — раскладка зафиксирована, не трогаем): прежняя структура, но
+// цвета/типографика/кнопки/чипы ретокенизированы под те же конвенции, что и phone Compact.
 // ============================================================================================
 
 @Suppress("LongParameterList") // См. обоснование в [ReleaseHeaderSection] — тот же набор данных
@@ -526,6 +545,132 @@ private fun CompactHeroHeader(
     }
 }
 
+// ============================================================================================
+// Desktop Expanded (desktop-проход 2026-09-15, мокап `showDetail`, правый ящик 520px) — hero
+// 230dp + контент с padding 0/24/30 и нахлёстом -20dp на обложку, кнопка "назад" на обложке.
+// ============================================================================================
+
+/**
+ * Шапка Title Detail в правом ящике на Expanded: обложка 230dp с градиентным скримом в
+ * bg-elevated (96%), круглая кнопка "назад" 34dp (`rgba(0,0,0,.5)`, top/left 16), контент —
+ * колонка с gap 16 и горизонтальным padding 24dp, заезжающая на обложку на 20dp. В отличие от
+ * [CompactHeroHeader] отдельной скруглённой карточки с собственным фоном нет — фон ящика
+ * (`MaterialTheme.colorScheme.surface`, рисует `ListDetailHost`) уже и есть bg-elevated, вторая
+ * плашка поверх была бы заметна. Тот же приём [Box] + `padding(top = ...)` вместо `offset`, что
+ * и у [CompactHeroHeader] (см. её KDoc), — чтобы родитель получил верную суммарную высоту.
+ */
+@Suppress("LongParameterList", "LongMethod") // См. обоснование в [ReleaseHeaderSection].
+@Composable
+private fun ExpandedDrawerHeader(
+    release: Release,
+    details: ReleaseDetails?,
+    detailsError: LoadError?,
+    isResolvingPlay: Boolean,
+    onWatchClick: () -> Unit,
+    onChangeListStatus: (ListStatus?) -> Unit,
+    onToggleFavorite: () -> Unit,
+    onRetryDetails: () -> Unit,
+    onShareClick: () -> Unit,
+    onBackClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
+    val bgElevated = MaterialTheme.colorScheme.surface // bg-elevated текущей темы (см. Color.kt)
+
+    Box(modifier = modifier.fillMaxWidth()) {
+        AsyncImage(
+            model = release.posterUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxWidth().height(DRAWER_COVER_HEIGHT).align(Alignment.TopCenter),
+        )
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(DRAWER_COVER_HEIGHT)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors =
+                                listOf(
+                                    Color.Black.copy(alpha = HERO_GRADIENT_TOP_ALPHA),
+                                    bgElevated.copy(alpha = HERO_GRADIENT_BOTTOM_ALPHA),
+                                ),
+                        ),
+                    ),
+        )
+        HeroBackButton(
+            onClick = onBackClick,
+            size = DRAWER_BACK_BUTTON_SIZE,
+            modifier =
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = dimens.spaceM, top = dimens.spaceM),
+        )
+
+        Column(
+            modifier =
+                Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .padding(top = DRAWER_COVER_HEIGHT - DRAWER_CONTENT_OVERLAP)
+                    .padding(horizontal = DRAWER_CONTENT_PADDING),
+            verticalArrangement = Arrangement.spacedBy(dimens.spaceM),
+        ) {
+            Text(
+                text = release.title,
+                style =
+                    MaterialTheme.typography.titleLarge.copy(
+                        fontSize = HERO_TITLE_SIZE,
+                        fontWeight = FontWeight.ExtraBold,
+                    ),
+            )
+
+            HeroMetaRow(release = release, details = details)
+            HeroRatingGenresRow(release = release)
+
+            HeroActionsRow(
+                release = release,
+                isResolvingPlay = isResolvingPlay,
+                onWatchClick = onWatchClick,
+                onChangeListStatus = onChangeListStatus,
+                onToggleFavorite = onToggleFavorite,
+                onShareClick = onShareClick,
+                buttonHeight = DRAWER_BUTTON_HEIGHT,
+                buttonRadius = DRAWER_BUTTON_RADIUS,
+            )
+
+            if (detailsError != null && details == null) {
+                AnixErrorState(
+                    message = detailsError.toDetailsMessage(strings),
+                    onRetry = onRetryDetails,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            val description = release.description
+            if (!description.isNullOrBlank()) {
+                HeroSynopsis(text = description, strings = strings)
+            }
+
+            // Как и в Compact-hero (см. комментарий там): данные реальны и уже загружены, молча
+            // терять их ради пиксель-точности нельзя — оставлены под синопсисом тем же
+            // визуальным языком, что и раньше.
+            MetadataSection(details = details)
+
+            val screenshots = details?.screenshotUrls.orEmpty()
+            if (screenshots.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
+                    HeroSectionTitle(text = strings.titleDetailScreenshots)
+                    ScreenshotRail(urls = screenshots)
+                }
+            }
+        }
+    }
+}
+
 /** Круглая кнопка "назад" поверх hero-обложки — `rgba(0,0,0,0.5)` без backdrop-blur: обычный
  *  `Modifier.blur` блюрит только СВОИХ детей, не то, что находится позади композабла — блюр
  *  ФОНА (backdrop filter) в стабильном Compose Multiplatform этой версии не даёт кросс-платформенного
@@ -537,12 +682,13 @@ private fun CompactHeroHeader(
 private fun HeroBackButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    size: Dp = HERO_BACK_BUTTON_SIZE,
 ) {
     val strings = LocalStrings.current
     Box(
         modifier =
             modifier
-                .size(HERO_BACK_BUTTON_SIZE)
+                .size(size)
                 .clip(CircleShape)
                 .background(Color.Black.copy(alpha = HERO_BACK_BUTTON_SCRIM_ALPHA))
                 .clickable(onClickLabel = strings.backContentDescription, role = Role.Button, onClick = onClick)
@@ -648,6 +794,8 @@ private fun HeroActionsRow(
     onChangeListStatus: (ListStatus?) -> Unit,
     onToggleFavorite: () -> Unit,
     onShareClick: () -> Unit,
+    buttonHeight: Dp = HERO_BUTTON_HEIGHT,
+    buttonRadius: Dp = Dp.Unspecified,
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
@@ -658,8 +806,15 @@ private fun HeroActionsRow(
                 isResolvingPlay = isResolvingPlay,
                 onClick = onWatchClick,
                 modifier = Modifier.weight(1f),
+                height = buttonHeight,
+                cornerRadius = buttonRadius,
             )
-            HeroAddToListButton(release = release, onChangeListStatus = onChangeListStatus)
+            HeroAddToListButton(
+                release = release,
+                onChangeListStatus = onChangeListStatus,
+                height = buttonHeight,
+                cornerRadius = buttonRadius,
+            )
         }
 
         Row(
@@ -710,14 +865,19 @@ private fun HeroPlayButton(
     isResolvingPlay: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    height: Dp = HERO_BUTTON_HEIGHT,
+    cornerRadius: Dp = Dp.Unspecified,
 ) {
     val strings = LocalStrings.current
-    val shape = RoundedCornerShape(AnixThemeTokens.dimens.cornerM)
+    val shape =
+        RoundedCornerShape(
+            if (cornerRadius == Dp.Unspecified) AnixThemeTokens.dimens.cornerM else cornerRadius,
+        )
 
     Row(
         modifier =
             modifier
-                .height(HERO_BUTTON_HEIGHT)
+                .height(height)
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.primary, shape)
                 .clickable(
@@ -771,19 +931,21 @@ private fun HeroPlayButton(
 private fun HeroAddToListButton(
     release: Release,
     onChangeListStatus: (ListStatus?) -> Unit,
+    height: Dp = HERO_BUTTON_HEIGHT,
+    cornerRadius: Dp = Dp.Unspecified,
 ) {
     val dimens = AnixThemeTokens.dimens
     val colors = AnixThemeTokens.colors
     val strings = LocalStrings.current
     var expanded by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(dimens.cornerM)
+    val shape = RoundedCornerShape(if (cornerRadius == Dp.Unspecified) dimens.cornerM else cornerRadius)
     val label = release.myListStatus?.displayName(strings) ?: strings.titleDetailAddToList
 
     Box {
         Row(
             modifier =
                 Modifier
-                    .height(HERO_BUTTON_HEIGHT)
+                    .height(height)
                     .clip(shape)
                     .background(colors.overlay07, shape)
                     .border(BorderStroke(HERO_ADD_BUTTON_BORDER_WIDTH, colors.overlay10), shape)
@@ -935,3 +1097,12 @@ private val HERO_ADD_BUTTON_BORDER_WIDTH = 1.dp
 private val HERO_SECTION_TITLE_SIZE = 14.sp
 private val HERO_SYNOPSIS_TEXT_SIZE = 13.sp
 private val HERO_SYNOPSIS_LINE_HEIGHT = 20.15.sp // 13sp × 1.55 line-height макета
+
+// ---- Desktop Expanded drawer (мокап `showDetail`, 2026-09-15) — литеральные px-значения того
+// же блока макета; тот же принцип локальных констант, что и у hero-констант phone Compact выше.
+private val DRAWER_COVER_HEIGHT = 230.dp
+private val DRAWER_CONTENT_OVERLAP = 20.dp
+private val DRAWER_CONTENT_PADDING = 24.dp
+private val DRAWER_BACK_BUTTON_SIZE = 34.dp
+private val DRAWER_BUTTON_HEIGHT = 44.dp
+private val DRAWER_BUTTON_RADIUS = 11.dp

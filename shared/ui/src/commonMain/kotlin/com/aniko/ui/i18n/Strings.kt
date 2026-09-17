@@ -42,6 +42,9 @@ interface Strings {
     // бара в `App.kt:toNavItem`, Kotlin-константа `AnixSection.Search` не переименована, см. её
     // KDoc). `navProfile` — новый ключ, вкладка `Settings` больше не в таб-баре (см. `settingsTitle`
     // ниже в разделе «Настройки»).
+
+    /** Desktop (Expanded): бренд в верхней части постоянного сайдбара. */
+    val brand: String
     val navHome: String
     val navCatalog: String
     val navLibrary: String
@@ -286,11 +289,6 @@ interface Strings {
     // Заголовок экрана комментариев к релизу (AnixDestination.ReleaseComments).
     val commentsTitle: String
 
-    // Плейсхолдер detail-панели на wide-экранах (ListDetailPaneScaffold, P5.T3), когда список
-    // ничего не выбрал.
-    val detailPaneEmptyTitle: String
-    val detailPaneEmptyMessage: String
-
     // --- Desktop-меню (macOS `MenuBar`, P5.T6) ---
     val menuAbout: String
     val menuQuit: String
@@ -348,8 +346,6 @@ interface Strings {
     val catalogTabNew: String
 
     val catalogFiltersTitle: String
-    val catalogFiltersReset: String
-    val catalogFiltersApply: String
     val catalogEmptyResults: String
 
     // Title Detail (P7.T7-T13)

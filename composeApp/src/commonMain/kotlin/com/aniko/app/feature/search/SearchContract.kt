@@ -75,8 +75,6 @@ sealed interface SearchIntent : UiIntent {
         val genre: String,
     ) : SearchIntent
 
-    data object FiltersReset : SearchIntent
-
     /** Catalog-меню «⋮» (сверка 2026-09-08): поставить релиз в список/сменить статус. */
     data class SetListStatus(
         val releaseId: ReleaseId,

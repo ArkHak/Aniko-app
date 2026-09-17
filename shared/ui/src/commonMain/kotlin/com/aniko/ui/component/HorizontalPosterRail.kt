@@ -2,7 +2,6 @@ package com.aniko.ui.component
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,15 +35,11 @@ import com.aniko.ui.theme.AnixThemeTokens
  * ряд) — сохраняет поведение исходной `ReleaseSection`: на главном экране могут быть данные
  * хотя бы в одной секции, и пустая ничем не должна "мигать".
  *
- * [gridOnExpanded] (P13.T7) — опционально переключает рельсу на `Expanded` в перенос-сетку
- * (`FlowRow`, не `LazyVerticalGrid`: рельса уже сама — один `item { }` внутри внешнего
- * `LazyColumn`/`verticalScroll`-контейнера вызывающей стороны, вложенный ленивый список того же
- * направления скролла упал бы на бесконечной высоте — тот же случай, что уже описан в KDoc
- * [EpisodeGrid]). По умолчанию `false` — старое поведение (горизонтальный скролл) не меняется
- * нигде, где параметр не передан явно (`ReleaseRelatedSection`/`LibraryScreen`/gallery), только
- * `HomeScreen` включает его для рельс-секций. В режиме сетки список без внутреннего скролла —
- * показывает первые [gridMaxItems] уже загруженных элементов и не дёргает [onLoadMore] (сетка —
- * витрина, а не бесконечная лента, тот же принцип, что `maxVisibleItems` у `ContinueWatchingSection`).
+ * Desktop (Expanded): `HomeScreen` (composeApp) НЕ использует эту рельсу для «Top This Week»/
+ * «Новые серии» — там своя 6-колоночная сетка (`HomeRailGridSection`, `HomeSections.kt`),
+ * чтобы не менять раскладку остальных потребителей рельсы (`ReleaseRelatedSection`/
+ * `LibraryScreen`/gallery). Эта функция остаётся чистой горизонтальной лентой на всех
+ * размерах окна.
  */
 @Suppress("LongParameterList") // Публичная сигнатура зафиксирована брифом P6.T5: state/key/item
 // обязательны, остальное — опциональные точки расширения (пустое сообщение/повтор/подгрузка/
@@ -62,8 +57,6 @@ fun <T : Any> HorizontalPosterRail(
     prefetchThreshold: Int = 4,
     action: (@Composable () -> Unit)? = null,
     windowSize: AnixWindowSize = LocalAnixWindowSize.current,
-    gridOnExpanded: Boolean = false,
-    gridMaxItems: Int = 12,
     item: @Composable (T) -> Unit,
 ) {
     if (state.isEmpty && emptyMessage == null) return
@@ -97,15 +90,6 @@ fun <T : Any> HorizontalPosterRail(
                     modifier = Modifier.fillMaxWidth().height(placeholderHeight),
                 )
 
-            windowSize == AnixWindowSize.Expanded && gridOnExpanded ->
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = dimens.spaceM),
-                    horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                    verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                ) {
-                    state.items.take(gridMaxItems).forEach { value -> item(value) }
-                }
-
             else ->
                 PosterLazyRow(
                     items = state.items,
@@ -119,9 +103,8 @@ fun <T : Any> HorizontalPosterRail(
     }
 }
 
-/** Горизонтальный скролл-вариант рельсы (Compact/Medium, либо Expanded без [HorizontalPosterRail]'s
- *  `gridOnExpanded]`) — вынесено отдельной функцией, чтобы не раздувать [HorizontalPosterRail]
- *  (detekt `LongMethod`/`CyclomaticComplexMethod`). */
+/** Горизонтальный скролл-вариант рельсы — вынесено отдельной функцией, чтобы не раздувать
+ *  [HorizontalPosterRail] (detekt `LongMethod`/`CyclomaticComplexMethod`). */
 @Suppress("LongParameterList") // Ровно по числу того, что реально нужно рельсе: данные+key+
 // load-more состояние+токены отступов+сам item-слот — группировка в конфиг-класс здесь не
 // улучшила бы читаемость вызова, см. тот же принцип в KDoc HorizontalPosterRail.

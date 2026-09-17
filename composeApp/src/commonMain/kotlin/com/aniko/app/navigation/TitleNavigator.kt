@@ -8,8 +8,10 @@ import com.aniko.model.VideoHost
 
 /**
  * Единственное, что экраны знают про навигацию к тайтлу/комментариям/плееру — они НЕ знают, идёт
- * ли переход через `NavController` (compact — полноэкранный маршрут) или через [DetailPaneStack]
- * (wide — persistent-панель рядом со списком, P5.T3). Эту развилку решает реализация
+ * ли переход через `NavController` (Compact/Medium — полноэкранный маршрут) или через
+ * [DetailPaneStack] (Expanded — правый ящик 520dp поверх списка в `ListDetailHost`,
+ * desktop-проход 2026-09-15, мокап `showDetail`; до него с P5.T3 здесь была persistent-панель
+ * material3-adaptive рядом со списком). Эту развилку решает реализация
  * ([AdaptiveTitleNavigator]) по единственному входу — `isTwoPane: () -> Boolean`.
  *
  * Предоставляется через [LocalTitleNavigator] на уровне `AnixAppScaffold` (интегратор, шаг 6) —
@@ -46,7 +48,8 @@ val LocalTitleNavigator =
     }
 
 /**
- * Реализация [TitleNavigator] поверх `NavController` (compact) + [DetailPaneStack] (wide).
+ * Реализация [TitleNavigator] поверх `NavController` (Compact/Medium) + [DetailPaneStack]
+ * (Expanded — ящик `ListDetailHost`, `isTwoPane` в `App.kt` true только на нём).
  *
  * `isTwoPane` — лямбда, а не готовое `Boolean`, и читается заново при каждом вызове
  * [openTitle]/[openComments]/[back] — так навигатор всегда видит АКТУАЛЬНый size class на момент

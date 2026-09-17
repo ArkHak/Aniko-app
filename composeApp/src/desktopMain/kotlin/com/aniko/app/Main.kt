@@ -109,11 +109,7 @@ private fun runAnikoApp(args: Array<String>) {
             // модуле `compose-ui`, недоступен отсюда) — заводим свой публичный аналог.
             CompositionLocalProvider(LocalDesktopWindow provides window) {
                 if (USE_CUSTOM_CHROME) {
-                    AnikoDesktopChrome(
-                        windowState = windowState,
-                        onClose = ::exitApplication,
-                        onMinimize = { windowState.isMinimized = true },
-                    ) {
+                    AnikoDesktopChrome {
                         App(onBackHandlerReady = { backHandler = it })
                     }
                 } else {

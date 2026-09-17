@@ -1,11 +1,14 @@
 package com.aniko.app.feature.search
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.mvi.CollectEffects
 import com.aniko.model.ListStatus
@@ -45,25 +49,11 @@ import org.koin.compose.viewmodel.koinViewModel
  * Раскладка по [AnixWindowSize] ([LocalAnixWindowSize] — глобально предоставлен в `App.kt`, этот
  * файл только читает, P5.T3):
  * - Compact/Medium — фильтры (статус+жанр) всегда видимы как две горизонтально скроллящиеся строки
- *   чипов ([CatalogInlineFilterChips]) прямо под полем поиска (P13.T3 — до этого жили за кнопкой
- *   "Фильтры" в `ModalBottomSheet`, мокап Claude Design рисует их постоянно видимыми, а не
- *   скрытыми в шторке). Medium отличается от Compact только тем, что `ListDetailHost`
- *   (`App.kt`, вне территории трека B) сам открывает detail-панель сбоку — список результатов
- *   получает меньше горизонтальной ширины, ничего специального здесь не нужно.
- * - Expanded — постоянная боковая панель [CatalogFilterPanel] (`Dimens.filterSidebarWidth`)
- *   слева от списка, фильтры всегда развёрнуты.
- *
- * Сверка с дизайном (2026-09-11, `local://design-catalog-reference`): область между полем поиска
- * и списком тайтлов упрощена до двух рядов чипов (статус, жанр) — три элемента, ранее жившие
- * здесь (табы «Аниме/Дунхуа» типа контента P16.T1, «Моя вкладка» P16.T2, переключатель
- * Сетка/Список), убраны с экрана как фичи по решению пользователя (см. журнал
- * `docs/REELWAVE_PLAN.md`): `CatalogContentType`/`CatalogFilter.contentType` остаётся в модели
- * (дефолт ANIME, входящие deep-link `type=donghua` по-прежнему применяются), но управлять им с
- * этого экрана больше нельзя; список результатов — теперь единственный режим (см. KDoc
- * `CatalogResultsGrid`). Вкладки «Все/Новинки» ([CatalogTab]) подняты ВЫШЕ поля поиска — тот же
- * слот, что "All/New Arrivals" в референсе. Поле поиска перекрашено в заливку без рамки
- * ([OutlinedTextFieldDefaults.colors] — `surfaceVariant`, `Color.Transparent` на бордере), тот же
- * компонент `OutlinedTextField`, только другие цвета (второй конвенции не заводим).
+ *   чипов ([CatalogInlineFilterChips]) прямо под полем поиска, вкладки «Все/Новинки» —
+ *   [ChipRow] над полем поиска (P13.T3).
+ * - Expanded — постоянная боковая панель [CatalogFilterPanel] фиксированной ширины 200.dp слева
+ *   от выдачи; вкладки «Все/Новинки» перенесены в панель, поле поиска имеет max-width 360.dp,
+ *   результаты — сетка из 5 колонок (desktop-артборд мокапа, строка 800).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -126,7 +116,7 @@ fun SearchScreen(
     }
 }
 
-/** Expanded: постоянная боковая панель фильтров + список (см. KDoc [SearchScreen]). */
+/** Expanded: фиксированная боковая панель 200.dp + выдача справа (см. KDoc [SearchScreen]). */
 @Suppress("LongParameterList") // Состояние + VM + 3 колбэка, см. SearchScreen KDoc.
 @Composable
 private fun ExpandedCatalogLayout(
@@ -138,34 +128,20 @@ private fun ExpandedCatalogLayout(
     onSetListStatus: (Int, ListStatus) -> Unit,
     onRemoveFromList: (Int) -> Unit,
 ) {
-    // P13.T7 [FIX]: сайдбар раньше держал фиксированные dimens.filterSidebarWidth (280dp)
-    // независимо от реальной доступной ширины — на Desktop `ExpandedCatalogLayout` живёт внутри
-    // constrained list-панели `ListDetailHost` (после P13.T6 максимум 560dp, на границе Medium/
-    // Expanded — ~420dp), а не во весь экран, как предполагала исходная раскладка P7.T6. При
-    // 280dp сайдбара body получал всего ~140-280dp — поле поиска переносилось по одной букве
-    // (найдено живьём при аудите Фазы 13). Пропорциональный `weight` с потолком в исходные 280dp
-    // решает оба случая: на действительно широком экране сайдбар упирается в свой прежний
-    // максимум 280dp (весь остаток уходит body, как и раньше), на узкой list-панели сайдбар
-    // сжимается вместе с body пропорционально (1:2), не отъедая у него непропорционально много
-    // места фиксированным числом.
-    Row(modifier = Modifier.fillMaxSize()) {
+    Row(
+        modifier = Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(EXPANDED_COLUMN_GAP),
+    ) {
         CatalogFilterPanel(
             filter = state.filter,
+            tab = state.tab,
+            onTabSelected = { tab -> viewModel.dispatch(SearchIntent.TabSelected(tab)) },
             onStatusToggle = { id -> viewModel.dispatch(SearchIntent.StatusToggled(id)) },
             onGenreToggle = { genre -> viewModel.dispatch(SearchIntent.GenreToggled(genre)) },
-            onReset = { viewModel.dispatch(SearchIntent.FiltersReset) },
             modifier =
                 Modifier
-                    .weight(FILTER_SIDEBAR_WEIGHT, fill = false)
-                    // Живая проверка (2026-09-03) вскрыла то же самое переносом-по-буквам на
-                    // заголовке "Фильтры"/"Сброс": на границе Medium/Expanded 1:2-пропорция сама
-                    // по себе может ужать сайдбар ниже FILTER_SIDEBAR_MIN_WIDTH — нижняя граница
-                    // не даёт панели сжаться настолько, что даже её собственный заголовок
-                    // перестаёт помещаться (список чипов внутри тоже теряет смысл на совсем
-                    // узкой ширине).
-                    .widthIn(min = FILTER_SIDEBAR_MIN_WIDTH, max = dimens.filterSidebarWidth)
-                    .fillMaxHeight()
-                    .padding(dimens.spaceM),
+                    .width(FILTER_SIDEBAR_WIDTH)
+                    .fillMaxHeight(),
         )
         CatalogBody(
             state = state,
@@ -178,16 +154,17 @@ private fun ExpandedCatalogLayout(
             onRemoveFromList = onRemoveFromList,
             onLoadMore = { viewModel.dispatch(SearchIntent.LoadMore) },
             onRetry = { viewModel.dispatch(SearchIntent.Retry) },
-            modifier = Modifier.weight(CATALOG_BODY_WEIGHT).fillMaxHeight(),
+            showTabs = false,
+            modifier = Modifier.weight(1f).fillMaxHeight(),
         )
     }
 }
 
-private const val FILTER_SIDEBAR_WEIGHT = 1f
-private const val CATALOG_BODY_WEIGHT = 2f
+/** Ширина левой колонки фильтров в Expanded (desktop-артборд, 200px). */
+private val FILTER_SIDEBAR_WIDTH = 200.dp
 
-/** Ниже этой ширины заголовок [CatalogFilterPanel] ("Фильтры"/"Сброс") сам не помещается в строку. */
-private val FILTER_SIDEBAR_MIN_WIDTH = 200.dp
+/** Горизонтальный зазор между левой панелью и правой колонкой выдачи (мокап: 28px). */
+private val EXPANDED_COLUMN_GAP = 28.dp
 
 /**
  * Compact/Medium: чипы фильтров (см. [CatalogInlineFilterChips]) рендерятся прямо в [CatalogBody]
@@ -244,9 +221,10 @@ private fun CompactCatalogLayout(
 
 /**
  * Вкладки «Все/Новинки» + поле поиска + чипы фильтров + список результатов — общая часть
- * Compact/Medium/Expanded раскладок (см. KDoc [SearchScreen]), различие только в [filtersContent]
- * (Compact/Medium передают [CatalogInlineFilterChips], Expanded оставляет `null` — панель уже
- * развёрнута сбоку, P13.T3) и в модификаторе ширины со стороны вызова.
+ * Compact/Medium/Expanded раскладок. Различия:
+ * - Expanded: вкладки скрыты (они рисуются в [CatalogFilterPanel]), поле поиска не
+ *   растягивается на всю ширину, а ограничено 360.dp и стилизовано под desktop-артборд.
+ * - Compact/Medium: поведение сохраняется (P13.T3).
  */
 @Suppress("LongParameterList")
 // 7 колбэков экрана поверх общего SearchState + опциональный слот фильтров — один экран,
@@ -264,77 +242,28 @@ private fun CatalogBody(
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    showTabs: Boolean = true,
     filtersContent: (@Composable () -> Unit)? = null,
 ) {
+    val isExpanded = LocalAnixWindowSize.current == AnixWindowSize.Expanded
     Column(modifier = modifier.padding(horizontal = dimens.spaceM)) {
-        // Вкладки «Все/Новинки» ([CatalogTab]) — подняты выше поля поиска (сверка с дизайном,
-        // 2026-09-11): тот же слот, что "All/New Arrivals" в референсе, см. KDoc [SearchScreen].
-        // Попытка заменить на iOS `UISegmentedControl`-компонент ([AnixSegmentedControl])
-        // отменена: в связке с этим конкретным экраном `SearchFilterSmokeTest`
-        // (`composeApp/src/desktopTest/...`) стабильно падал на непрозрачную ошибку видимости
-        // поля поиска — root cause не установлен в бюджет этой задачи (не всплывающий стектрейс,
-        // а несовпадение visible-bounds в `ComposeUiTest`, воспроизводится только в связке с
-        // отсутствием/заменой именно этого ряда, не с самим `AnixSegmentedControl` в изоляции).
-        // Оставлен `ChipRow` — рабочий, проверенный вариант; `AnixSegmentedControl` — в бэклоге.
-        ChipRow(
-            items = CatalogTab.entries,
-            isSelected = { it == state.tab },
-            label = { tab -> tab.label(strings) },
-            onClick = onTabSelected,
-            modifier = Modifier.fillMaxWidth().padding(top = dimens.spaceS),
-            selectedColor = MaterialTheme.colorScheme.primary,
-        )
+        // Вкладки «Все/Новинки» ([CatalogTab]) — для Compact/Medium над полем поиска.
+        // Expanded передаёт showTabs = false, т.к. вкладки живут в боковой панели.
+        if (showTabs) {
+            CatalogTabsChipRow(
+                state = state,
+                strings = strings,
+                dimens = dimens,
+                onTabSelected = onTabSelected,
+            )
+        }
 
-        OutlinedTextField(
-            value = state.query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth().padding(vertical = dimens.spaceS),
-            // [ИЗВЕСТНАЯ ПРОБЛЕМА, не решена в рамках T9] Подтверждено на устройстве: пустое
-            // поле озвучивается TalkBack без имени — placeholder не даёт доступного имени сам по
-            // себе (проверено дампом accessibility-дерева, content-desc/text у EditText пустые).
-            // Ни внешний Modifier.semantics{}/clearAndSetSemantics, ни параметр `label` этого не
-            // чинят: `modifier`/`label` OutlinedTextField в используемой версии Compose
-            // Multiplatform (Android-таргет) не связываются с accessible name внутреннего
-            // BasicTextField так, как задокументировано для androidx Material3 — похоже на
-            // версионную особенность/баг именно этого CMP-релиза, не архитектуру проекта.
-            // `clearAndSetSemantics` рискует стереть реальную EditableText/SetText-семантику поля
-            // ради имени — сознательно не применён без возможности проверить TalkBack "на слух" в
-            // этой среде. Требует отдельного расследования, не блокирует остальную Фазу 11.
-            placeholder = { Text(strings.searchPlaceholder) },
-            singleLine = true,
-            // iOS-like редизайн (2026-09-11): заливка вместо рамки — приглушённый серый трек
-            // (`outlineVariant`, iOS `systemGray6`-аналог, отличим от белых карточек вокруг),
-            // бордер прозрачен в обоих состояниях (тот же `OutlinedTextField`, не новый
-            // компонент — второй конвенции поля ввода не заводим).
-            shape = RoundedCornerShape(dimens.cornerM),
-            colors =
-                OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.outlineVariant,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.outlineVariant,
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent,
-                ),
-            trailingIcon = {
-                if (state.query.isNotEmpty()) {
-                    // P11.T7 (Трек C): было `Text("✕")` без осмысленной подписи для скринридера
-                    // — заменено на Icon с contentDescription из уже существующего ключа (P11
-                    // фундамент, F6). T9 на устройстве: сам IconButton всё равно не сливал его в
-                    // свой кликабельный узел — добавлен clearAndSetSemantics.
-                    IconButton(
-                        onClick = { onQueryChange("") },
-                        modifier =
-                            Modifier.clearAndSetSemantics {
-                                contentDescription = strings.searchClearContentDescription
-                            },
-                    ) {
-                        AnixIcon(
-                            name = "close",
-                            contentDescription = null,
-                            filled = true,
-                        )
-                    }
-                }
-            },
+        CatalogSearchField(
+            state = state,
+            strings = strings,
+            dimens = dimens,
+            isExpanded = isExpanded,
+            onQueryChange = onQueryChange,
         )
 
         // P13.T3: чипы статус+жанр (Compact/Medium) — прямо под полем поиска, перед списком.
@@ -352,6 +281,133 @@ private fun CatalogBody(
         )
     }
 }
+
+/** Вкладки «Все/Новинки» над полем поиска — только Compact/Medium (см. KDoc [CatalogBody]). */
+@Composable
+private fun CatalogTabsChipRow(
+    state: SearchState,
+    strings: Strings,
+    dimens: AnixDimens,
+    onTabSelected: (CatalogTab) -> Unit,
+) {
+    ChipRow(
+        items = CatalogTab.entries,
+        isSelected = { it == state.tab },
+        label = { tab -> tab.label(strings) },
+        onClick = onTabSelected,
+        modifier = Modifier.fillMaxWidth().padding(top = dimens.spaceS),
+        selectedColor = MaterialTheme.colorScheme.primary,
+    )
+}
+
+/**
+ * Поле поиска каталога — общий `OutlinedTextField`, стилизация зависит от [isExpanded] (см. KDoc
+ * [CatalogBody]): Compact/Medium сохраняют iOS-like заливку без рамки, Expanded — desktop-артборд
+ * (max-width 360.dp, высота 42.dp, бордер/заливка `overlay09`/`overlay05`, текст 13sp).
+ */
+@Composable
+private fun CatalogSearchField(
+    state: SearchState,
+    strings: Strings,
+    dimens: AnixDimens,
+    isExpanded: Boolean,
+    onQueryChange: (String) -> Unit,
+) {
+    val searchModifier =
+        if (isExpanded) {
+            Modifier
+                .widthIn(max = SEARCH_MAX_WIDTH)
+                .height(SEARCH_FIELD_HEIGHT)
+                .padding(bottom = dimens.spaceS)
+        } else {
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = dimens.spaceS)
+        }
+
+    OutlinedTextField(
+        value = state.query,
+        onValueChange = onQueryChange,
+        modifier = searchModifier,
+        // [ИЗВЕСТНАЯ ПРОБЛЕМА, не решена в рамках T9] Подтверждено на устройстве: пустое
+        // поле озвучивается TalkBack без имени — placeholder не даёт доступного имени сам по
+        // себе (проверено дампом accessibility-дерева, content-desc/text у EditText пустые).
+        // Ни внешний Modifier.semantics{}/clearAndSetSemantics, ни параметр `label` этого не
+        // чинят: `modifier`/`label` OutlinedTextField в используемой версии Compose
+        // Multiplatform (Android-таргет) не связываются с accessible name внутреннего
+        // BasicTextField так, как задокументировано для androidx Material3 — похоже на
+        // версионную особенность/баг именно этого CMP-релиза, не архитектуру проекта.
+        // `clearAndSetSemantics` рискует стереть реальную EditableText/SetText-семантику поля
+        // ради имени — сознательно не применён без возможности проверить TalkBack "на слух" в
+        // этой среде. Требует отдельного расследования, не блокирует остальную Фазу 11.
+        placeholder = { Text(strings.searchPlaceholder) },
+        singleLine = true,
+        shape = if (isExpanded) RoundedCornerShape(SEARCH_FIELD_RADIUS) else RoundedCornerShape(dimens.cornerM),
+        colors = catalogSearchFieldColors(isExpanded),
+        textStyle =
+            if (isExpanded) {
+                MaterialTheme.typography.bodyMedium.copy(fontSize = SEARCH_FONT_SIZE)
+            } else {
+                MaterialTheme.typography.bodyLarge
+            },
+        trailingIcon = {
+            if (state.query.isNotEmpty()) {
+                // P11.T7 (Трек C): было `Text("✕")` без осмысленной подписи для скринридера
+                // — заменено на Icon с contentDescription из уже существующего ключа (P11
+                // фундамент, F6). T9 на устройстве: сам IconButton всё равно не сливал его в
+                // свой кликабельный узел — добавлен clearAndSetSemantics.
+                IconButton(
+                    onClick = { onQueryChange("") },
+                    modifier =
+                        Modifier.clearAndSetSemantics {
+                            contentDescription = strings.searchClearContentDescription
+                        },
+                ) {
+                    AnixIcon(
+                        name = "close",
+                        contentDescription = null,
+                        filled = true,
+                    )
+                }
+            }
+        },
+    )
+}
+
+/**
+ * Compact/Medium: заливка без рамки (`outlineVariant`, iOS `systemGray6`-аналог, бордер
+ * прозрачен, iOS-like редизайн 2026-09-11). Expanded: desktop-артборд — заливка `overlay05` +
+ * бордер `overlay09`.
+ */
+@Composable
+private fun catalogSearchFieldColors(isExpanded: Boolean) =
+    if (isExpanded) {
+        OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = AnixThemeTokens.colors.overlay05,
+            unfocusedContainerColor = AnixThemeTokens.colors.overlay05,
+            focusedBorderColor = AnixThemeTokens.colors.overlay09,
+            unfocusedBorderColor = AnixThemeTokens.colors.overlay09,
+        )
+    } else {
+        OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.outlineVariant,
+            unfocusedContainerColor = MaterialTheme.colorScheme.outlineVariant,
+            focusedBorderColor = Color.Transparent,
+            unfocusedBorderColor = Color.Transparent,
+        )
+    }
+
+/** Max-width поля поиска в Expanded (мокап: 360px). */
+private val SEARCH_MAX_WIDTH = 360.dp
+
+/** Высота поля поиска в Expanded (мокап: 42px). */
+private val SEARCH_FIELD_HEIGHT = 42.dp
+
+/** Радиус поля поиска в Expanded (мокап: 10px). */
+private val SEARCH_FIELD_RADIUS = 10.dp
+
+/** Размер текста поля поиска в Expanded (мокап: 13px). */
+private val SEARCH_FONT_SIZE = 13.sp
 
 private fun CatalogTab.label(strings: Strings): String =
     when (this) {

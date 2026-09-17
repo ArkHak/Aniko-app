@@ -17,6 +17,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 import kotlin.math.abs
@@ -61,6 +64,43 @@ fun RatingBadge(
             text = text,
             style = MaterialTheme.typography.labelSmall,
             color = Color.White,
+        )
+    }
+}
+
+/**
+ * Бейдж рейтинга в правом верхнем углу постера в сетке (desktop-мокап Claude Design, строка 757):
+ * мини-плашка без иконки, контрастная поверх постера.
+ */
+@Composable
+fun TopEndRatingBadge(
+    grade: Double,
+    modifier: Modifier = Modifier,
+) {
+    val strings = LocalStrings.current
+    val text = formatGrade(grade)
+
+    Box(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(TOP_END_RATING_RADIUS))
+                .background(TOP_END_RATING_BACKGROUND)
+                .clearAndSetSemantics {
+                    contentDescription = strings.badgeRatingContentDescription(text)
+                }.padding(
+                    horizontal = TOP_END_RATING_HORIZONTAL_PADDING,
+                    vertical = TOP_END_RATING_VERTICAL_PADDING,
+                ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = TOP_END_RATING_FONT_SIZE,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                ),
         )
     }
 }
@@ -176,3 +216,10 @@ private fun formatGrade(grade: Double): String {
 
 private const val DECIMAL_SCALE = 10
 private const val DIVISOR_HALF = 2
+
+// Токены [TopEndRatingBadge] — точные значения desktop-мокапа Claude Design (строка 757).
+private val TOP_END_RATING_BACKGROUND = Color.Black.copy(alpha = 0.55f)
+private val TOP_END_RATING_RADIUS = 7.dp
+private val TOP_END_RATING_HORIZONTAL_PADDING = 6.dp
+private val TOP_END_RATING_VERTICAL_PADDING = 2.dp
+private val TOP_END_RATING_FONT_SIZE = 10.sp

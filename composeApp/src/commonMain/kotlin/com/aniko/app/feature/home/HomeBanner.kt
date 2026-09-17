@@ -5,12 +5,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -26,11 +28,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.aniko.model.InterestingBanner
+import com.aniko.ui.adaptive.AnixWindowSize
+import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.component.AnixContentState
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixLoadingState
@@ -56,6 +63,10 @@ fun HomeBanner(
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
+    val windowSize = LocalAnixWindowSize.current
+    // Expanded-гейт высоты: desktop-мокап (строка 757) даёт 220dp, mobile-артборды — 230dp
+    // (Фаза 14); менять глобальный токен нельзя — регрессия телефонной раскладки (см. ревью F3).
+    val bannerHeight = if (windowSize == AnixWindowSize.Expanded) dimens.bannerHeightExpanded else dimens.bannerHeight
 
     // Нет баннеров и нет ошибки — секция ничего не занимает (тот же принцип, что и у остальных
     // секций Home: пустая лента не должна "мигать" пустым блоком).
@@ -71,13 +82,13 @@ fun HomeBanner(
         val errorMessage = state.errorMessage
         when {
             state.isLoading && state.items.isEmpty() ->
-                AnixLoadingState(modifier = bannerPlaceholderModifier(dimens.bannerHeight, dimens.spaceM))
+                AnixLoadingState(modifier = bannerPlaceholderModifier(bannerHeight, dimens.spaceM))
 
             errorMessage != null && state.items.isEmpty() ->
                 AnixErrorState(
                     message = errorMessage,
                     onRetry = onRetry,
-                    modifier = bannerPlaceholderModifier(dimens.bannerHeight, dimens.spaceM),
+                    modifier = bannerPlaceholderModifier(bannerHeight, dimens.spaceM),
                 )
 
             else -> {
@@ -91,12 +102,13 @@ fun HomeBanner(
                 ) {
                     HorizontalPager(
                         state = pagerState,
-                        modifier = Modifier.fillMaxWidth().height(dimens.bannerHeight),
+                        modifier = Modifier.fillMaxWidth().height(bannerHeight),
                     ) { page ->
                         val banner = banners[page]
                         BannerSlide(
                             banner = banner,
                             onClick = { banner.releaseId?.let(onBannerClick) },
+                            isExpanded = windowSize == AnixWindowSize.Expanded,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -115,10 +127,19 @@ private fun bannerPlaceholderModifier(
     horizontalPadding: Dp,
 ) = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding).height(height)
 
+/**
+ * [isExpanded] переключает оформление слайда между исходным Compact/Medium видом (вертикальный
+ * скрим снизу, заголовок `titleLarge`, паддинг `dimens.spaceM` по периметру) и desktop-мокапом
+ * Claude Design (строка 757): горизонтальный скрим слева `rgba(0,0,0,.6) → transparent 65%`,
+ * заголовок Manrope 800 30px, подпись 13px, отступ left 32/bottom 24, max-width 420 — правка
+ * затрагивает только [AnixWindowSize.Expanded] (бриф desktop-прохода), Compact/Medium не
+ * регрессируют.
+ */
 @Composable
 private fun BannerSlide(
     banner: InterestingBanner,
     onClick: () -> Unit,
+    isExpanded: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -144,36 +165,30 @@ private fun BannerSlide(
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
         )
-        // Скрим — простой вертикальный градиент (не blur/платформенный эффект, чистый Compose
-        // Brush), гарантирует читаемость белого текста поверх произвольного изображения баннера
-        // независимо от темы приложения.
-        // Track C (2026-09-04): макет задаёт `transparent 45% → rgba(0,0,0,0.75) 100%` — верхние
-        // 45% высоты остаются полностью прозрачными (не линейная растяжка от 0 до 100%, как было
-        // раньше), затемнение растёт только в нижних 55%, где лежит текст.
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            BANNER_SCRIM_STOP_START to Color.Transparent,
-                            BANNER_SCRIM_STOP_END to BANNER_SCRIM_COLOR,
-                        ),
-                    ),
+                    .background(if (isExpanded) expandedScrimBrush() else compactScrimBrush()),
         )
-        Column(modifier = Modifier.align(Alignment.BottomStart).padding(dimens.spaceM)) {
+        Column(
+            modifier =
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(if (isExpanded) BANNER_TEXT_PADDING_EXPANDED else PaddingValues(dimens.spaceM))
+                    .let { base -> if (isExpanded) base.widthIn(max = BANNER_TEXT_MAX_WIDTH) else base },
+            verticalArrangement = Arrangement.spacedBy(if (isExpanded) BANNER_TEXT_GAP else dimens.spaceXs),
+        ) {
             Text(
                 text = banner.title,
-                style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
+                style = if (isExpanded) expandedTitleStyle() else compactTitleStyle(),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             banner.description?.let { description ->
                 Text(
                     text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = BANNER_SUBTITLE_ALPHA),
+                    style = if (isExpanded) expandedSubtitleStyle() else compactSubtitleStyle(),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -181,6 +196,43 @@ private fun BannerSlide(
         }
     }
 }
+
+/** Desktop (Expanded, мокап строка 757): `rgba(0,0,0,.6) → transparent 65%`, слева направо. */
+private fun expandedScrimBrush(): Brush =
+    Brush.horizontalGradient(
+        BANNER_SCRIM_STOP_START to BANNER_SCRIM_COLOR,
+        BANNER_SCRIM_STOP_END to Color.Transparent,
+    )
+
+/** Compact/Medium (не тронуто desktop-проходом): прежний вертикальный скрим снизу вверх. */
+private fun compactScrimBrush(): Brush =
+    Brush.verticalGradient(
+        COMPACT_SCRIM_STOP_START to Color.Transparent,
+        COMPACT_SCRIM_STOP_END to COMPACT_SCRIM_COLOR,
+    )
+
+@Composable
+private fun expandedTitleStyle(): TextStyle =
+    MaterialTheme.typography.displayMedium.copy(
+        fontSize = BANNER_TITLE_FONT_SIZE,
+        fontWeight = FontWeight.ExtraBold,
+        lineHeight = BANNER_TITLE_LINE_HEIGHT,
+        color = Color.White,
+    )
+
+@Composable
+private fun compactTitleStyle(): TextStyle = MaterialTheme.typography.titleLarge.copy(color = Color.White)
+
+@Composable
+private fun expandedSubtitleStyle(): TextStyle =
+    MaterialTheme.typography.bodyMedium.copy(
+        fontSize = BANNER_SUBTITLE_FONT_SIZE,
+        color = Color.White.copy(alpha = BANNER_SUBTITLE_ALPHA),
+    )
+
+@Composable
+private fun compactSubtitleStyle(): TextStyle =
+    MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = COMPACT_SUBTITLE_ALPHA))
 
 @Composable
 private fun BannerPagerIndicator(
@@ -210,10 +262,24 @@ private fun BannerPagerIndicator(
     }
 }
 
-private val BANNER_SCRIM_COLOR = Color.Black.copy(alpha = 0.75f)
-private const val BANNER_SCRIM_STOP_START = 0.45f
-private const val BANNER_SCRIM_STOP_END = 1f
-private const val BANNER_SUBTITLE_ALPHA = 0.85f
+// Desktop (Expanded) — мокап Claude Design, строка 757.
+private val BANNER_SCRIM_COLOR = Color.Black.copy(alpha = 0.6f)
+private const val BANNER_SCRIM_STOP_START = 0f
+private const val BANNER_SCRIM_STOP_END = 0.65f
+private const val BANNER_SUBTITLE_ALPHA = 0.75f
+private val BANNER_TITLE_FONT_SIZE = 30.sp
+private val BANNER_TITLE_LINE_HEIGHT = 36.sp
+private val BANNER_SUBTITLE_FONT_SIZE = 13.sp
+private val BANNER_TEXT_MAX_WIDTH = 420.dp
+private val BANNER_TEXT_PADDING_EXPANDED = PaddingValues(start = 32.dp, bottom = 24.dp)
+private val BANNER_TEXT_GAP = 8.dp
+
+// Compact/Medium — исходное оформление (Track C, 2026-09-04), не тронуто desktop-проходом.
+private val COMPACT_SCRIM_COLOR = Color.Black.copy(alpha = 0.75f)
+private const val COMPACT_SCRIM_STOP_START = 0.45f
+private const val COMPACT_SCRIM_STOP_END = 1f
+private const val COMPACT_SUBTITLE_ALPHA = 0.85f
+
 private val INDICATOR_DOT_SIZE = 6.dp
 private val INDICATOR_DOT_SIZE_SELECTED = 8.dp
 private const val INDICATOR_DOT_ALPHA = 0.4f

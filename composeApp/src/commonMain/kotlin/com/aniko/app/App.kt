@@ -1,7 +1,6 @@
 package com.aniko.app
 
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,10 +9,15 @@ import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -22,38 +26,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.toRoute
 import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
 import com.aniko.app.feature.auth.LoginScreen
-import com.aniko.app.feature.collections.CollectionsScreen
-import com.aniko.app.feature.comments.ReleaseCommentsScreen
-import com.aniko.app.feature.feed.FeedScreen
-import com.aniko.app.feature.gallery.TokenGalleryScreen
-import com.aniko.app.feature.home.HomeScreen
-import com.aniko.app.feature.library.LibraryScreen
-import com.aniko.app.feature.notifications.NotificationsScreen
-import com.aniko.app.feature.player.PlayerScreen
-import com.aniko.app.feature.profile.ProfileScreen
-import com.aniko.app.feature.release.ReleaseDetailsScreen
-import com.aniko.app.feature.schedule.ScheduleScreen
-import com.aniko.app.feature.search.SearchScreen
-import com.aniko.app.feature.settings.NotificationSettingsScreen
-import com.aniko.app.feature.settings.SettingsScreen
 import com.aniko.app.navigation.AnixDestination
 import com.aniko.app.navigation.AnixSection
 import com.aniko.app.navigation.DeepLinkDispatcher
-import com.aniko.app.navigation.DetailPaneRoute
 import com.aniko.app.navigation.DetailPaneStack
 import com.aniko.app.navigation.ListDetailHost
 import com.aniko.app.navigation.LocalTitleNavigator
@@ -71,14 +61,17 @@ import com.aniko.data.sync.SyncCoordinator
 import com.aniko.data.theme.ThemeStore
 import com.aniko.ui.adaptive.AdaptiveNavItem
 import com.aniko.ui.adaptive.AdaptiveScaffold
+import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.adaptive.rememberAnixWindowSize
+import com.aniko.ui.component.AnixLanguagePicker
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.component.AnixOfflineBanner
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.ProvideAppStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.image.createAnixImageLoader
+import com.aniko.ui.theme.AnixThemeTokens
 import com.aniko.ui.theme.AppTheme
 import io.ktor.client.HttpClient
 import org.koin.compose.KoinContext
@@ -268,13 +261,14 @@ private fun AnixAppScaffold(
 ) {
     val navController = rememberNavController()
     val paneStack = rememberDetailPaneStack()
-    // 2026-09-08 (макет Claude Design, tablet-артборд): панелей list-detail нет ни на одном
-    // размере — и на планшете контент занимает всю ширину, тайтл открывается полноэкранным
-    // маршрутом. pane-механика (DetailPaneStack/migrate) остаётся в коде неактивной
-    // (компилируется, ранний возврат в ListDetailHost), удаление — отдельной чисткой
-    // (см. журнал плана). Окна Medium/Expanded при этом сохраняют «таблетные» раскладки экранов
-    // (isTwoPane остаётся true на Medium — колонки Schedule/грид Library и т.п.).
-    val panesEnabled = false
+    // Desktop-проход (2026-09-15, мокап Claude Design, desktop-артборд `showDetail`): на
+    // Expanded карточка тайтла открывается правым ящиком 520dp поверх списка (см. KDoc
+    // `ListDetailHost`) — pane-механика активна ТОЛЬКО там. Compact/Medium — полноэкранный
+    // маршрут, как и раньше (phone/tablet-артборды мокапа, фазы 13–15, не трогаем). Раскладки
+    // самих экранов по-прежнему решаются `AnixWindowSize` напрямую (`isTwoPane` там остаётся
+    // true на Medium — колонки Schedule/грид Library и т.п.); этот флаг касается только
+    // развилки маршрут-vs-панель внутри `AdaptiveTitleNavigator`.
+    val panesEnabled = LocalAnixWindowSize.current == AnixWindowSize.Expanded
     val titleNavigator = rememberTitleNavigator(navController, paneStack, isTwoPane = { panesEnabled })
 
     LaunchedEffect(titleNavigator, onBackHandlerReady) {
@@ -284,9 +278,9 @@ private fun AnixAppScaffold(
     // Миграция открытого тайтла между маршрутом (compact) и панелью (wide) при смене размера окна
     // (P5.T3 — найдено ревью: без этого шага пользователь "терял" бы открытую карточку релиза при
     // изменении размера окна, т.к. NavController и DetailPaneStack — два независимых источника
-    // состояния без моста между ними). Реализация — см. [migratePaneRoutes] ниже. С 2026-09-08
-    // panesEnabled = false на всех размерах (макет: панелей нет) — вызов остаётся no-op для
-    // сохранения контракта, удаляется вместе с pane-кодом отдельной чисткой.
+    // состояния без моста между ними). Реализация — см. [migratePaneRoutes] ниже. С 2026-09-15
+    // снова активна — срабатывает при ресайзе окна через границу Expanded (desktop-проход,
+    // ящик 520dp включается/выключается на лету).
     LaunchedEffect(panesEnabled) {
         migratePaneRoutes(navController, paneStack, isTwoPane = panesEnabled)
     }
@@ -328,298 +322,145 @@ private fun AnixAppScaffold(
             onItemClick = { item ->
                 navController.navigateToTabRoot(AnixSection.valueOf(item.id).destination)
             },
-        ) { innerPadding ->
-            // Liquid Glass (2026-09-11, feature/liquid-glass-tab-bar): нижняя часть innerPadding
-            // раньше физически обрезала контент НАД таб-баром — под полупрозрачным/блюрящим баром
-            // оставалась голая заливка фона `AppTheme`, блюрить было нечего. Теперь вниз идёт
-            // ТОЛЬКО top/start/end часть — контент продолжается edge-to-edge ПОД бар (это и есть
-            // источник фона для [com.aniko.ui.glass.LiquidGlass], подписанный в `AdaptiveScaffold`
-            // через `Modifier.glassBackdropSource`), а высоту бара учитывают сами корневые экраны
-            // через `LocalGlassBottomInset` в `contentPadding` своих `LazyColumn`/
-            // `LazyVerticalGrid` (Home/Catalog/Library/Schedule/Profile — см. их файлы). Экраны,
-            // ещё не переведённые на `LocalGlassBottomInset` (не корневые вкладки таб-бара —
-            // Feed/Collections/детали и т.п.), не ломаются: `AnixWindowSize.Medium/Expanded`,
-            // `showNavigationChrome == false` и не-таб-роуты внутри Compact просто не получают
-            // ничего, кроме нуля из дефолта `LocalGlassBottomInset` — прежнее поведение.
-            val contentPadding =
-                PaddingValues(
-                    start = innerPadding.calculateStartPadding(LocalLayoutDirection.current),
-                    top = innerPadding.calculateTopPadding(),
-                    end = innerPadding.calculateEndPadding(LocalLayoutDirection.current),
-                    bottom = 0.dp,
+            // Desktop-артборд мокапа (2026-09-15, шелл 1220×760): traffic lights в шапке сайдбара
+            // (padding 6px 8px 20px — на стороне вызывающего, см. KDoc AppSidebarTrafficLights),
+            // переключатель языка — внизу (фон --w05, radius 10, margin 0 8px). Слоты читаются
+            // только Expanded-веткой AdaptiveScaffold, на Compact/Medium не рендерятся.
+            sidebarHeader = {
+                AppSidebarTrafficLights(
+                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 20.dp),
                 )
-            AnixNavGraph(
+            },
+            sidebarFooter = { AnixSidebarLanguageFooter(localeStore) },
+        ) { innerPadding ->
+            AnixAppScaffoldContent(
+                innerPadding = innerPadding,
                 navController = navController,
                 paneStack = paneStack,
                 titleNavigator = titleNavigator,
                 localeStore = localeStore,
                 themeStore = themeStore,
-                // `consumeWindowInsets`, не только `padding` — без него `innerPadding` физически
-                // сдвигает контент, но не помечает эти insets как уже потреблённые: экраны со
-                // своим собственным `Scaffold`/`TopAppBar` внутри графа (Settings, Profile,
-                // Comments, Gallery, ReleaseDetails...) заново читают `WindowInsets.safeDrawing` и
-                // отступают от статус-бара ВТОРОЙ раз — снаружи уже есть `.padding(innerPadding)`,
-                // и поверх него их собственный TopAppBar добавляет то же самое (жалоба живой
-                // проверки: "шапка ниже верхней части экрана, как будто лишний отступ"). Тот же
-                // приём уже применён точечно у офлайн-баннера чуть выше по файлу (см. её комментарий
-                // про `onConsumedWindowInsetsChanged` в `Scaffold`) — здесь тот же механизм, но для
-                // всего `AnixNavGraph` целиком. `contentPadding` (не полный `innerPadding`) — см.
-                // комментарий выше про Liquid Glass; `consumeWindowInsets` по-прежнему получает
-                // ПОЛНЫЙ `innerPadding`, а не урезанный `contentPadding` — низ всё ещё физически
-                // относится к системному/бар-инсету и не должен читаться экранами графа второй раз.
-                modifier = Modifier.fillMaxSize().padding(contentPadding).consumeWindowInsets(innerPadding),
             )
         }
     }
 }
 
 /**
- * Переносит открытый тайтл между маршрутом [com.aniko.app.navigation.AdaptiveTitleNavigator]
- * (compact) и [DetailPaneStack] (wide) при смене [isTwoPane] — вынесена из [AnixAppScaffold]
- * отдельной функцией (detekt `LongMethod`).
- *
- * Известное упрощение: обрабатывает только САМЫЙ ВЕРХНИЙ элемент соответствующего стека. Если на
- * compact параллельно открыты и `Details`, и `Comments` (`Comments` поверх `Details` в истории
- * [navController]), при переходе на wide смигрирует только верхний `Comments` — `Details`
- * останется висеть в истории [navController] непереехавшим. Не создаёт видимых проблем на
- * практике ([DetailPaneStack.open] всё равно требует `Details` под `Comments`, см. её KDoc), но
- * не покрывает произвольную глубину стека — полная миграция потребовала бы обхода всего
- * `NavController.currentBackStack`, что не укладывалось по объёму Фазы 5.
- */
-private fun migratePaneRoutes(
-    navController: NavHostController,
-    paneStack: DetailPaneStack,
-    isTwoPane: Boolean,
-) {
-    if (isTwoPane) {
-        val entry = navController.currentBackStackEntry
-        when {
-            entry != null && entry.destination.hasRoute(AnixDestination.ReleaseDetails::class) -> {
-                val route = entry.toRoute<AnixDestination.ReleaseDetails>()
-                paneStack.open(DetailPaneRoute.Details(route.releaseId))
-                navController.popBackStack()
-            }
-            entry != null && entry.destination.hasRoute(AnixDestination.ReleaseComments::class) -> {
-                val route = entry.toRoute<AnixDestination.ReleaseComments>()
-                paneStack.open(DetailPaneRoute.Comments(route.releaseId))
-                navController.popBackStack()
-            }
-        }
-    } else {
-        paneStack.entries.forEach { route -> navController.navigate(route.toDestination()) }
-        paneStack.clear()
-    }
-}
-
-private fun DetailPaneRoute.toDestination(): AnixDestination =
-    when (this) {
-        is DetailPaneRoute.Details -> AnixDestination.ReleaseDetails(releaseId)
-        is DetailPaneRoute.Comments -> AnixDestination.ReleaseComments(releaseId)
-    }
-
-/**
- * Граф маршрутов основного каркаса — вынесен из [AnixAppScaffold] отдельной функцией (detekt
- * `LongMethod`), сами маршруты дополнительно разложены по трём `NavGraphBuilder`-расширениям
- * ниже (detekt `LongParameterList`/`LongMethod` на них самих).
+ * Переключатель языка в футере сайдбара (desktop-артборд мокапа, 2026-09-15): ОДНА компактная
+ * плашка с текущим языком, клик перебирает варианты (Системный → EN → RU → Системный) — ровно
+ * как `toggleLang` в мокапе (`<div onClick={{ toggleLang }}>` в футере сайдбара desktop-артборда,
+ * подпись — `langLabel` в JetBrains Mono 11px/700). Три отдельных чипа
+ * ([AnixLanguagePicker] — раскладка `Settings`) в 232dp сайдбара не помещаются: правый сегмент
+ * обрезался краем панели (живая проверка 2026-09-16, реальное окно). Дубль с пунктом «Язык» в
+ * `Settings` осознанный — мокап содержит оба, см. KDoc `chromeRoutes`.
  */
 @Composable
-@Suppress("LongParameterList") // themeStore добавлен аддитивно к уже существовавшему набору
-// параметров (тот же случай, что и AnixSessionGate выше) — граф маршрутов остаётся тонким
-// прокси без собственного стейта, дробить дальше означало бы заводить объект конфигурации ради
-// самого счётчика.
-private fun AnixNavGraph(
-    navController: NavHostController,
-    paneStack: DetailPaneStack,
-    titleNavigator: TitleNavigator,
-    localeStore: LocaleStore,
-    themeStore: ThemeStore,
-    modifier: Modifier = Modifier,
-) {
-    NavHost(
-        navController = navController,
-        startDestination = AnixDestination.Home,
-        modifier = modifier,
+private fun AnixSidebarLanguageFooter(localeStore: LocaleStore) {
+    val languageTag by localeStore.languageTag.collectAsStateWithLifecycle()
+    val strings = LocalStrings.current
+    val label = languageTag.toLanguageLabel(strings)
+    Surface(
+        color = AnixThemeTokens.colors.overlay05,
+        shape = RoundedCornerShape(SIDEBAR_FOOTER_RADIUS),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = SIDEBAR_FOOTER_MARGIN),
     ) {
-        listSectionRoutes(navController, paneStack, titleNavigator)
-        titleDetailRoutes(navController, titleNavigator)
-        chromeRoutes(navController, localeStore, themeStore)
-    }
-}
-
-/**
- * Четыре list-секции каркаса (P5.T5) — каждая оборачивается в [ListDetailHost] (P5.T3).
- *
- * `enterTransition`/`exitTransition` = `None` на все четыре — иначе действует дефолт самого
- * `NavHost` (не переопределён нигде в [AnixNavGraph]): `androidx.navigation:navigation-compose`
- * с версии 2.8 анимирует КАЖДЫЙ `composable()` без явного оверрайда через `fadeIn(tween(700))`/
- * `fadeOut(tween(700))` (сверено с реальным `NavHost.kt` из sources-jar артефакта
- * `navigation-compose-android:2.9.7`). Живая проверка на эмуляторе (`dumpsys gfxinfo`) подтвердила
- * реальный джанк при переключении вкладок (78–100% janky-кадров), но A/B-тест того же перехода с
- * этими `None` против дефолтного fade НЕ показал измеримой разницы (в пределах шума), а джанк той
- * же интенсивности воспроизвёлся даже на локальной рекомпозиции без единой навигации — то есть
- * жалоба "фриз при переключении вкладок", скорее всего, НЕ объясняется полностью этим 700мс-фейдом
- * (честный вывод расследования, не переоценивать). Оставлено как отдельное валидное улучшение:
- * bottom-таб-бары по конвенции Material Design (см. Now-in-Android) не анимируют переключение
- * между вкладками верхнего уровня — мгновенный переход здесь корректен сам по себе, независимо от
- * того, решает ли он замеченный джанк целиком. Только эти четыре маршрута: `titleDetailRoutes`/
- * `chromeRoutes` ниже (drill-down на карточку релиза/комментарии/плеер/настройки) сохраняют
- * дефолтный fade — он уместен для перехода "вглубь", не между вкладками.
- */
-private fun NavGraphBuilder.listSectionRoutes(
-    navController: NavHostController,
-    paneStack: DetailPaneStack,
-    titleNavigator: TitleNavigator,
-) {
-    composable<AnixDestination.Home>(
-        enterTransition = { EnterTransition.None },
-        exitTransition = { ExitTransition.None },
-    ) {
-        ListDetailHost(paneStack) {
-            HomeScreen(
-                onReleaseClick = titleNavigator::openTitle,
-                onCatalogClick = { navController.navigateToTabRoot(AnixDestination.Search) },
-                onScheduleClick = { navController.navigateToTabRoot(AnixDestination.Schedule) },
-                // Track C (2026-09-04): в макете плитка "Filters" (была "Library") ведёт в тот же
-                // Catalog, что и "Popular" — не в `AnixDestination.Library` (он остаётся доступен
-                // через нижнюю навигацию, вкладка "Мои списки", просто эта конкретная плитка Home
-                // больше туда не ведёт, см. KDoc `HomeQuickActions`).
-                onFilterClick = { navController.navigateToTabRoot(AnixDestination.Search) },
-                onFeedClick = { navController.navigate(AnixDestination.Feed) },
-                onCollectionsClick = { navController.navigate(AnixDestination.Collections) },
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { localeStore.setLanguageTag(languageTag.nextLanguageTag()) }
+                    .clearAndSetSemantics {
+                        contentDescription = "${strings.settingsLanguage}: $label"
+                        role = Role.Button
+                    }.padding(vertical = SIDEBAR_FOOTER_PADDING),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
             )
         }
     }
-    composable<AnixDestination.Search>(
-        enterTransition = { EnterTransition.None },
-        exitTransition = { ExitTransition.None },
-    ) {
-        ListDetailHost(paneStack) { SearchScreen(onReleaseClick = titleNavigator::openTitle) }
-    }
-    composable<AnixDestination.Schedule>(
-        enterTransition = { EnterTransition.None },
-        exitTransition = { ExitTransition.None },
-    ) {
-        ListDetailHost(paneStack) { ScheduleScreen() }
-    }
-    composable<AnixDestination.Library>(
-        enterTransition = { EnterTransition.None },
-        exitTransition = { ExitTransition.None },
-    ) {
-        ListDetailHost(paneStack) { LibraryScreen(onReleaseClick = titleNavigator::openTitle) }
-    }
 }
 
+/** Подпись текущего языка для плашки сайдбара — те же три значения, что у [AnixLanguagePicker]. */
+private fun String?.toLanguageLabel(strings: Strings): String =
+    when (this) {
+        "en" -> "EN"
+        "ru" -> "RU"
+        else -> strings.galleryLanguageSystem
+    }
+
+/** Следующий язык по кругу — порядок тот же, что у [AnixLanguagePicker] (`null` → en → ru → `null`). */
+private fun String?.nextLanguageTag(): String? =
+    when (this) {
+        null -> "en"
+        "en" -> "ru"
+        else -> null
+    }
+
 /**
- * Полноэкранные маршруты карточки релиза/комментариев/плеера. На Medium тот же контент рисуется
- * внутри [ListDetailHost] (detail-панель рядом со списком, см. `DetailPaneContent`), на Compact и
- * Expanded (Desktop) сюда ведёт [TitleNavigator] всегда — Expanded полноширинный, как в макете
- * Claude Design (2026-09-08): список заменяется экраном тайтла, sidebar остаётся.
+ * Тело слота `content` [AdaptiveScaffold] внутри [AnixAppScaffold] — вынесено отдельной функцией
+ * (detekt `LongMethod`): считает `contentPadding` без нижней вставки под Liquid Glass bottom bar
+ * и рисует [AnixNavGraph]. См. комментарии внутри про Liquid Glass/`consumeWindowInsets` —
+ * перенесены без изменения смысла.
  */
-private fun NavGraphBuilder.titleDetailRoutes(
+@Suppress("LongParameterList") // Тот же координирующий блок, что и AnixAppScaffold — см. её KDoc.
+@Composable
+private fun AnixAppScaffoldContent(
+    innerPadding: PaddingValues,
     navController: NavHostController,
+    paneStack: DetailPaneStack,
     titleNavigator: TitleNavigator,
-) {
-    composable<AnixDestination.ReleaseDetails> { entry ->
-        val route: AnixDestination.ReleaseDetails = entry.toRoute()
-        ReleaseDetailsScreen(
-            releaseId = route.releaseId,
-            pendingEpisodeSourceId = route.pendingEpisodeSourceId,
-            pendingEpisodePosition = route.pendingEpisodePosition,
-            onEpisodeClick = titleNavigator::openPlayer,
-        )
-    }
-    composable<AnixDestination.ReleaseComments> { entry ->
-        val route: AnixDestination.ReleaseComments = entry.toRoute()
-        ReleaseCommentsScreen(releaseId = route.releaseId)
-    }
-    // Без анимаций (как и четыре таб-рута выше, см. KDoc `listSectionRoutes`): дефолтный
-    // 700ms fade NavHost при входе/выходе плеера держал в композиции ДВА экрана плеера
-    // одновременно (старый entry жив, пока не завершится exit-переход) — два живых WebView с
-    // видео поверх друг друга («два плеера дублируются и накладываются», жалоба 2026-09-08,
-    // см. журнал). Видео-поверхности переключаются мгновенно, без кросс-фейда — как у всех
-    // нормальных видеоплееров.
-    composable<AnixDestination.Player>(
-        enterTransition = { EnterTransition.None },
-        exitTransition = { ExitTransition.None },
-        popEnterTransition = { EnterTransition.None },
-        popExitTransition = { ExitTransition.None },
-    ) { entry ->
-        val route: AnixDestination.Player = entry.toRoute()
-        PlayerScreen(
-            releaseId = route.releaseId,
-            sourceId = route.sourceId,
-            position = route.position,
-            hostKey = route.hostKey,
-            // Не `titleNavigator.back()`: на wide-экранах он сначала разбирает стек detail-панелей,
-            // а плеер лежит полноэкранным маршрутом ПОВЕРХ них — «назад» из плеера обязан снимать
-            // именно маршрут (см. KDoc `PlayerScreen.onBack`).
-            onBack = { navController.popBackStack() },
-        )
-    }
-}
-
-/**
- * Profile (таб) + Settings и остальные экраны, открываемые из него (TokenGallery,
- * NotificationSettings).
- *
- * P13.T2 развернула прежний поток: раньше `Settings` был вкладкой таб-бара, а `Profile` —
- * дочерним экраном («Настройки» → «Мой профиль»). Теперь `Profile` сам вкладка таб-бара
- * (см. [AnixSection]), а `Settings` — дочерний маршрут, открываемый шестерёнкой из `TopAppBar`
- * `ProfileScreen.kt` ([ProfileScreen.onSettingsClick]). Тема (`AnixThemePicker`) физически
- * переехала на `ProfileScreen` вместе с `AchievementsSection` (мокап рисует переключатель темы
- * прямо под шапкой профиля) — поэтому здесь `themeStore` читается уже для `AnixDestination.Profile`,
- * а не для `Settings`. Язык (`AnixLanguagePicker`) остался в `Settings` — решение по умолчанию:
- * мокап явно требует переноса только Theme. Desktop-дубль переключателя языка в футере сайдбара
- * (`sidebarFooter` `AdaptiveScaffold`) удалён 2026-09-08 по запросу пользователя: он обрезался
- * на малой высоте сайдбара и дублировал пункт «Язык» из Settings — язык теперь только в Settings.
- */
-private fun NavGraphBuilder.chromeRoutes(
-    navController: NavHostController,
     localeStore: LocaleStore,
     themeStore: ThemeStore,
 ) {
-    composable<AnixDestination.Settings> {
-        val languageTag by localeStore.languageTag.collectAsStateWithLifecycle()
-        SettingsScreen(
-            onBack = { navController.popBackStack() },
-            onDesignGalleryClick = { navController.navigate(AnixDestination.TokenGallery) },
-            onNotificationsClick = { navController.navigate(AnixDestination.NotificationSettings) },
-            languageTag = languageTag,
-            onLanguageTagChange = localeStore::setLanguageTag,
+    // Liquid Glass (2026-09-11, feature/liquid-glass-tab-bar): нижняя часть innerPadding
+    // раньше физически обрезала контент НАД таб-баром — под полупрозрачным/блюрящим баром
+    // оставалась голая заливка фона `AppTheme`, блюрить было нечего. Теперь вниз идёт
+    // ТОЛЬКО top/start/end часть — контент продолжается edge-to-edge ПОД бар (это и есть
+    // источник фона для [com.aniko.ui.glass.LiquidGlass], подписанный в `AdaptiveScaffold`
+    // через `Modifier.glassBackdropSource`), а высоту бара учитывают сами корневые экраны
+    // через `LocalGlassBottomInset` в `contentPadding` своих `LazyColumn`/
+    // `LazyVerticalGrid` (Home/Catalog/Library/Schedule/Profile — см. их файлы). Экраны,
+    // ещё не переведённые на `LocalGlassBottomInset` (не корневые вкладки таб-бара —
+    // Feed/Collections/детали и т.п.), не ломаются: `AnixWindowSize.Medium/Expanded`,
+    // `showNavigationChrome == false` и не-таб-роуты внутри Compact просто не получают
+    // ничего, кроме нуля из дефолта `LocalGlassBottomInset` — прежнее поведение.
+    val contentPadding =
+        PaddingValues(
+            start = innerPadding.calculateStartPadding(LocalLayoutDirection.current),
+            top = innerPadding.calculateTopPadding(),
+            end = innerPadding.calculateEndPadding(LocalLayoutDirection.current),
+            bottom = 0.dp,
         )
-    }
-    composable<AnixDestination.Profile> {
-        val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
-        ProfileScreen(
-            onSettingsClick = { navController.navigate(AnixDestination.Settings) },
-            onNotificationsClick = { navController.navigate(AnixDestination.Notifications) },
-            // Не `titleNavigator::openTitle`: маршрут профиля не завёрнут в `ListDetailHost`, и на
-            // wide-экранах навигатор открыл бы тайтл в панели, которой здесь негде отрисоваться
-            // (см. KDoc `ProfileScreen.onReleaseClick`) — отсюда всегда полноэкранный маршрут.
-            onReleaseClick = { releaseId -> navController.navigate(AnixDestination.ReleaseDetails(releaseId)) },
-            // Track A (точное соответствие макету): ссылка "My Lists →" в шапке профиля ведёт на
-            // тот же маршрут, что и вкладка таб-бара `Library` (см. KDoc `ProfileScreen.onOpenLists`).
-            onOpenLists = { navController.navigate(AnixDestination.Library) },
-            themeMode = themeMode,
-            onThemeModeChange = themeStore::setThemeMode,
-        )
-    }
-    composable<AnixDestination.Notifications> {
-        NotificationsScreen(
-            onBack = { navController.popBackStack() },
-            onReleaseClick = { releaseId -> navController.navigate(AnixDestination.ReleaseDetails(releaseId)) },
-        )
-    }
-    composable<AnixDestination.Feed> {
-        FeedScreen(onBack = { navController.popBackStack() })
-    }
-    composable<AnixDestination.Collections> {
-        CollectionsScreen(onBack = { navController.popBackStack() })
-    }
-    composable<AnixDestination.TokenGallery> {
-        TokenGalleryScreen(onBack = { navController.popBackStack() })
-    }
-    composable<AnixDestination.NotificationSettings> {
-        NotificationSettingsScreen(onBack = { navController.popBackStack() })
-    }
+    AnixNavGraph(
+        navController = navController,
+        paneStack = paneStack,
+        titleNavigator = titleNavigator,
+        localeStore = localeStore,
+        themeStore = themeStore,
+        // `consumeWindowInsets`, не только `padding` — без него `innerPadding` физически
+        // сдвигает контент, но не помечает эти insets как уже потреблённые: экраны со
+        // своим собственным `Scaffold`/`TopAppBar` внутри графа (Settings, Profile,
+        // Comments, Gallery, ReleaseDetails...) заново читают `WindowInsets.safeDrawing` и
+        // отступают от статус-бара ВТОРОЙ раз — снаружи уже есть `.padding(innerPadding)`,
+        // и поверх него их собственный TopAppBar добавляет то же самое (жалоба живой
+        // проверки: "шапка ниже верхней части экрана, как будто лишний отступ"). Тот же
+        // приём уже применён точечно у офлайн-баннера чуть выше по файлу (см. её комментарий
+        // про `onConsumedWindowInsetsChanged` в `Scaffold`) — здесь тот же механизм, но для
+        // всего `AnixNavGraph` целиком. `contentPadding` (не полный `innerPadding`) — см.
+        // комментарий выше про Liquid Glass; `consumeWindowInsets` по-прежнему получает
+        // ПОЛНЫЙ `innerPadding`, а не урезанный `contentPadding` — низ всё ещё физически
+        // относится к системному/бар-инсету и не должен читаться экранами графа второй раз.
+        modifier = Modifier.fillMaxSize().padding(contentPadding).consumeWindowInsets(innerPadding),
+    )
 }
+
+// Футер сайдбара с переключателем языка (desktop-артборд мокапа, 2026-09-15): margin 0 8px,
+// radius 10, фон --w05. Литеральные значения одного места макета — не общие токены AnixDimens.
+private val SIDEBAR_FOOTER_MARGIN = 8.dp
+private val SIDEBAR_FOOTER_RADIUS = 10.dp
+private val SIDEBAR_FOOTER_PADDING = 4.dp

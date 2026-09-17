@@ -116,8 +116,6 @@ class SearchViewModel(
                     copy(genres = if (intent.genre in genres) genres - intent.genre else genres + intent.genre)
                 }
 
-            SearchIntent.FiltersReset -> updateFilter { CatalogFilter() }
-
             // Catalog «⋮» (2026-09-08): оптимистичная запись в список через тот же механизм, что
             // Library (offline-очередь), результат не отражается в стейте каталога (фильтры и
             // список релизов не зависят от списков пользователя).

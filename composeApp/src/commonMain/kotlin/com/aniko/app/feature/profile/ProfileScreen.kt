@@ -5,6 +5,8 @@
 
 package com.aniko.app.feature.profile
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -35,6 +38,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -59,6 +64,7 @@ import com.aniko.model.FriendRequestVisibility
 import com.aniko.model.PrivacyVisibility
 import com.aniko.model.ProfileDetails
 import com.aniko.model.ProfilePrivacy
+import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.adaptive.LocalGlassBottomInset
 import com.aniko.ui.component.AnixAvatar
@@ -356,7 +362,8 @@ private fun ProfileContent(
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
     val windowSize = LocalAnixWindowSize.current
-    val sectionPadding = Modifier.padding(horizontal = dimens.spaceM)
+    val isExpanded = windowSize == AnixWindowSize.Expanded
+    val sectionPadding = if (isExpanded) Modifier else Modifier.padding(horizontal = dimens.spaceM)
 
     val pinnedSectionStore = koinInject<LocalProfilePinnedSectionStore>()
     val pinnedSection by pinnedSectionStore.pinnedSection().collectAsStateWithLifecycle(initialValue = null)
@@ -375,7 +382,7 @@ private fun ProfileContent(
                 FavoriteGenresSection(profile = profile, pinState = pinState, modifier = sectionPadding)
             },
             ProfileShowcaseSection.ACHIEVEMENTS to {
-                AchievementsSection(achievements = achievements, pinState = pinState)
+                AchievementsSection(achievements = achievements, pinState = pinState, windowSize = windowSize)
             },
             ProfileShowcaseSection.STATISTICS to {
                 HorizontalDivider(modifier = sectionPadding)
@@ -385,36 +392,63 @@ private fun ProfileContent(
                     pinState = pinState,
                     modifier = sectionPadding,
                 )
-                StatsGrid(profile = profile, modifier = sectionPadding)
+                StatsGrid(profile = profile, windowSize = windowSize, modifier = sectionPadding)
                 ProfileChartsSection(profile = profile, windowSize = windowSize, modifier = sectionPadding)
             },
             ProfileShowcaseSection.RECENTLY_WATCHED to {
-                RecentlyWatchedSection(profile = profile, onReleaseClick = onReleaseClick, pinState = pinState)
+                RecentlyWatchedSection(
+                    profile = profile,
+                    onReleaseClick = onReleaseClick,
+                    pinState = pinState,
+                    windowSize = windowSize,
+                )
             },
         )
     val pinnedBlock = movableSections.firstOrNull { it.first == pinnedSection }?.second
 
+    val columnModifier =
+        if (isExpanded) {
+            Modifier
+                .fillMaxSize()
+                .widthIn(max = dimens.contentMaxWidth)
+                .verticalScroll(rememberScrollState())
+                // Раньше Expanded-ветка обнуляла горизонтальные отступы секций
+                // (`sectionPadding = Modifier`) и не добавляла свой — контент печатался вплотную
+                // к краям окна (ревью F5, 2026-09-17). Остальные Expanded-экраны (Home/Schedule)
+                // используют `spaceM` по горизонтали — тот же токен и здесь.
+                .padding(horizontal = dimens.spaceM)
+                .padding(top = dimens.spaceM, bottom = dimens.spaceM + LocalGlassBottomInset.current)
+        } else {
+            Modifier
+                .fillMaxSize()
+                .widthIn(max = dimens.contentMaxWidth)
+                .verticalScroll(rememberScrollState())
+                // Liquid Glass (2026-09-11): нижний паддинг учитывает высоту плавающего
+                // таб-бара — см. KDoc `LocalGlassBottomInset`/аналогичное место в
+                // `HomeScreen.kt`. Профиль — таб-рут (см. KDoc [ProfileScreen] про P13.T2),
+                // поэтому у него тот же bottom bar под ним, что и у остальных корневых вкладок.
+                .padding(top = dimens.spaceM, bottom = dimens.spaceM + LocalGlassBottomInset.current)
+        }
+
     Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
         Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .widthIn(max = dimens.contentMaxWidth)
-                    .verticalScroll(rememberScrollState())
-                    // Liquid Glass (2026-09-11): нижний паддинг учитывает высоту плавающего
-                    // таб-бара — см. KDoc `LocalGlassBottomInset`/аналогичное место в
-                    // `HomeScreen.kt`. Профиль — таб-рут (см. KDoc [ProfileScreen] про P13.T2),
-                    // поэтому у него тот же bottom bar под ним, что и у остальных корневых вкладок.
-                    .padding(top = dimens.spaceM, bottom = dimens.spaceM + LocalGlassBottomInset.current),
+            modifier = columnModifier,
+            horizontalAlignment = if (isExpanded) Alignment.Start else Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
         ) {
-            ProfileHeader(profile = profile, onOpenLists = onOpenLists, modifier = sectionPadding)
+            ProfileHeader(
+                profile = profile,
+                onOpenLists = onOpenLists,
+                windowSize = windowSize,
+                modifier = sectionPadding,
+            )
 
             pinnedBlock?.invoke()
 
             ProfileThemeSection(
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange,
+                windowSize = windowSize,
                 modifier = sectionPadding,
             )
 
@@ -447,18 +481,88 @@ private fun ProfileContent(
 private fun ProfileThemeSection(
     themeMode: String?,
     onThemeModeChange: (String?) -> Unit,
+    windowSize: AnixWindowSize,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
+    val isExpanded = windowSize == AnixWindowSize.Expanded
 
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement =
+            if (isExpanded) {
+                Arrangement.spacedBy(THEME_LABEL_GAP)
+            } else {
+                Arrangement.spacedBy(dimens.spaceXs)
+            },
+    ) {
         Text(
             text = strings.settingsTheme,
-            style = MaterialTheme.typography.titleSmall,
+            style =
+                if (isExpanded) {
+                    MaterialTheme.typography.titleSmall.copy(fontSize = THEME_LABEL_FONT_SIZE)
+                } else {
+                    MaterialTheme.typography.titleSmall
+                },
             fontWeight = FontWeight.Bold,
         )
-        AnixThemePicker(currentMode = themeMode, onSelect = onThemeModeChange)
+        if (isExpanded) {
+            val mode = themeMode ?: "light"
+            Row(horizontalArrangement = Arrangement.spacedBy(THEME_CHIP_GAP)) {
+                ThemeChip(
+                    label = strings.themeLight,
+                    selected = mode == "light",
+                    onClick = { onThemeModeChange("light") },
+                )
+                ThemeChip(
+                    label = strings.themeDark,
+                    selected = mode == "dark",
+                    onClick = { onThemeModeChange("dark") },
+                )
+            }
+        } else {
+            AnixThemePicker(currentMode = themeMode, onSelect = onThemeModeChange)
+        }
+    }
+}
+
+@Composable
+private fun ThemeChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = AnixThemeTokens.colors
+    val primary = MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(THEME_CHIP_RADIUS)
+    val containerColor = if (selected) primary.copy(alpha = THEME_SELECTED_CONTAINER_ALPHA) else Color.Transparent
+    val borderColor = if (selected) primary.copy(alpha = THEME_SELECTED_BORDER_ALPHA) else colors.overlay09
+
+    Box(
+        modifier =
+            Modifier
+                .minimumInteractiveComponentSize()
+                .clip(shape)
+                .background(containerColor, shape)
+                .border(BorderStroke(THEME_CHIP_BORDER_WIDTH, borderColor), shape)
+                .selectable(selected = selected, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            modifier =
+                Modifier.padding(
+                    horizontal = THEME_CHIP_HORIZONTAL_PADDING,
+                    vertical = THEME_CHIP_VERTICAL_PADDING,
+                ),
+            style =
+                MaterialTheme.typography.labelMedium.copy(
+                    fontSize = THEME_CHIP_FONT_SIZE,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -488,10 +592,12 @@ private fun ProfileThemeSection(
 private fun ProfileHeader(
     profile: ProfileDetails,
     onOpenLists: () -> Unit,
+    windowSize: AnixWindowSize,
     modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
+    val isExpanded = windowSize == AnixWindowSize.Expanded
     val topGenreName = profile.preferredGenres.maxByOrNull { it.percentage }?.name
     val genreAccent = profileGenreAccentColor(topGenreName, AnixThemeTokens.colors.chartSeries)
     val avatarModifier =
@@ -502,48 +608,69 @@ private fun ProfileHeader(
         } else {
             Modifier
         }
+    val avatarSize = if (isExpanded) AVATAR_SIZE_EXPANDED else AVATAR_SIZE
+    val nameFontSize = if (isExpanded) PROFILE_NAME_FONT_SIZE_EXPANDED else PROFILE_NAME_FONT_SIZE
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
+        horizontalAlignment = if (isExpanded) Alignment.Start else Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) PROFILE_HEADER_GAP_EXPANDED else dimens.spaceS),
     ) {
         val coverUrl = profile.coverUrl
-        if (coverUrl != null) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(PROFILE_COVER_HEIGHT)
-                        .clip(RoundedCornerShape(dimens.cornerL)),
-                contentAlignment = Alignment.Center,
+        if (isExpanded && coverUrl == null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(PROFILE_HEADER_GAP_EXPANDED),
             ) {
-                AsyncImage(
-                    model = coverUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.matchParentSize(),
-                )
                 AnixAvatar(
                     avatarUrl = profile.avatarUrl,
                     login = profile.login,
-                    size = AVATAR_SIZE,
+                    size = avatarSize,
                     modifier = avatarModifier,
+                )
+                Text(
+                    text = profile.login,
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = nameFontSize),
+                    fontWeight = FontWeight.ExtraBold,
                 )
             }
         } else {
-            AnixAvatar(
-                avatarUrl = profile.avatarUrl,
-                login = profile.login,
-                size = AVATAR_SIZE,
-                modifier = avatarModifier,
+            if (coverUrl != null) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(PROFILE_COVER_HEIGHT)
+                            .clip(RoundedCornerShape(dimens.cornerL)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AsyncImage(
+                        model = coverUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                    AnixAvatar(
+                        avatarUrl = profile.avatarUrl,
+                        login = profile.login,
+                        size = avatarSize,
+                        modifier = avatarModifier,
+                    )
+                }
+            } else {
+                AnixAvatar(
+                    avatarUrl = profile.avatarUrl,
+                    login = profile.login,
+                    size = avatarSize,
+                    modifier = avatarModifier,
+                )
+            }
+            Text(
+                text = profile.login,
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = nameFontSize),
+                fontWeight = FontWeight.ExtraBold,
             )
         }
-        Text(
-            text = profile.login,
-            style = MaterialTheme.typography.titleLarge.copy(fontSize = PROFILE_NAME_FONT_SIZE),
-            fontWeight = FontWeight.ExtraBold,
-        )
 
         // Подтверждено паттерном Фазы 11 (T9, см. `ReleaseDetailsScreen.CommentsLinkRow`): Text
         // внутри кликабельного Row не сливается с ним сам по себе, поэтому семантика
@@ -697,3 +824,20 @@ private val PROFILE_COVER_HEIGHT = 96.dp
 /** [ProfileHeader] — акцентное кольцо аватара по топ-любимому жанру (P16.T13). */
 private val PROFILE_AVATAR_ACCENT_WIDTH = 2.dp
 private val PROFILE_AVATAR_ACCENT_GAP = 3.dp
+
+/** Desktop-вариант [ProfileHeader]: аватар 72dp, имя 20px/800, gap 16dp (мокап строка 875). */
+private val AVATAR_SIZE_EXPANDED = 72.dp
+private val PROFILE_NAME_FONT_SIZE_EXPANDED = 20.sp
+private val PROFILE_HEADER_GAP_EXPANDED = 16.dp
+
+/** Desktop-вариант [ProfileThemeSection]: чипы темы по мокапу (строка 875). */
+private val THEME_LABEL_FONT_SIZE = 14.sp
+private val THEME_LABEL_GAP = 8.dp
+private val THEME_CHIP_RADIUS = 20.dp
+private val THEME_CHIP_BORDER_WIDTH = 1.dp
+private val THEME_CHIP_HORIZONTAL_PADDING = 16.dp
+private val THEME_CHIP_VERTICAL_PADDING = 8.dp
+private val THEME_CHIP_GAP = 8.dp
+private val THEME_CHIP_FONT_SIZE = 12.5.sp
+private const val THEME_SELECTED_CONTAINER_ALPHA = 0.22f
+private const val THEME_SELECTED_BORDER_ALPHA = 0.55f

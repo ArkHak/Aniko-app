@@ -66,11 +66,12 @@ data class AnixDimens(
     val chartHeight: Dp = 140.dp,
     /** Максимальная ширина контентной колонки на desktop/tablet-раскладках (Фаза 7). */
     val contentMaxWidth: Dp = 1200.dp,
-    /** Высота баннера-карусели на главном экране (Фаза 7, P7.T1; 230dp — Track C, 2026-09-04,
-     *  точное соответствие макету Claude Design, было 220dp). */
+    /** Высота баннера-карусели на главном экране (P7.T1) для Compact/Medium — 230dp по
+     *  mobile-артбордам (сверена Фазой 14, была 220dp). Desktop (Expanded) использует
+     *  [bannerHeightExpanded] 220dp по макету Claude Design (строка 757). */
     val bannerHeight: Dp = 230.dp,
-    /** Ширина боковой панели фильтров каталога на wide-экранах (Фаза 7, P7.T5). */
-    val filterSidebarWidth: Dp = 280.dp,
+    /** Высота баннера-карусели на desktop (Expanded) — 220dp по макету Claude Design (строка 757). */
+    val bannerHeightExpanded: Dp = 220.dp,
     /** Высота плитки быстрого действия на главном экране (Фаза 7, P7.T1). */
     val quickActionTileHeight: Dp = 88.dp,
     /** Радиус backdrop-blur материала Liquid Glass (2026-09-11, feature/liquid-glass-tab-bar) —

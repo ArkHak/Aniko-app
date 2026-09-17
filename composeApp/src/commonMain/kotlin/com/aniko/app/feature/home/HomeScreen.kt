@@ -143,52 +143,93 @@ private fun HomeContent(
                         top = dimens.spaceM,
                         bottom = dimens.spaceM + LocalGlassBottomInset.current,
                     ),
-                verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
+                // Desktop (Expanded): мокап Claude Design (строка 757) задаёт gap 28dp между
+                // секциями Home — не токен `spaceL` (24dp), Compact/Medium сохраняют прежний
+                // отступ.
+                verticalArrangement =
+                    Arrangement.spacedBy(
+                        if (windowSize == AnixWindowSize.Expanded) HOME_EXPANDED_SECTION_GAP else dimens.spaceL,
+                    ),
             ) {
-                // Мобильный макет Claude Design (2026-09-08): на телефоне Home открывается
-                // брендом + приветствием по времени суток; на Medium/Expanded заголовка нет
-                // (десктопный/планшетный артборд начинается сразу с баннера).
-                if (windowSize == AnixWindowSize.Compact) {
-                    item(key = "home_greeting_header") {
-                        HomeGreetingHeader()
-                    }
-                }
-
-                item(key = "home_hero") {
-                    HomeHeroSection(
-                        bannerState = state.banners.toContentState { it.toHomeMessage(strings) },
-                        onBannerClick = onReleaseClick,
-                        onBannerRetry = { viewModel.dispatch(HomeIntent.RetryBanners) },
-                        onCatalogClick = onCatalogClick,
-                        onScheduleClick = onScheduleClick,
-                        onFilterClick = onFilterClick,
-                        onRandomClick = { viewModel.dispatch(HomeIntent.OpenRandomRelease) },
-                        onFeedClick = onFeedClick,
-                        onCollectionsClick = onCollectionsClick,
-                    )
-                }
-
-                item(key = "home_continue_watching") {
-                    ContinueWatchingSection(
-                        title = strings.homeContinueWatching,
-                        state = state.watching,
-                        onReleaseClick = onReleaseClick,
-                        onRetry = { viewModel.dispatch(HomeIntent.RetryWatching) },
-                    )
-                }
-
+                // `AnixThemeTokens.dimens` — @Composable-аксессор, читать его внутри
+                // `LazyListScope`-функции (`homeContentItems`, не composable) нельзя: вычисляем
+                // ширину постера рельс здесь, в composable-скоупе, и передаём значением.
                 val railPosterWidth = if (windowSize.isTwoPane) dimens.posterWidthL else dimens.posterWidth
-                homeRailItems(
+                homeContentItems(
                     state = state,
                     windowSize = windowSize,
                     strings = strings,
                     viewModel = viewModel,
                     onReleaseClick = onReleaseClick,
-                    posterWidth = railPosterWidth,
+                    onCatalogClick = onCatalogClick,
+                    onScheduleClick = onScheduleClick,
+                    onFilterClick = onFilterClick,
+                    onFeedClick = onFeedClick,
+                    onCollectionsClick = onCollectionsClick,
+                    railPosterWidth = railPosterWidth,
                 )
             }
         }
     }
+}
+
+/** Содержимое `LazyColumn` [HomeContent] — вынесено отдельной `LazyListScope`-функцией (detekt
+ *  `LongMethod`), тот же приём, что уже у [homeRailItems]. */
+@Suppress("LongParameterList") // Тот же координирующий блок, что и у HomeContent — см. её KDoc.
+private fun LazyListScope.homeContentItems(
+    state: HomeState,
+    windowSize: AnixWindowSize,
+    strings: Strings,
+    viewModel: HomeViewModel,
+    onReleaseClick: (Int) -> Unit,
+    onCatalogClick: () -> Unit,
+    onScheduleClick: () -> Unit,
+    onFilterClick: () -> Unit,
+    onFeedClick: () -> Unit,
+    onCollectionsClick: () -> Unit,
+    railPosterWidth: Dp,
+) {
+    // Мобильный макет Claude Design (2026-09-08): на телефоне Home открывается
+    // брендом + приветствием по времени суток; на Medium/Expanded заголовка нет
+    // (десктопный/планшетный артборд начинается сразу с баннера).
+    if (windowSize == AnixWindowSize.Compact) {
+        item(key = "home_greeting_header") {
+            HomeGreetingHeader()
+        }
+    }
+
+    item(key = "home_hero") {
+        HomeHeroSection(
+            bannerState = state.banners.toContentState { it.toHomeMessage(strings) },
+            onBannerClick = onReleaseClick,
+            onBannerRetry = { viewModel.dispatch(HomeIntent.RetryBanners) },
+            onCatalogClick = onCatalogClick,
+            onScheduleClick = onScheduleClick,
+            onFilterClick = onFilterClick,
+            onRandomClick = { viewModel.dispatch(HomeIntent.OpenRandomRelease) },
+            onFeedClick = onFeedClick,
+            onCollectionsClick = onCollectionsClick,
+        )
+    }
+
+    item(key = "home_continue_watching") {
+        ContinueWatchingSection(
+            title = strings.homeContinueWatching,
+            state = state.watching,
+            onReleaseClick = onReleaseClick,
+            onRetry = { viewModel.dispatch(HomeIntent.RetryWatching) },
+            windowSize = windowSize,
+        )
+    }
+
+    homeRailItems(
+        state = state,
+        windowSize = windowSize,
+        strings = strings,
+        viewModel = viewModel,
+        onReleaseClick = onReleaseClick,
+        posterWidth = railPosterWidth,
+    )
 }
 
 /**
@@ -216,38 +257,60 @@ private fun LazyListScope.homeRailItems(
     posterWidth: Dp,
 ) {
     item(key = "home_top_week") {
-        HorizontalPosterRail(
-            // Данные не изменились — тот же `discussing` (`POST discover/discussing`, замена CUT
-            // «Top This Week» из аудита P0.T3), меняется только заголовок под текст макета.
-            title = strings.homeTopWeek,
-            state = state.discussing.toContentState { it.toHomeMessage(strings) },
-            key = { it.id },
-            onRetry = { viewModel.dispatch(HomeIntent.RetryDiscussing) },
-            windowSize = windowSize,
-            gridOnExpanded = true,
-        ) { release ->
-            TitleCard(
-                release = release,
-                onClick = { onReleaseClick(release.id) },
-                posterWidth = posterWidth,
+        // Данные не изменились — тот же `discussing` (`POST discover/discussing`, замена CUT
+        // «Top This Week» из аудита P0.T3), меняется только заголовок под текст макета.
+        val topWeekState = state.discussing.toContentState { it.toHomeMessage(strings) }
+        if (windowSize == AnixWindowSize.Expanded) {
+            // Desktop (Expanded): сетка 6 колонок (мокап Claude Design, строка 757) — своя
+            // раскладка в `HomeSections.kt`, не `HorizontalPosterRail.gridOnExpanded`
+            // (см. её KDoc), чтобы не менять раскладку других потребителей рельсы.
+            HomeRailGridSection(
+                title = strings.homeTopWeek,
+                state = topWeekState,
+                onRetry = { viewModel.dispatch(HomeIntent.RetryDiscussing) },
+                onReleaseClick = onReleaseClick,
             )
+        } else {
+            HorizontalPosterRail(
+                title = strings.homeTopWeek,
+                state = topWeekState,
+                key = { it.id },
+                onRetry = { viewModel.dispatch(HomeIntent.RetryDiscussing) },
+                windowSize = windowSize,
+            ) { release ->
+                TitleCard(
+                    release = release,
+                    onClick = { onReleaseClick(release.id) },
+                    posterWidth = posterWidth,
+                )
+            }
         }
     }
 
     item(key = "home_new_episodes") {
-        HorizontalPosterRail(
-            title = strings.homeSectionNewEpisodes,
-            state = state.newEpisodes.toContentState { it.toHomeMessage(strings) },
-            key = { it.id },
-            onRetry = { viewModel.dispatch(HomeIntent.RetryNewEpisodes) },
-            windowSize = windowSize,
-            gridOnExpanded = true,
-        ) { release ->
-            NewEpisodeCard(
-                release = release,
-                onClick = { onReleaseClick(release.id) },
-                posterWidth = posterWidth,
+        val newEpisodesState = state.newEpisodes.toContentState { it.toHomeMessage(strings) }
+        if (windowSize == AnixWindowSize.Expanded) {
+            HomeRailGridSection(
+                title = strings.homeSectionNewEpisodes,
+                state = newEpisodesState,
+                onRetry = { viewModel.dispatch(HomeIntent.RetryNewEpisodes) },
+                onReleaseClick = onReleaseClick,
+                isNewEpisode = true,
             )
+        } else {
+            HorizontalPosterRail(
+                title = strings.homeSectionNewEpisodes,
+                state = newEpisodesState,
+                key = { it.id },
+                onRetry = { viewModel.dispatch(HomeIntent.RetryNewEpisodes) },
+                windowSize = windowSize,
+            ) { release ->
+                NewEpisodeCard(
+                    release = release,
+                    onClick = { onReleaseClick(release.id) },
+                    posterWidth = posterWidth,
+                )
+            }
         }
     }
 }
@@ -382,3 +445,6 @@ internal fun AnixError.toHomeMessage(strings: Strings): String =
 private const val GREETING_MORNING_START_HOUR = 5
 private const val GREETING_DAY_START_HOUR = 12
 private const val GREETING_EVENING_START_HOUR = 17
+
+/** Desktop (Expanded): gap между секциями Home (мокап Claude Design, строка 757). */
+private val HOME_EXPANDED_SECTION_GAP = 28.dp

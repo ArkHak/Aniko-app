@@ -87,8 +87,10 @@ import org.koin.compose.viewmodel.koinViewModel
  * телефоне, см. её KDoc). Track A (design-match-remaining-screens, 2026-09-04): на phone Compact
  * разметка макета (`showDetail`) кладёт эту кнопку прямо поверх hero-обложки шапки (полупрозрачный
  * круг, [ReleaseHeaderSection]), не отдельным `TopAppBar` над контентом — иначе получилась бы
- * дублирующая кнопка назад. На Medium/Expanded (та же `ReleaseDetailsScreen`, встроенная в
- * detail-панель `ListDetailHost`) раскладка НЕ меняется (P13.T13/P5.T3) — `TopAppBar` остаётся.
+ * дублирующая кнопка назад. Desktop-проход (2026-09-15, мокап `showDetail`): на Expanded тот же
+ * приём, что и на Compact — экран живёт в правом ящике `ListDetailHost` и рисует кнопку "назад"
+ * на hero-обложке (`ExpandedDrawerHeader` в `ReleaseHeaderSection.kt`), поэтому `TopAppBar`
+ * остаётся только на Medium.
  */
 @Suppress("LongParameterList") // 6 параметров: releaseId/modifier/viewModel — обязательный
 // каркас экрана, pendingEpisode*/onEpisodeClick — deep link (P10.T7, см. их собственный KDoc);
@@ -122,11 +124,11 @@ fun ReleaseDetailsScreen(
         onResolved = { target -> onEpisodeClick(releaseId, target.sourceId, target.position, target.host) },
     )
 
-    // См. KDoc функции про кнопку "назад" (P13 [FIX] + Track A: `TopAppBar` только на Medium/Expanded).
-    val isCompact = windowSize == AnixWindowSize.Compact
+    // См. KDoc функции про кнопку "назад" (P13 [FIX] + Track A + desktop-проход 2026-09-15:
+    // `TopAppBar` только на Medium; Compact и Expanded рисуют кнопку на hero-обложке сами).
     Scaffold(
         modifier = modifier.testTag(AnixTestTags.RELEASE_DETAILS_SCREEN_ROOT),
-        topBar = { if (!isCompact) ReleaseDetailsTopBar(onBack = { titleNavigator.back() }) },
+        topBar = { if (windowSize == AnixWindowSize.Medium) ReleaseDetailsTopBar(onBack = { titleNavigator.back() }) },
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             when {
@@ -284,14 +286,22 @@ private fun ReleaseDetailsContent(
     // отступ ей не нужен и даже мешал бы (обложка перестала бы быть во всю ширину). Остальные
     // секции ниже (рейтинг/серии/похожее/комментарии) и Medium/Expanded-раскладка шапки — как и
     // раньше, получают `spaceM` тем же способом, каким раньше был запятнан весь `Column`.
-    val isCompact = LocalAnixWindowSize.current == AnixWindowSize.Compact
-    val sectionModifier = Modifier.padding(horizontal = dimens.spaceM)
+    val windowSize = LocalAnixWindowSize.current
+    val isCompact = windowSize == AnixWindowSize.Compact
+    // Desktop-проход (2026-09-15): на Expanded экран живёт в правом ящике 520dp `ListDetailHost`
+    // (мокап `showDetail`) — шапка (`ExpandedDrawerHeader`) full-bleed, как и Compact-hero
+    // (обложка 230dp край-в-край + собственный контентный padding), поэтому родительский отступ
+    // не нужен и ей; секции ниже получают 24dp вместо spaceM, зазоры — 16dp вместо spaceL
+    // (блок мокапа: `padding:0 24px 30px; gap:16px`).
+    val isExpanded = windowSize == AnixWindowSize.Expanded
+    val sectionModifier =
+        Modifier.padding(horizontal = if (isExpanded) DRAWER_CONTENT_PADDING else dimens.spaceM)
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) dimens.spaceM else dimens.spaceL),
     ) {
-        if (!isCompact) Spacer(modifier = Modifier.height(dimens.spaceM))
+        if (windowSize == AnixWindowSize.Medium) Spacer(modifier = Modifier.height(dimens.spaceM))
 
         ReleaseHeaderSection(
             release = release,
@@ -309,7 +319,7 @@ private fun ReleaseDetailsContent(
             onRetryDetails = onRetryDetails,
             onShareClick = onShareClick,
             onBackClick = onBackClick,
-            modifier = if (isCompact) Modifier else sectionModifier,
+            modifier = if (isCompact || isExpanded) Modifier else sectionModifier,
         )
 
         ReleaseRatingSection(releaseId = release.id, averageGrade = release.grade, modifier = sectionModifier)
@@ -337,7 +347,7 @@ private fun ReleaseDetailsContent(
             modifier = sectionModifier,
         )
 
-        Spacer(modifier = Modifier.height(dimens.spaceM))
+        Spacer(modifier = Modifier.height(if (isExpanded) DRAWER_BOTTOM_PADDING else dimens.spaceM))
     }
 }
 
@@ -490,3 +500,10 @@ private val COMMENT_PREVIEW_AVATAR_SIZE = 30.dp
 private val COMMENT_PREVIEW_BORDER_WIDTH = 1.dp
 private val COMMENT_PREVIEW_TEXT_SIZE = 12.5.sp
 private val COMMENTS_TITLE_SIZE = 14.sp
+
+// Правый ящик Expanded (мокап `showDetail`, 2026-09-15): контентный padding 0/24/30 —
+// горизонталь и низ здесь (верх задаёт hero-нахлёст шапки); ширина самого ящика (520dp) —
+// константа `ListDetailHost`, она владеет раскладкой поверх списка. Литеральные значения
+// одного блока макета — не общие токены AnixDimens.
+private val DRAWER_CONTENT_PADDING = 24.dp
+private val DRAWER_BOTTOM_PADDING = 30.dp

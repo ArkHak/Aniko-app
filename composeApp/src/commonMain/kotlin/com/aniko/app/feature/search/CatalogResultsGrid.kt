@@ -1,8 +1,11 @@
 package com.aniko.app.feature.search
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,8 +13,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -23,17 +31,29 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.aniko.app.ui.toContentState
 import com.aniko.data.paging.PagingState
 import com.aniko.model.ListStatus
 import com.aniko.model.Release
+import com.aniko.model.ReleaseStatus
+import com.aniko.ui.adaptive.AnixWindowSize
+import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.adaptive.LocalGlassBottomInset
 import com.aniko.ui.component.AnixContentSlot
 import com.aniko.ui.component.AnixLoadingState
+import com.aniko.ui.component.AnixPoster
 import com.aniko.ui.component.TitleCard
 import com.aniko.ui.component.TitleCardLayout
+import com.aniko.ui.component.TopEndRatingBadge
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.i18n.displayName
@@ -47,12 +67,15 @@ import kotlin.math.roundToInt
  * различает их источник. Мост `PagingState -> AnixContentState` — [toContentState]
  * (`composeApp/.../ui/PagingStateAdapter.kt`, Фаза 6).
  *
- * Единственный режим выдачи — список (раньше был переключатель Сетка/Список, убран 2026-09-11 —
- * решение зафиксировано в `docs/REELWAVE_PLAN.md`, catalog-экран сверен с дизайном без него).
- *
- * Пагинация "вперёд" — тот же паттерн, что в `LibraryScreen`/старой `SearchScreen`
- * (`itemsIndexed` + проверка индекса относительно конца списка на каждый видимый элемент, без
- * отдельного `LazyGridState`/`snapshotFlow`) — сознательно не переизобретается.
+ * Раскладка по [AnixWindowSize]:
+ * - Compact/Medium — списочные строки [TitleCard] ([CatalogList], тот же паттерн пагинации, что
+ *   в `LibraryScreen`/старой `SearchScreen`: `itemsIndexed` + проверка индекса относительно
+ *   конца списка на каждый видимый элемент, без отдельного `LazyGridState`/`snapshotFlow`).
+ * - Expanded — сетка из 5 колонок ([CatalogGrid], desktop-артборд мокапа, строка 800): постер
+ *   2:3 radius 14, бейдж рейтинга top-right, название/мета-строка/опциональный release-badge под
+ *   постером — своя ячейка [CatalogGridItem] (не [TitleCard]: макет хочет рейтинг СПРАВА и без
+ *   персональных оверлеев избранного/статуса списка, которые рисует стандартная Grid-раскладка
+ *   [TitleCard]).
  */
 @Suppress("LongParameterList") // Координирующий блок: пагинированное состояние + 5 колбэков.
 @Composable
@@ -67,6 +90,7 @@ fun CatalogResultsGrid(
 ) {
     val strings = LocalStrings.current
     val dimens = AnixThemeTokens.dimens
+    val isExpanded = LocalAnixWindowSize.current == AnixWindowSize.Expanded
     // P2.T10: не показываем error.message напрямую — технический AnixError, не UI-текст.
     // Один и тот же fallback для обоих режимов выдачи — специального catalogLoadError-ключа
     // фундамент Фазы 7 не заводил (в отличие от catalogEmptyResults), реюз searchError осознан.
@@ -78,14 +102,167 @@ fun CatalogResultsGrid(
         emptyMessage = strings.catalogEmptyResults,
         onRetry = onRetry,
     ) { items ->
-        CatalogList(
-            items = items,
-            isLoadingMore = contentState.isLoading,
-            onReleaseClick = onReleaseClick,
-            onLoadMore = onLoadMore,
-            dimens = dimens,
-            onSetListStatus = onSetListStatus,
-            onRemoveFromList = onRemoveFromList,
+        if (isExpanded) {
+            CatalogGrid(
+                items = items,
+                isLoadingMore = contentState.isLoading,
+                strings = strings,
+                dimens = dimens,
+                onReleaseClick = onReleaseClick,
+                onLoadMore = onLoadMore,
+            )
+        } else {
+            CatalogList(
+                items = items,
+                isLoadingMore = contentState.isLoading,
+                onReleaseClick = onReleaseClick,
+                onLoadMore = onLoadMore,
+                dimens = dimens,
+                onSetListStatus = onSetListStatus,
+                onRemoveFromList = onRemoveFromList,
+            )
+        }
+    }
+}
+
+/** Expanded: сетка 5 колонок, gap 16 (desktop-артборд мокапа, строка 800). */
+@Suppress("LongParameterList") // Пагинация + рендер-зависимости ячейки, см. CatalogResultsGrid.
+@Composable
+private fun CatalogGrid(
+    items: List<Release>,
+    isLoadingMore: Boolean,
+    strings: Strings,
+    dimens: AnixDimens,
+    onReleaseClick: (Int) -> Unit,
+    onLoadMore: () -> Unit,
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(GRID_COLUMNS),
+        modifier = Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(GRID_GAP),
+        verticalArrangement = Arrangement.spacedBy(GRID_GAP),
+        contentPadding =
+            PaddingValues(
+                top = dimens.spaceS,
+                bottom = dimens.spaceM + LocalGlassBottomInset.current,
+            ),
+    ) {
+        itemsIndexed(items, key = { _, release -> release.id }) { index, release ->
+            if (index >= items.size - PREFETCH_THRESHOLD) onLoadMore()
+            CatalogGridItem(
+                release = release,
+                strings = strings,
+                onClick = { onReleaseClick(release.id) },
+            )
+        }
+
+        if (isLoadingMore) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                AnixLoadingState(Modifier.fillMaxWidth().padding(dimens.spaceM))
+            }
+        }
+    }
+}
+
+/**
+ * Ячейка сетки Catalog Expanded (мокап: постер 2:3 radius 14, бейдж рейтинга top-right inset 6,
+ * название 12px/600 Manrope lh 1.25, мета-строка 10.5px `--t2-58`, опциональный release-badge).
+ */
+@Composable
+private fun CatalogGridItem(
+    release: Release,
+    strings: Strings,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = AnixThemeTokens.colors
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = release.title }
+                .clickable(onClick = onClick),
+        verticalArrangement = Arrangement.spacedBy(GRID_ITEM_VERTICAL_GAP),
+    ) {
+        Box {
+            AnixPoster(
+                url = release.posterUrl,
+                contentDescription = null,
+                width = null,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            val grade = release.grade
+            if (grade != null) {
+                TopEndRatingBadge(
+                    grade = grade,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(RATING_BADGE_INSET),
+                )
+            }
+        }
+
+        Text(
+            text = release.title,
+            style =
+                MaterialTheme.typography.titleSmall.copy(
+                    fontSize = GRID_TITLE_FONT_SIZE,
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = GRID_TITLE_LINE_HEIGHT,
+                ),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = GRID_TITLE_MAX_LINES,
+            overflow = TextOverflow.Ellipsis,
+        )
+
+        val meta = releaseMeta(strings, release)
+        if (meta != null) {
+            Text(
+                text = meta,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = GRID_META_FONT_SIZE),
+                color = colors.textSecondary58,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        if (release.status != ReleaseStatus.UNKNOWN) {
+            ReleaseStatusBadge(status = release.status)
+        }
+    }
+}
+
+/** Опциональный бейдж статуса релиза под карточкой (мокап: padding 3/9, radius 20, 9.5px/700). */
+@Composable
+private fun ReleaseStatusBadge(
+    status: ReleaseStatus,
+    modifier: Modifier = Modifier,
+) {
+    val strings = LocalStrings.current
+    val colors = AnixThemeTokens.colors
+    val label =
+        when (status) {
+            ReleaseStatus.FINISHED -> strings.releaseStatusFinished
+            ReleaseStatus.ONGOING -> strings.releaseStatusOngoing
+            ReleaseStatus.ANNOUNCE -> strings.releaseStatusAnnounce
+            ReleaseStatus.UNKNOWN -> return
+        }
+    Box(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(RELEASE_BADGE_RADIUS))
+                .background(colors.overlay07)
+                .border(RELEASE_BADGE_BORDER_WIDTH, colors.overlay16, RoundedCornerShape(RELEASE_BADGE_RADIUS))
+                .padding(horizontal = RELEASE_BADGE_HORIZONTAL_PADDING, vertical = RELEASE_BADGE_VERTICAL_PADDING),
+    ) {
+        Text(
+            text = label,
+            style =
+                MaterialTheme.typography.labelSmall.copy(
+                    fontSize = RELEASE_BADGE_FONT_SIZE,
+                    fontWeight = FontWeight.Bold,
+                ),
+            color = colors.textSecondary72,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -221,3 +398,17 @@ private val MENU_DOT_SIZE = 3.dp
 private val MENU_DOT_GAP = 2.dp
 
 private const val PREFETCH_THRESHOLD = 6
+
+private const val GRID_COLUMNS = 5
+private val GRID_GAP = 16.dp
+private val GRID_ITEM_VERTICAL_GAP = 7.dp
+private val RATING_BADGE_INSET = 6.dp
+private val GRID_TITLE_FONT_SIZE = 12.sp
+private val GRID_TITLE_LINE_HEIGHT = 15.sp
+private const val GRID_TITLE_MAX_LINES = 2
+private val GRID_META_FONT_SIZE = 10.5.sp
+private val RELEASE_BADGE_RADIUS = 20.dp
+private val RELEASE_BADGE_BORDER_WIDTH = 1.dp
+private val RELEASE_BADGE_HORIZONTAL_PADDING = 9.dp
+private val RELEASE_BADGE_VERTICAL_PADDING = 3.dp
+private val RELEASE_BADGE_FONT_SIZE = 9.5.sp

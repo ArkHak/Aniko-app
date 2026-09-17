@@ -91,10 +91,16 @@ import androidx.compose.foundation.lazy.itemsIndexed as itemsIndexedColumn
  * P13.T4: на [com.aniko.ui.adaptive.AnixWindowSize.Compact] грид постеров ([LibraryGrid]) заменён
  * на компактные горизонтальные строки ([LibraryRows]) — под мокап Claude Design, тот же паттерн
  * "48×48 арт + название + прогресс + чип справа", что уже даёт [ProgressRow] на Home (Continue
- * Watching). Ячейки Medium/Expanded ([LibraryGrid]) обёрнуты в тот же overlay-контейнер
- * (`overlay045`/`overlay07`/`cornerM`), что и строки Compact. Долгое нажатие/контекстное меню
- * (смена статуса/избранное/удаление) работает одинаково в обоих вариантах — [ProgressRow]
- * получил тот же `onLongClick`, что уже был у [ReleaseCard].
+ * Watching).
+ *
+ * P13.T7: на [com.aniko.ui.adaptive.AnixWindowSize.Expanded] вместо сетки постеров используется
+ * desktop-раскладка «My Lists»: заголовок + shuffle, чипы-вкладки и 3-колоночная сетка
+ * горизонтальных карточек ([LibraryExpandedListCard]) с 52×52 артом и прогресс-подписью.
+ * Долгое нажатие/контекстное меню (смена статуса/избранное/удаление) работает одинаково во
+ * всех раскладках — [LibraryExpandedListCard] переиспользует [LibraryContextMenu].
+ *
+ * Ячейки Medium ([LibraryGrid]) и Compact ([LibraryRows]) обёрнуты в тот же overlay-контейнер
+ * (`overlay045`/`overlay07`/`cornerM`), что и строки Compact.
  */
 @Composable
 fun LibraryScreen(
@@ -133,74 +139,91 @@ fun LibraryScreen(
                 )
             }
             // Track A: макет (`listsGroups`) рисует переключатель вкладок как ряд чипов
-            // (тот же паттерн, что жанр-чипы Catalog) — на всех ширинах окна, см.
-            // [LibraryTabChips].
-            LibraryTabChips(
-                selectedTab = selectedTab,
-                onTabSelected = { tab -> viewModel.selectTab(tab) },
-                strings = strings,
-                profile = uiState.profile,
-                modifier = Modifier.padding(horizontal = dimens.spaceM),
-            )
+            // (тот же паттерн, что жанр-чипы Catalog) — на Compact/Medium, см.
+            // [LibraryTabChips]. На Expanded используется собственный ряд чипов под макет
+            // desktop-артборда ([LibraryExpandedChips]).
+            if (windowSize != AnixWindowSize.Expanded) {
+                LibraryTabChips(
+                    selectedTab = selectedTab,
+                    onTabSelected = { tab -> viewModel.selectTab(tab) },
+                    strings = strings,
+                    profile = uiState.profile,
+                    modifier = Modifier.padding(horizontal = dimens.spaceM),
+                )
+            }
 
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                Column(modifier = Modifier.fillMaxSize().widthIn(max = dimens.contentMaxWidth)) {
-                    val pagingState = uiState.pagingState
-
-                    LibraryToolbar(
-                        tab = selectedTab,
-                        itemCount = pagingState.items.size,
+                if (windowSize == AnixWindowSize.Expanded) {
+                    LibraryExpandedContent(
+                        pagingState = uiState.pagingState,
+                        selectedTab = selectedTab,
                         isShuffled = uiState.isShuffled,
-                        isReversed = uiState.isReversed,
+                        menuReleaseId = menuReleaseId,
+                        onMenuReleaseIdChange = { menuReleaseId = it },
+                        onReleaseClick = onReleaseClick,
                         onShuffleClick = { viewModel.toggleShuffle(selectedTab) },
-                        onReverseClick = { viewModel.toggleReverse(selectedTab) },
+                        onTabSelected = { tab -> viewModel.selectTab(tab) },
+                        viewModel = viewModel,
                     )
+                } else {
+                    Column(modifier = Modifier.fillMaxSize().widthIn(max = dimens.contentMaxWidth)) {
+                        val pagingState = uiState.pagingState
 
-                    when {
-                        pagingState.error != null && pagingState.items.isEmpty() ->
-                            AnixErrorBox(
-                                // P2.T10: не показываем `error.message` напрямую — это текст исключения
-                                // AnixError (технический, на английском, только для логов/debug), не
-                                // локализованный UI-текст. Всегда локализованный fallback.
-                                message = strings.libraryLoadError,
-                                onRetry = { viewModel.retry(selectedTab) },
-                                modifier = Modifier.fillMaxSize(),
-                            )
+                        LibraryToolbar(
+                            tab = selectedTab,
+                            itemCount = pagingState.items.size,
+                            isShuffled = uiState.isShuffled,
+                            isReversed = uiState.isReversed,
+                            onShuffleClick = { viewModel.toggleShuffle(selectedTab) },
+                            onReverseClick = { viewModel.toggleReverse(selectedTab) },
+                        )
 
-                        pagingState.items.isEmpty() && (pagingState.isLoading || pagingState.isRefreshing) ->
-                            AnixLoadingBox(
-                                modifier = Modifier.fillMaxSize(),
-                            )
-
-                        pagingState.isEmpty ->
-                            AnixEmptyBox(
-                                message = selectedTab.emptyMessage(strings),
-                                modifier = Modifier.fillMaxSize(),
-                            )
-
-                        // P13.T4: грид ([LibraryGrid]) остаётся на Medium/Expanded, Compact — новые
-                        // компактные строки ([LibraryRows]), см. KDoc класса.
-                        else ->
-                            if (windowSize.isTwoPane) {
-                                LibraryGrid(
-                                    pagingState = pagingState,
-                                    windowSize = windowSize,
-                                    selectedTab = selectedTab,
-                                    menuReleaseId = menuReleaseId,
-                                    onMenuReleaseIdChange = { menuReleaseId = it },
-                                    onReleaseClick = onReleaseClick,
-                                    viewModel = viewModel,
+                        when {
+                            pagingState.error != null && pagingState.items.isEmpty() ->
+                                AnixErrorBox(
+                                    // P2.T10: не показываем `error.message` напрямую — это текст исключения
+                                    // AnixError (технический, на английском, только для логов/debug), не
+                                    // локализованный UI-текст. Всегда локализованный fallback.
+                                    message = strings.libraryLoadError,
+                                    onRetry = { viewModel.retry(selectedTab) },
+                                    modifier = Modifier.fillMaxSize(),
                                 )
-                            } else {
-                                LibraryRows(
-                                    pagingState = pagingState,
-                                    selectedTab = selectedTab,
-                                    menuReleaseId = menuReleaseId,
-                                    onMenuReleaseIdChange = { menuReleaseId = it },
-                                    onReleaseClick = onReleaseClick,
-                                    viewModel = viewModel,
+
+                            pagingState.items.isEmpty() && (pagingState.isLoading || pagingState.isRefreshing) ->
+                                AnixLoadingBox(
+                                    modifier = Modifier.fillMaxSize(),
                                 )
-                            }
+
+                            pagingState.isEmpty ->
+                                AnixEmptyBox(
+                                    message = selectedTab.emptyMessage(strings),
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+
+                            // P13.T4: грид ([LibraryGrid]) остаётся на Medium, Compact — новые
+                            // компактные строки ([LibraryRows]), см. KDoc класса.
+                            else ->
+                                if (windowSize.isTwoPane) {
+                                    LibraryGrid(
+                                        pagingState = pagingState,
+                                        windowSize = windowSize,
+                                        selectedTab = selectedTab,
+                                        menuReleaseId = menuReleaseId,
+                                        onMenuReleaseIdChange = { menuReleaseId = it },
+                                        onReleaseClick = onReleaseClick,
+                                        viewModel = viewModel,
+                                    )
+                                } else {
+                                    LibraryRows(
+                                        pagingState = pagingState,
+                                        selectedTab = selectedTab,
+                                        menuReleaseId = menuReleaseId,
+                                        onMenuReleaseIdChange = { menuReleaseId = it },
+                                        onReleaseClick = onReleaseClick,
+                                        viewModel = viewModel,
+                                    )
+                                }
+                        }
                     }
                 }
             }
@@ -232,7 +255,7 @@ private fun LibraryTabChips(
 }
 
 /**
- * Сетка [ReleaseCard] — Medium/Expanded (P9.T3). Каждая ячейка обёрнута в overlay-контейнер
+ * Сетка [ReleaseCard] — Medium (P9.T3). Каждая ячейка обёрнута в overlay-контейнер
  * (`overlay045`/`overlay07`/`cornerM` + `spaceXs` padding) — тот же паттерн, что и строки
  * [LibraryRows] на Compact и [NewEpisodeCard] на Home. На Compact вместо неё — [LibraryRows].
  */
@@ -516,7 +539,7 @@ private val LIBRARY_GRID_CARD_BORDER_WIDTH = 1.dp
  * избранного (снятие галочки убирает карточку ровно так же).
  */
 @Composable
-private fun LibraryContextMenu(
+internal fun LibraryContextMenu(
     expanded: Boolean,
     release: Release,
     tab: LibraryTab,
@@ -598,11 +621,11 @@ private fun LibraryTab.count(profile: ProfileDetails?): Int? =
         }
     }
 
-private fun LibraryTab.emptyMessage(strings: Strings): String =
+internal fun LibraryTab.emptyMessage(strings: Strings): String =
     when (this) {
         is LibraryTab.Status -> strings.libraryEmptyStatus
         LibraryTab.Favorites -> strings.libraryEmptyFavorites
         LibraryTab.History -> strings.libraryEmptyHistory
     }
 
-private const val LIBRARY_PREFETCH_THRESHOLD = 6
+internal const val LIBRARY_PREFETCH_THRESHOLD = 6
