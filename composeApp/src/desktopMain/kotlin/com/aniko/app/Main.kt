@@ -76,7 +76,7 @@ private fun runAnikoApp(args: Array<String>) {
     args.firstOrNull()?.let(DeepLinkDispatcher::dispatch)
 
     application {
-        val windowState = rememberWindowState(size = DpSize(1280.dp, 860.dp))
+        val windowState = rememberWindowState(size = DpSize(1080.dp, 720.dp))
         Window(
             onCloseRequest = ::exitApplication,
             title = "Aniko",

@@ -1,6 +1,5 @@
 package com.aniko.app
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,15 +8,10 @@ import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -26,11 +20,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -64,14 +53,12 @@ import com.aniko.ui.adaptive.AdaptiveScaffold
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.adaptive.rememberAnixWindowSize
-import com.aniko.ui.component.AnixLanguagePicker
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.component.AnixOfflineBanner
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.ProvideAppStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.image.createAnixImageLoader
-import com.aniko.ui.theme.AnixThemeTokens
 import com.aniko.ui.theme.AppTheme
 import io.ktor.client.HttpClient
 import org.koin.compose.KoinContext
@@ -322,16 +309,6 @@ private fun AnixAppScaffold(
             onItemClick = { item ->
                 navController.navigateToTabRoot(AnixSection.valueOf(item.id).destination)
             },
-            // Desktop-артборд мокапа (2026-09-15, шелл 1220×760): traffic lights в шапке сайдбара
-            // (padding 6px 8px 20px — на стороне вызывающего, см. KDoc AppSidebarTrafficLights),
-            // переключатель языка — внизу (фон --w05, radius 10, margin 0 8px). Слоты читаются
-            // только Expanded-веткой AdaptiveScaffold, на Compact/Medium не рендерятся.
-            sidebarHeader = {
-                AppSidebarTrafficLights(
-                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 20.dp),
-                )
-            },
-            sidebarFooter = { AnixSidebarLanguageFooter(localeStore) },
         ) { innerPadding ->
             AnixAppScaffoldContent(
                 innerPadding = innerPadding,
@@ -344,62 +321,6 @@ private fun AnixAppScaffold(
         }
     }
 }
-
-/**
- * Переключатель языка в футере сайдбара (desktop-артборд мокапа, 2026-09-15): ОДНА компактная
- * плашка с текущим языком, клик перебирает варианты (Системный → EN → RU → Системный) — ровно
- * как `toggleLang` в мокапе (`<div onClick={{ toggleLang }}>` в футере сайдбара desktop-артборда,
- * подпись — `langLabel` в JetBrains Mono 11px/700). Три отдельных чипа
- * ([AnixLanguagePicker] — раскладка `Settings`) в 232dp сайдбара не помещаются: правый сегмент
- * обрезался краем панели (живая проверка 2026-09-16, реальное окно). Дубль с пунктом «Язык» в
- * `Settings` осознанный — мокап содержит оба, см. KDoc `chromeRoutes`.
- */
-@Composable
-private fun AnixSidebarLanguageFooter(localeStore: LocaleStore) {
-    val languageTag by localeStore.languageTag.collectAsStateWithLifecycle()
-    val strings = LocalStrings.current
-    val label = languageTag.toLanguageLabel(strings)
-    Surface(
-        color = AnixThemeTokens.colors.overlay05,
-        shape = RoundedCornerShape(SIDEBAR_FOOTER_RADIUS),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = SIDEBAR_FOOTER_MARGIN),
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clickable { localeStore.setLanguageTag(languageTag.nextLanguageTag()) }
-                    .clearAndSetSemantics {
-                        contentDescription = "${strings.settingsLanguage}: $label"
-                        role = Role.Button
-                    }.padding(vertical = SIDEBAR_FOOTER_PADDING),
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-            )
-        }
-    }
-}
-
-/** Подпись текущего языка для плашки сайдбара — те же три значения, что у [AnixLanguagePicker]. */
-private fun String?.toLanguageLabel(strings: Strings): String =
-    when (this) {
-        "en" -> "EN"
-        "ru" -> "RU"
-        else -> strings.galleryLanguageSystem
-    }
-
-/** Следующий язык по кругу — порядок тот же, что у [AnixLanguagePicker] (`null` → en → ru → `null`). */
-private fun String?.nextLanguageTag(): String? =
-    when (this) {
-        null -> "en"
-        "en" -> "ru"
-        else -> null
-    }
 
 /**
  * Тело слота `content` [AdaptiveScaffold] внутри [AnixAppScaffold] — вынесено отдельной функцией
@@ -458,9 +379,3 @@ private fun AnixAppScaffoldContent(
         modifier = Modifier.fillMaxSize().padding(contentPadding).consumeWindowInsets(innerPadding),
     )
 }
-
-// Футер сайдбара с переключателем языка (desktop-артборд мокапа, 2026-09-15): margin 0 8px,
-// radius 10, фон --w05. Литеральные значения одного места макета — не общие токены AnixDimens.
-private val SIDEBAR_FOOTER_MARGIN = 8.dp
-private val SIDEBAR_FOOTER_RADIUS = 10.dp
-private val SIDEBAR_FOOTER_PADDING = 4.dp

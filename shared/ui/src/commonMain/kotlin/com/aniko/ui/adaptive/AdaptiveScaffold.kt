@@ -28,10 +28,10 @@ import com.aniko.ui.glass.rememberGlassBackdropState
  * Чистый UI-компонент: не знает про `AnixDestination`/Koin/`NavController` — вызывающая сторона
  * (composeApp) передаёт список [items] и обрабатывает клики через [onItemClick].
  *
- * @param sidebarHeader Слот в верхней части постоянного sidebar на [AnixWindowSize.Expanded]
- *   (например, кнопки управления окном). См. [AnixSidebar].
- * @param sidebarFooter Слот в нижней части постоянного sidebar на [AnixWindowSize.Expanded]
- *   (например, переключатель языка). См. [AnixSidebar].
+ * @param sidebarHeader Слот в верхней части постоянного sidebar на [AnixWindowSize.Expanded].
+ *   По умолчанию пустой. См. [AnixSidebar].
+ * @param sidebarFooter Слот в нижней части постоянного sidebar на [AnixWindowSize.Expanded].
+ *   По умолчанию пустой. См. [AnixSidebar].
  * @param showNavigationChrome `false` полностью убирает bottomBar/rail/sidebar, отдавая [content]
  * весь экран (P13, найдено живой проверкой) — нужен маршрутам, которые обязаны быть "поверх"
  * каркаса (плеер, см. KDoc `PlayerScreen`): `content` и раньше получал `PaddingValues` без

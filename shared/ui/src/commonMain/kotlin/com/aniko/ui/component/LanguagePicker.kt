@@ -6,12 +6,12 @@ import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.jetBrainsMonoFontFamily
 
 /**
- * Компактный переключатель языка (P5.T9, UI-часть) — используется в Settings и в футере
- * сайдбара ([com.aniko.ui.adaptive.AdaptiveScaffold] на Expanded).
+ * Компактный переключатель языка (P5.T9, UI-часть) — используется в Settings
+ * ([com.aniko.app.feature.settings.SettingsScreen]).
  *
  * Тот же паттерн, что уже был у `GalleryControls` в `composeApp/.../gallery/TokenGalleryScreen.kt`
- * (`ChipRow` с `listOf(null, "en", "ru")`), вынесенный в `shared/ui`, чтобы им мог пользоваться
- * и сайдбар, и Settings — не только галерея токенов.
+ * (`ChipRow` с `listOf(null, "en", "ru")`), вынесенный в `shared/ui`, чтобы им могли пользоваться
+ * и Settings, и галерея токенов.
  *
  * [currentTag] — `null` означает "следовать системному языку", `"en"`/`"ru"` — явный выбор.
  * Подпись чипа рисуется JetBrains Mono (макет Claude Design) — единственный вызов `ChipRow` в
