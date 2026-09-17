@@ -109,6 +109,17 @@ kotlin {
     }
 }
 
+// Смоук-тесты desktopTest (P11, src/desktopTest/.../smoke) доводят композицию до PlayerScreen,
+// чей desktop-actual (`EmbedPlayer.desktop.kt`, :shared:player) создаёт настоящий VLCJ
+// `CallbackMediaPlayerComponent`. На CI (ubuntu, без libVLC) NativeDiscovery vlcj зацикливается
+// в обходе дерева каталогов на EDT — тест формально зелёный, но его тестовая JVM потом не
+// завершается никогда, и CI-джоб вис до системного 6-часового таймаута (2026-09-15/17,
+// диагностировано jstack-дампом). Флаг переводит EmbedPlayerView в режим placeholder:
+// без нативного плеера и без реального сетевого резолва потока из тестов.
+tasks.withType<Test>().configureEach {
+    systemProperty("aniko.playerTestMode", "true")
+}
+
 android {
     namespace = "com.aniko.app"
 

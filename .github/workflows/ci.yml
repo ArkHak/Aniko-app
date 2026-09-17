@@ -68,6 +68,10 @@ jobs:
   common-test:
     name: commonTest (shared:*)
     runs-on: ubuntu-latest
+    # Страховка от зависших тестовых JVM: без лимита джоб висел до системных 6 часов
+    # (прогоны 2026-09-15/17 — vlcj NativeDiscovery зацикливался в смоук-тесте плеера).
+    # Нормальная длительность шага — ~2-3 минуты.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 

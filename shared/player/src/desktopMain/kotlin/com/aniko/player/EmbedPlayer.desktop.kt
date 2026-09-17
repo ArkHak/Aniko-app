@@ -30,6 +30,16 @@ import uk.co.caprica.vlcj.player.component.CallbackMediaPlayerComponent
  * больше не поднимается вовсе, поэтому этот composable запускает [DesktopVlcjPlayer] сразу, не
  * дожидаясь готовности никакого браузерного движка.
  *
+ * **Тестовый режим (`aniko.playerTestMode`).** Смоук-тесты `:composeApp:desktopTest` доводят
+ * композицию до `PlayerScreen` (P11.T2, `BrowseDetailPlaySmokeTest`). Настоящий
+ * `CallbackMediaPlayerComponent` там не нужен — тест проверяет навигацию, а не видео. Хуже того,
+ * на CI-раннере (ubuntu, без libVLC) `NativeDiscovery` vlcj уходит в бесконечный обход дерева
+ * каталогов прямо на EDT: тест формально зелёный, но его поток крутится на 100% CPU вечно,
+ * тестовая JVM не завершается, и CI-джоб висел до системного 6-часового таймаута (прогоны
+ * 2026-09-15/17, диагностировано jstack-дампом). Поэтому под системным свойством
+ * `aniko.playerTestMode=true` (ставится Test-таскам в `composeApp/build.gradle.kts`) рисуется
+ * только placeholder — без нативного плеера и без сетевого резолва [DesktopStreamResolver].
+ *
  * **Топология трёх слоёв** (см. отчёт задачи за разбором альтернатив, которые не сработали —
  * `CallbackMediaPlayerComponent` внутри `SwingPanel` с Compose-соседями, `EmbeddedMediaPlayerComponent`
  * — обе на этой ветке подтверждённые вживую тупики):
@@ -62,9 +72,18 @@ actual fun EmbedPlayerView(
     modifier: Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
-        DesktopVlcjPlayer(url = url, referer = referer, controller = controller, modifier = Modifier.fillMaxSize())
+        if (!isPlayerTestMode()) {
+            DesktopVlcjPlayer(url = url, referer = referer, controller = controller, modifier = Modifier.fillMaxSize())
+        }
     }
 }
+
+/**
+ * `true` под системным свойством `aniko.playerTestMode=true` — см. KDoc [EmbedPlayerView].
+ * Читается на каждую композицию намеренно: свойство задаётся Test-таском до старта JVM, но
+ * чтение на месте не зависит от порядка загрузки классов и не требует remember.
+ */
+private fun isPlayerTestMode(): Boolean = System.getProperty("aniko.playerTestMode") == "true"
 
 /**
  * Владеет [CallbackMediaPlayerComponent] на время жизни композиции этого узла — переживает смену
