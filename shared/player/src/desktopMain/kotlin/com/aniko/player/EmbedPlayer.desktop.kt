@@ -121,6 +121,10 @@ private fun DesktopVlcjPlayer(
         controller?.setExpectedSource(url)
         val resolved = DesktopStreamResolver.resolve(url, referer)
         if (resolved != null) {
+            // Качества и referer для будущего переключения качества — контроллеру (см. KDoc
+            // [EmbedVideoController.onStreamsResolved]): чип качества на Desktop заполняется из
+            // controller-списка, а setQuality перезапускает поток с этим же referer.
+            controller?.onStreamsResolved(resolved)
             // `:http-referrer=` — media-опция libVLC (модуль access/http) для ФИНАЛЬНОГО запроса
             // потока самим libVLC. `resolved.referer`, а НЕ внешний параметр `referer` этой
             // функции — они могут не совпадать (Kodik: партнёрский Referer нужен только чтобы

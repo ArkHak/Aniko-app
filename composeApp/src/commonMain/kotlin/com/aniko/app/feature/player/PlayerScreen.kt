@@ -56,7 +56,8 @@ import org.koin.compose.viewmodel.koinViewModel
  * **P13 — компактный режим по умолчанию + переключение на fullscreen.** Сверка с мокапом Claude
  * Design (`showPlayer`) показала, что референс НЕ полноэкранный: видео закреплено сверху
  * фиксированной областью, под ним в обычном потоке — метаданные/прогресс/чипы озвучки-скорости,
- * не в auto-hide оверлее. `isFullscreen` (по умолчанию `false`) переключает между
+ * не в auto-hide оверлее. `isFullscreen` (дефолт платформенный — [playerOpensFullscreen]:
+ * Desktop открывается сразу в fullscreen, Android/iOS — в компактном, P13-мокап) переключает между
  * [CompactPlayerChrome] (chrome компактного режима) и [PlayerOverlay] (старый полноэкранный режим
  * с авто-скрытием, P8.T3-T5) — **`EmbedPlayerView` вызывается РОВНО ОДИН РАЗ** вне этого
  * ветвления (см. KDoc [CompactPlayerChrome] про то, почему второй call site оборвал бы
@@ -188,13 +189,28 @@ fun PlayerScreen(
                     // рисуется вовсе (честный UI, как у Audio-пикера с одной озвучкой).
                     // Качества берём у хоста (мост отдаёт то, что объявляет его меню), пока хост
                     // молчит — фолбэк по домену (Kodik: 720p/480p), затем — из embed-URL.
+                    // Desktop ([isEmbedQualityControllerDriven]): моста-скрейпинга нет — чип
+                    // отражает ТОЛЬКО список контроллера (резолвер отдал прозондированные
+                    // качества, `setQuality` реально перезапускает поток), доменный фолбэк
+                    // отключаем — иначе чип обещал бы качества, которые движок переключить не
+                    // может (резолв ещё идёт / Sibnet / однокачественный AniLibria-фолбэк).
+                    val qualityDrivenByController = isEmbedQualityControllerDriven()
                     val qualityOptions =
                         videoState.availableQualities.ifEmpty {
-                            playerEmbedQualities(source.url)
+                            if (qualityDrivenByController) emptyList() else playerEmbedQualities(source.url)
                         }
                     var manualQuality by remember(source.url) { mutableStateOf<String?>(null) }
+                    // Оптимистичный лейбл (manualQuality) живёт только для хост-скрейпинга:
+                    // там пикер предлагает то, что показывает меню хоста. Когда качества
+                    // присылает контроллер (Desktop), лейбл берём из его `currentQuality` —
+                    // показывать качество, которое движок реально играет, а не то, что UI
+                    // оптимистично выбрал (переключение могло не состояться — тогда чип врёт).
+                    // URL-фолбэк (`currentEmbedQuality`) — только для хост-скрейпинга: на Desktop
+                    // он подставлял бы декоративный сегмент URL вместо реального качества потока.
                     val currentQuality =
-                        manualQuality ?: videoState.currentQuality ?: currentEmbedQuality(source.url)
+                        manualQuality
+                            ?: videoState.currentQuality
+                            ?: currentEmbedQuality(source.url).takeUnless { qualityDrivenByController }
                     var showQualityPicker by remember { mutableStateOf(false) }
                     // Скорость — одним табом (как качество, P16 2026-09-10).
                     val speedRate = videoState.playbackRate

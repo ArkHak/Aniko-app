@@ -44,11 +44,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.aniko.data.profileshowcase.ProfileShowcaseSection
 import com.aniko.model.Achievement
 import com.aniko.model.ProfileDetails
 import com.aniko.ui.adaptive.AnixWindowSize
+import com.aniko.ui.component.AnixAsyncImage
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.StatTileData
 import com.aniko.ui.component.TitleCard
@@ -343,7 +343,7 @@ private fun AchievementBadge(achievement: Achievement) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(dimens.spaceXs),
     ) {
-        AsyncImage(
+        AnixAsyncImage(
             model = achievement.badgeUrl,
             contentDescription = achievement.name,
             modifier =

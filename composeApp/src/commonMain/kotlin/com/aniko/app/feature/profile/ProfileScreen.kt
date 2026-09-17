@@ -53,7 +53,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.aniko.data.profileshowcase.LocalProfilePinnedSectionStore
 import com.aniko.data.profileshowcase.ProfileShowcaseSection
 import com.aniko.model.Achievement
@@ -64,6 +63,7 @@ import com.aniko.model.ProfilePrivacy
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.adaptive.LocalGlassBottomInset
+import com.aniko.ui.component.AnixAsyncImage
 import com.aniko.ui.component.AnixAvatar
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixIcon
@@ -539,7 +539,7 @@ private fun ProfileHeader(
                             .clip(RoundedCornerShape(dimens.cornerL)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    AsyncImage(
+                    AnixAsyncImage(
                         model = coverUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,

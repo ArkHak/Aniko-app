@@ -95,7 +95,9 @@ data class ReleaseDto(
     @SerialName("last_view_episode")
     val lastViewEpisode: Int? = null,
     @SerialName("last_view_timestamp") val lastViewTimestamp: Long? = null,
-    @SerialName("episode_last_update") val episodeLastUpdate: Long? = null,
+    @Serializable(with = EpisodeLastUpdateSerializer::class)
+    @SerialName("episode_last_update")
+    val episodeLastUpdate: Long? = null,
     @SerialName("is_viewed") val isViewed: Boolean = false,
 )
 

@@ -26,10 +26,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.aniko.model.Release
 import com.aniko.model.Schedule
 import com.aniko.model.WeekDay
+import com.aniko.ui.component.AnixAsyncImage
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.theme.AnixThemeTokens
 
@@ -127,7 +127,7 @@ private fun ScheduleExpandedReleaseCard(
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
-            AsyncImage(
+            AnixAsyncImage(
                 model = release.posterUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,

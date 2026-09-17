@@ -12,7 +12,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.Dp
-import coil3.compose.AsyncImage
 import com.aniko.ui.theme.AnixThemeTokens
 
 /**
@@ -36,7 +35,7 @@ fun AnixPoster(
     val shape = RoundedCornerShape(dimens.cornerM)
     val posterDescription = contentDescription
 
-    AsyncImage(
+    AnixAsyncImage(
         model = url,
         contentDescription = contentDescription,
         contentScale = ContentScale.Crop,

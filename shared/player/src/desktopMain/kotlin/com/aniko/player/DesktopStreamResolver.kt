@@ -64,10 +64,19 @@ object DesktopStreamResolver {
      * `https://kodikplayer.com/` — свой собственный домен, а не домен партнёра. Использование
      * "чужого" referer тут было бы тихой порчей воспроизведения: не ошибка резолва, а 403/зависший
      * буфер уже внутри VLCJ, которую было бы гораздо труднее диагностировать постфактум.
+     * @param qualityStreams все качества, которые отдал хост: отображаемый лейбл («720p») → playable
+     *  URL потока (того же вида, что [streamUrl] — для Kodik уже расшифрованный и прогнанный через
+     *  `preferPlayableUrl` HLS-вариант). Пустая map — хост отдаёт ровно одно качество (Sibnet)
+     *  либо отдельных URL под каждое качество не объявляет. Контроллер плеера
+     *  (`EmbedVideoController.desktop.kt`) публикует её в `EmbedVideoState.availableQualities` и
+     *  переключает по ней через `setQuality`, поэтому сюда попадают ТОЛЬКО реально доступные
+     *  (прозондированные) варианты — предлагать мёртвое качество в чипе было бы хуже, чем не
+     *  предлагать переключение вовсе.
      */
     data class Resolved(
         val streamUrl: String,
         val referer: String?,
+        val qualityStreams: Map<String, String> = emptyMap(),
     )
 
     /**

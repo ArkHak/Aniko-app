@@ -10,6 +10,7 @@ import com.aniko.model.AnixError
 import com.aniko.model.VideoHost
 import com.aniko.model.VoiceType
 import com.aniko.player.PlaybackSource
+import com.aniko.player.playerOpensFullscreen
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -36,7 +37,9 @@ import kotlinx.coroutines.launch
  * завершился или для источника не нашлось соответствия.
  * @param isAudioSwitching идёт переключение озвучки — блокирует повторный тап по строке в пикере,
  * пока не разрешится сеть (выбор источника + список серий + резолв ссылки).
- * @param isFullscreen режим отображения плеера (P13). Живёт здесь, а не в `remember` на
+ * @param isFullscreen режим отображения плеера (P13). Дефолт платформенный
+ * ([playerOpensFullscreen]: Desktop открывается сразу во всю высоту окна приложения,
+ * Android/iOS — в компактном chrome). Живёт здесь, а не в `remember` на
  * [PlayerScreen] — живая проверка нашла: реальный поворот экрана в альбомную ориентацию нередко
  * пересекает границу `AnixWindowSize` (Compact/Medium/Expanded), а [com.aniko.ui.adaptive.AdaptiveScaffold]
  * вызывает свой `content(...)` из ТРЁХ разных call site по одному на каждую ветку — при смене
@@ -66,7 +69,7 @@ data class PlayerUiState(
     val voiceTypes: List<VoiceType> = emptyList(),
     val currentVoiceType: VoiceType? = null,
     val isAudioSwitching: Boolean = false,
-    val isFullscreen: Boolean = false,
+    val isFullscreen: Boolean = playerOpensFullscreen(),
     val resumePositionMs: Long? = null,
     val pendingSeekToMs: Long? = null,
 )

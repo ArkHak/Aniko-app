@@ -10,8 +10,10 @@ import com.aniko.model.AnixError
 import com.aniko.model.Episode
 import com.aniko.model.ListStatus
 import com.aniko.model.Release
+import com.aniko.model.ReleaseDetails
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -108,7 +110,7 @@ class ReleaseDetailsViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isDetailsLoading = true, detailsError = null) }
             try {
-                val details = releaseRepository.releaseDetails(releaseId)
+                val details = fetchDetailsWithRetry(releaseId)
                 _uiState.update { it.copy(details = details, isDetailsLoading = false) }
                 // Отдельный независимый запрос (P13.T12) — `ReleaseDetails` не несёт сами
                 // комментарии, только commentCount (см. KDoc `ReleaseDetails` в shared/model).
@@ -118,6 +120,28 @@ class ReleaseDetailsViewModel(
                 throw e
             } catch (e: Exception) {
                 _uiState.update { it.copy(isDetailsLoading = false, detailsError = e.toLoadError()) }
+            }
+        }
+    }
+
+    /**
+     * Расширенная карточка — единственный некэшируемый запрос экрана (база релиза — cache-first
+     * из БД, см. KDoc [load]), поэтому одиночный транзиентный сбой сети/сервера раньше сразу
+     * превращался в блок «Не удалось загрузить дополнительную информацию» на иначе рабочем
+     * экране. Даём транзиентным ошибкам ([Exception.isTransient]) до [DETAILS_MAX_AUTO_RETRIES]
+     * автоматических повторов с паузой; кнопка «Повторить» ([retryDetails]) остаётся.
+     */
+    private suspend fun fetchDetailsWithRetry(releaseId: Int): ReleaseDetails {
+        var attempt = 0
+        while (true) {
+            try {
+                return releaseRepository.releaseDetails(releaseId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (attempt >= DETAILS_MAX_AUTO_RETRIES || !e.isTransient()) throw e
+                attempt++
+                delay(DETAILS_RETRY_DELAY_MS)
             }
         }
     }
@@ -469,6 +493,20 @@ private fun Exception.toLoadError(): LoadError {
         else -> LoadError.GENERIC
     }
 }
+
+/** Транзиентные сбои расширенной карточки (сеть/5xx/неизвестное), при которых автоповтор
+ *  осмыслен; `Api`/`Parsing`/`Unauthorized` детерминированы — повтор ничего не изменит. */
+private fun Exception.isTransient(): Boolean =
+    when (val error = this as? AnixError) {
+        null -> true
+        is AnixError.Network, is AnixError.Unknown -> true
+        is AnixError.Http -> error.statusCode >= HTTP_SERVER_ERROR_FIRST
+        else -> false
+    }
+
+private const val DETAILS_MAX_AUTO_RETRIES = 2
+private const val DETAILS_RETRY_DELAY_MS = 1_500L
+private const val HTTP_SERVER_ERROR_FIRST = 500
 
 /** Сколько комментариев показываем инлайн под ссылкой "N комментариев" (P13.T12, макет Claude
  *  Design — секция "comments" в мокапе на Title Detail показывает 2 карточки; 3-й элемент запаса

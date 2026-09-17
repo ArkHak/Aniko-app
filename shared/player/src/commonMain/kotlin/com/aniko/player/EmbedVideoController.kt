@@ -84,10 +84,13 @@ expect class EmbedVideoController() {
     fun setPlaybackRate(rate: Float)
 
     /**
-     * Просит плеер хоста переключить качество видео (P16-фикс 2026-09-09). Поддерживается
+     * Просит плеер переключить качество видео (P16-фикс 2026-09-09). Поддерживается
      * там, где хост даёт клиентское переключение (Kodik/flowplayer — его quality-dropdown);
      * на хостах без такого UI (Sibnet/VideoJS без плагина уровней) — безопасный no-op.
-     * [quality] — отображаемое имя («720p»/«480p»).
+     * [quality] — отображаемое имя («720p»/«480p»). На Desktop (`feature/desktop-video-player`,
+     * этой же веткой) CUT снят: там нет dropdown хоста вообще — переключение делает сам
+     * контроллер, перезапуская уже резолвнутый прямой поток выбранного качества
+     * ([DesktopStreamResolver.Resolved.qualityStreams]), см. KDoc actual-реализации.
      */
     fun setQuality(quality: String)
 

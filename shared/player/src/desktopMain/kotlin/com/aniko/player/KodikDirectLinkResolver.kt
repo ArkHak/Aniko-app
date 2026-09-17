@@ -55,7 +55,7 @@ import java.util.Base64
  * качеств. Дешёвая правка (тот же вызов в цикле вместо одного), а устойчивость к "верхнее
  * качество недоступно с этой сети, а 480p — доступно" заметно выше.
  *
- * `@Suppress("TooManyFunctions")` — все 13 функций обслуживают РОВНО один связный алгоритм в три
+ * `@Suppress("TooManyFunctions")` — все 14 функций обслуживают РОВНО один связный алгоритм в три
  * шага (см. выше), разнесённый по маленьким именованным функциям ради читаемости каждого шага —
  * резать этот объект по произвольной границе на несколько ради счётчика было бы хуже, чем чуть
  * больший объект (тот же принцип, что и у `EpisodeRepository`, см. её KDoc).
@@ -64,7 +64,13 @@ import java.util.Base64
 internal object KodikDirectLinkResolver {
     /** `@Suppress("ReturnCount")` — три guard-clause выхода (не распарсили type/id/hash / хост не
      *  отдал `links` / ни один кандидат не прошёл зонд достижимости) читаются честнее одной
-     *  пирамиды `if/else`. */
+     *  пирамиды `if/else`.
+     *
+     *  Переключение качества (Desktop, этой же веткой): [decryptAndRank] возвращает кандидатов с
+     *  лейблами качества, дефолтный поток — первый реально доступный по приоритету (то же
+     *  зондирование [followMediaRedirects] по [probeReachable] с кэшем, чтобы дефолт не зондить
+     *  дважды), а в `qualityStreams` попадают ВСЕ достижимые качества — UI предлагает переключение
+     *  только на то, что реально проиграется (мёртвое качество хуже отсутствия чипа). */
     @Suppress("ReturnCount")
     suspend fun resolve(
         client: HttpClient,
@@ -79,10 +85,26 @@ internal object KodikDirectLinkResolver {
         val links = fetchLinks(client, pageUrl, info) ?: return null
         val candidates = decryptAndRank(links)
         val probeHeaders = mapOf(HttpHeaders.Referrer to PLAYER_ORIGIN, HttpHeaders.UserAgent to BROWSER_USER_AGENT)
-        return candidates.firstNotNullOfOrNull { candidate ->
-            val reachable = client.followMediaRedirects(candidate, probeHeaders)?.status?.isSuccess() == true
-            if (reachable) DesktopStreamResolver.Resolved(streamUrl = candidate, referer = PLAYER_ORIGIN) else null
-        }
+        // Кэш зондов: дефолтный поток — первый по приоритету достижимый кандидат, качества из
+        // qualityStreams зондируются тем же вызовом по уникальным URL (дубль зонда того же
+        // адреса — это тот же ответ, второй раз не ходим в сеть).
+        val probeResults = mutableMapOf<String, Boolean>()
+
+        suspend fun probeReachable(url: String): Boolean =
+            probeResults.getOrPut(url) {
+                client.followMediaRedirects(url, probeHeaders)?.status?.isSuccess() == true
+            }
+
+        val default = candidates.firstOrNull { (_, url) -> probeReachable(url) } ?: return null
+        val qualityStreams =
+            candidates
+                .associate { (quality, url) -> quality to url }
+                .filterValues { url -> probeReachable(url) }
+        return DesktopStreamResolver.Resolved(
+            streamUrl = default.second,
+            referer = PLAYER_ORIGIN,
+            qualityStreams = qualityStreams,
+        )
     }
 
     private suspend fun fetchPageHtml(
@@ -130,9 +152,12 @@ internal object KodikDirectLinkResolver {
         return "${PLAYER_ORIGIN}ftor?$query"
     }
 
-    /** Кандидаты потока, отсортированные по приоритету качества (1080 → 720 → 480 → 360, затем
-     *  что осталось) — вызывающая сторона зондирует их по очереди, см. KDoc класса. */
-    private fun decryptAndRank(links: JsonObject): List<String> {
+    /** Кандидаты потока (лейбл качества → URL), отсортированные по приоритету качества
+     *  (1080 → 720 → 480 → 360, затем что осталось) — вызывающая сторона зондирует их по очереди,
+     *  см. KDoc [resolve]. Лейбл — в том виде, в котором качество показывает UI («720p»): ключи
+     *  `links` у Kodik обычно уже в форме `720p`, но суффикс гарантируем (голое `720` тоже
+     *  нормализуется в `720p`) — вдруг хост сменит формат ключей. */
+    private fun decryptAndRank(links: JsonObject): List<Pair<String, String>> {
         val byQuality = mutableMapOf<String, String>()
         for ((quality, sourcesElement) in links) {
             val rawSrc =
@@ -144,11 +169,18 @@ internal object KodikDirectLinkResolver {
                     ?.contentOrNull
                     ?: continue
             val absolute = toAbsolute(decryptIfNeeded(rawSrc))
-            byQuality[quality.removeSuffix("p")] = preferPlayableUrl(absolute)
+            byQuality[qualityLabel(quality)] = preferPlayableUrl(absolute)
         }
-        val ranked = QUALITY_PRIORITY.mapNotNull { byQuality[it] }
-        return if (ranked.isNotEmpty()) ranked else byQuality.values.toList()
+        val ranked = QUALITY_PRIORITY.mapNotNull { quality -> byQuality[quality]?.let { quality to it } }
+        return if (ranked.isNotEmpty()) ranked else byQuality.entries.map { (quality, url) -> quality to url }
     }
+
+    private fun qualityLabel(quality: String): String =
+        if (quality.endsWith("p", ignoreCase = true)) {
+            quality
+        } else {
+            quality + "p"
+        }
 
     /**
      * Посимвольный ROT18 (сдвиг +18 внутри алфавита СВОЕГО регистра, с переносом на `Z`/`z`) поверх

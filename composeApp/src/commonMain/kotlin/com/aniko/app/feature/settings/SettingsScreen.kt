@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -21,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -93,7 +95,9 @@ fun SettingsScreen(
         // кликабельный узел (тот же паттерн, что и остальные M3-компоненты этой фазы) —
         // clearAndSetSemantics на каждом пункте, кроме языка (у него нет своего onClick — переключение
         // происходит через AnixLanguagePicker внутри, уже озвученный отдельно).
-        Surface(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        // Surface без color заливал бы весь контент `colorScheme.surface` (белым) поверх серого
+        // фона страницы — прозрачный, Scaffold под ним уже красит `colorScheme.background`.
+        Surface(modifier = Modifier.fillMaxSize().padding(innerPadding), color = Color.Transparent) {
             // Дизайн-leftovers (фазы 14/15): chrome-роуты на desktop не должны растягивать строки
             // на всю ширину окна — повторяем паттерн ProfileScreen: Box(TopCenter) +
             // Column(widthIn(max = contentMaxWidth)).
@@ -116,6 +120,7 @@ fun SettingsScreen(
                                 .clearAndSetSemantics {
                                     contentDescription = strings.settingsDesignGallery
                                 },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                     ListItem(
                         headlineContent = { Text(text = strings.settingsNotificationsSection) },
@@ -125,6 +130,7 @@ fun SettingsScreen(
                                 .clearAndSetSemantics {
                                     contentDescription = strings.settingsNotificationsSection
                                 },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                     // Возвращено сюда по запросу пользователя (2026-09-11) — было перенесено на
                     // ProfileScreen в P13.T2, теперь снова стоит рядом с языком, на прежнем месте
@@ -180,6 +186,7 @@ fun SettingsScreen(
                                 .clearAndSetSemantics {
                                     contentDescription = strings.settingsSignOut
                                 },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
             }
@@ -232,5 +239,8 @@ private fun SettingsPickerListItem(
     ListItem(
         headlineContent = { Text(text = headline) },
         supportingContent = content,
+        // Дефолтный containerColor M3 ListItem в используемой версии — surface (белый), на серой
+        // странице настроек это читается белой простынёй (живой фидбек 2026-09-17) — прозрачный.
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
 }

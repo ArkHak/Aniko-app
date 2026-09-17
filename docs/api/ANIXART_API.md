@@ -141,6 +141,12 @@ Kotlin-клиент (`shared/network`, `shared/data/.../api/*.kt`). Значен
 `profile_list_status`, `is_favorite`, `is_viewed`, `your_vote`, `vote_1_count`…`vote_5_count`,
 `related_releases`, `recommended_releases`, `episode_last_update`, `genres`, `status`, `poster`, `year` и др.
 
+> **Полиморфное поле `episode_last_update`** (живой кейс 2026-09-17, релиз id 20236): обычно
+> unix-timestamp числом или `null`, но в `extended_mode=true` может прийти объектом
+> `{"last_episode_update_date": <unix-ts>, ...}` — без ленивого парсера роняет всю карточку
+> (`JsonConvertException: Expected numeric literal`). Обработано `EpisodeLastUpdateSerializer`
+> (`shared/data/dto`), тот же класс полиморфии, что у `last_view_episode` (см. открытый вопрос №6).
+
 ## 6. Серии и источники видео — цепочка резолвинга плеера
 
 **`EpisodeApi`**

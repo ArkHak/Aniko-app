@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -95,6 +96,10 @@ fun NotificationsScreen(
                         AnixIcon(name = "arrow_back", contentDescription = null)
                     }
                 },
+                // Тот же «белая полоска» баг, что был на SettingsScreen/ProfileScreen (см. KDoc
+                // SettingsTopBar): дефолтный containerColor M3 TopAppBar (surface, белый) не
+                // совпадает с фоном страницы (background) — красим шапку в фон страницы.
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
     ) { innerPadding ->

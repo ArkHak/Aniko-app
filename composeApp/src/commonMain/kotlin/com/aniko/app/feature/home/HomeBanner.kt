@@ -34,10 +34,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.aniko.model.InterestingBanner
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
+import com.aniko.ui.component.AnixAsyncImage
 import com.aniko.ui.component.AnixContentState
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixLoadingState
@@ -153,13 +153,14 @@ private fun BannerSlide(
                 .clip(shape)
                 .clickable(onClick = onClick)
                 // Подтверждено на устройстве (Фаза 11, T9): contentDescription на вложенном
-                // AsyncImage не сливается сам по себе с кликабельным Box (обычный
+                // Coil-изображении (AsyncImage/AnixAsyncImage) не сливается сам по себе с
+                // кликабельным Box (обычный
                 // semantics(mergeDescendants=true) тоже не сработал, проверено на эмуляторе) —
                 // TalkBack фокусировал баннер без имени. clearAndSetSemantics задаёт имя
                 // напрямую на кликабельном узле.
                 .clearAndSetSemantics { contentDescription = banner.title },
     ) {
-        AsyncImage(
+        AnixAsyncImage(
             model = banner.imageUrl,
             contentDescription = banner.title,
             contentScale = ContentScale.Crop,

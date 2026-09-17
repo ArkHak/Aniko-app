@@ -10,15 +10,18 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -78,6 +81,10 @@ fun NotificationSettingsScreen(
                         )
                     }
                 },
+                // Тот же «белая полоска» баг, что был на SettingsScreen/ProfileScreen (см. KDoc
+                // SettingsTopBar): дефолтный containerColor M3 TopAppBar (surface, белый) не
+                // совпадает с фоном страницы (background) — красим шапку в фон страницы.
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
     ) { innerPadding ->
@@ -116,6 +123,7 @@ private fun NotificationSettingsContent(
             if (permission != null && !permission.isGranted) {
                 ListItem(
                     headlineContent = { Text(strings.settingsNotificationsPermissionRequired) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     trailingContent = {
                         // Подтверждено на устройстве (Фаза 11, T9): M3 Button не сливает свой Text{}
                         // в озвучиваемый узел (тот же паттерн, что и остальные M3-компоненты фазы).
@@ -238,6 +246,9 @@ private fun ToggleRow(
 ) {
     ListItem(
         headlineContent = { Text(label) },
+        // См. SettingsScreen — дефолтный containerColor (surface, белый) на серой странице
+        // читается белой простынёй, поэтому прозрачный.
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         trailingContent = {
             // Подтверждено на устройстве (Фаза 11, T9): M3 Switch не наследует имя от соседнего
             // ListItem.headlineContent — TalkBack озвучивал переключатель без указания, что

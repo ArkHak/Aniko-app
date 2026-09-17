@@ -27,7 +27,8 @@ import java.net.URI
  * 2. Если блок по номеру серии не нашёлся (другой формат страницы), берём ВСЕ вхождения
  *    `"file":"..."` по порядку и индексируем по [epOrdinal] — тот же фолбэк, что в оригинале.
  * 3. Значение `file` — либо один URL, либо список вида `[480p]url1,[720p]url2,[1080p]url3`
- *    ([parseQualityMap]) — берём лучшее доступное качество.
+ *    ([parseQualityMap]) — берём лучшее доступное качество, а весь набор отдаём в
+ *    `Resolved.qualityStreams` (Desktop-переключение качества, см. её KDoc).
  *
  * Referer — `https://anilibria.top/` фиксированный (для самого API/CDN AniLibria; см. оригинал),
  * не self-referer, как у Sibnet — у AniLibria это два разных партнёрских домена под одним
@@ -58,7 +59,14 @@ internal object AniLibriaDirectLinkResolver {
         val best =
             QUALITY_PRIORITY.firstNotNullOfOrNull { quality -> qualityMap[quality] }
                 ?: qualityMap.values.firstOrNull()
-        return best?.let { DesktopStreamResolver.Resolved(streamUrl = it, referer = REFERER) }
+        // Ключи qualityMap — голые числа («480»), лейблы UI — «480p» (тот же формат, что у Kodik
+        // и чипа качества) — нормализуем здесь. Одно-URL-фолбэк ([FALLBACK_QUALITY]) по смыслу
+        // тоже «одно доступное качество»: переключать нечего, но чип с единственным вариантом
+        // корректнее, чем его отсутствие, пока хост реально отдаёт этот уровень.
+        val qualityStreams = qualityMap.entries.associate { (quality, url) -> "${quality}p" to url }
+        return best?.let {
+            DesktopStreamResolver.Resolved(streamUrl = it, referer = REFERER, qualityStreams = qualityStreams)
+        }
     }
 
     /** `@Suppress("ReturnCount")` — тот же принцип, что и у [resolve] (см. её KDoc). */

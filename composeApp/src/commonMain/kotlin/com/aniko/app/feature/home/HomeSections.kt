@@ -27,11 +27,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.aniko.data.paging.PagingState
 import com.aniko.model.Release
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
+import com.aniko.ui.component.AnixAsyncImage
 import com.aniko.ui.component.AnixContentState
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixLoadingState
@@ -201,7 +201,7 @@ private fun ContinueWatchingFrame(
                 .clickable(onClick = onClick)
                 .clearAndSetSemantics { contentDescription = accessibleLabel },
     ) {
-        AsyncImage(
+        AnixAsyncImage(
             model = posterUrl,
             contentDescription = null,
             contentScale = ContentScale.Crop,

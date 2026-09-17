@@ -36,9 +36,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.aniko.data.paging.PagingState
 import com.aniko.model.Release
+import com.aniko.ui.component.AnixAsyncImage
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLoadingState
@@ -436,7 +436,7 @@ private fun LibraryExpandedCardArt(
                 .clip(RoundedCornerShape(11.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        AsyncImage(
+        AnixAsyncImage(
             model = posterUrl,
             contentDescription = null,
             contentScale = ContentScale.Crop,

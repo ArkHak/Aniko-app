@@ -53,13 +53,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.aniko.model.ListStatus
 import com.aniko.model.Release
 import com.aniko.model.ReleaseDetails
 import com.aniko.model.ReleaseStatus
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
+import com.aniko.ui.component.AnixAsyncImage
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixPoster
@@ -387,7 +387,7 @@ private fun ScreenshotRail(urls: List<String>) {
 
     LazyRow(horizontalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
         items(items = urls, key = { it }) { url ->
-            AsyncImage(
+            AnixAsyncImage(
                 model = url,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
@@ -452,7 +452,7 @@ private fun CompactHeroHeader(
     val bgElevated = MaterialTheme.colorScheme.surface // bg-elevated текущей темы (см. Color.kt)
 
     Box(modifier = modifier.fillMaxWidth()) {
-        AsyncImage(
+        AnixAsyncImage(
             model = release.posterUrl,
             contentDescription = null,
             contentScale = ContentScale.Crop,
@@ -579,7 +579,7 @@ private fun ExpandedDrawerHeader(
     val bgElevated = MaterialTheme.colorScheme.surface // bg-elevated текущей темы (см. Color.kt)
 
     Box(modifier = modifier.fillMaxWidth()) {
-        AsyncImage(
+        AnixAsyncImage(
             model = release.posterUrl,
             contentDescription = null,
             contentScale = ContentScale.Crop,
