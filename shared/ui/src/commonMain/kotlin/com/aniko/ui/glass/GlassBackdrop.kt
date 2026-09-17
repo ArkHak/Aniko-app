@@ -58,6 +58,17 @@ class GlassBackdropState internal constructor() {
     internal var sourceCoordinates: LayoutCoordinates? = null
         private set
 
+    /**
+     * `true`, пока источник записывает своё поддерево в [sourceLayer] ([GraphicsLayer.record]).
+     * Стекло ВНУТРИ поддерева источника, нарисованное во время этой записи, не имеет права
+     * читать слой ([LiquidGlass] обязан проверять этот флаг): `drawLayer` слоя, который в этот
+     * момент записывается, уходит в бесконечную рекурсию record→draw→record и роняет нативный
+     * рендерер по переполнению стека (живой SIGILL в `runSkikoComposeUiTest`-харнессе desktopTest,
+     * 2026-09-17 — плитки `HomeQuickActions` с `liquidGlass()` внутри `AdaptiveScaffold`-источника).
+     */
+    internal var isRecording: Boolean = false
+        private set
+
     private val glassNodes = mutableListOf<DrawModifierNode>()
 
     internal fun attachSource(layer: GraphicsLayer) {
@@ -84,6 +95,16 @@ class GlassBackdropState internal constructor() {
     /** Вызывается источником сразу после [GraphicsLayer.record] — см. KDoc класса. */
     internal fun notifySourceUpdated() {
         glassNodes.forEach { it.invalidateDraw() }
+    }
+
+    /** Оборачивает [GraphicsLayer.record] источника — см. KDoc [isRecording]. */
+    internal inline fun <T> withRecording(block: () -> T): T {
+        isRecording = true
+        try {
+            return block()
+        } finally {
+            isRecording = false
+        }
     }
 }
 
@@ -155,7 +176,7 @@ private class GlassBackdropSourceNode(
             // Тот же приём, что у Compose-снапшот-утилит: `record { this@draw.drawContent() }` —
             // явная квалификация `this@draw` (не безымянный `this` блока, который был бы обычным
             // `DrawScope` без `drawContent()`) обязательна, см. KDoc класса про двухслойный blur.
-            currentLayer.record { this@draw.drawContent() }
+            state.withRecording { currentLayer.record { this@draw.drawContent() } }
             state.notifySourceUpdated()
         }
         drawContent()

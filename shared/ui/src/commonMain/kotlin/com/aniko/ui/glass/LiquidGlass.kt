@@ -178,7 +178,11 @@ private class LiquidGlassNode(
                 srcCoords != null &&
                 srcCoords.isAttached &&
                 myCoords != null &&
-                myCoords.isAttached
+                myCoords.isAttached &&
+                // Стекло внутри поддерева источника рисуется В МОМЕНТ записи этого слоя — читать
+                // его нельзя (рекурсия record→draw, SIGILL по переполнению стека, 2026-09-17);
+                // такой проход отрисовывается fallback-заливкой.
+                !backdrop.isRecording
 
         if (canBlur) {
             drawBlurredBackdrop(srcLayer, srcCoords, myCoords)

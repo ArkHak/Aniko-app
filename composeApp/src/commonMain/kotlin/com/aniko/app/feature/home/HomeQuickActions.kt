@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aniko.ui.glass.LiquidGlassStyle
+import com.aniko.ui.glass.LocalGlassBackdrop
 import com.aniko.ui.glass.liquidGlass
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
@@ -72,16 +74,19 @@ import com.aniko.ui.theme.AnixThemeTokens
  *   меньше пустого поля вокруг однострочного лейбла.
  * - Лейбл плитки крупнее и жирнее относительно плитки — см. KDoc [QuickActionTileView].
  * - Плоская заливка (`Modifier.background`) заменена на [com.aniko.ui.glass.liquidGlass] в
- *   fallback-режиме (`state = null`, без `Modifier.glassBackdropSource` выше по дереву) — плитки
- *   лежат в потоке страницы, а не поверх скроллящегося контента под плавающим элементом (как
- *   `AnixNavigationBar`), поэтому реальному backdrop-blur физически нечего размывать; материал
- *   спроектирован деградировать именно в такой ситуации в плотную тонированную заливку
- *   ([com.aniko.ui.glass.LiquidGlassStyle.fallbackAlpha]) с тем же вертикальным градиентом/
- *   specular-бликом/rim-обводкой, что и у полноценного блюра — этого достаточно для "глянцевого
- *   стекла" без реального размытия. `tint` стекла — тот самый насыщенный OKLCH-тон конкретной
- *   плитки (см. KDoc [QuickActionTileColors]), НЕ нейтральный `colorScheme.surface`, как у
- *   таб-бара — иначе все 6 плиток слились бы в один цвет и пропала бы их идентификация друг от
- *   друга по цвету.
+ *   fallback-режиме — плитки лежат в потоке страницы, а не поверх скроллящегося контента под
+ *   плавающим элементом (как `AnixNavigationBar`), поэтому реальному backdrop-blur физически
+ *   нечего размывать; материал спроектирован деградировать именно в такой ситуации в плотную
+ *   тонированную заливку ([com.aniko.ui.glass.LiquidGlassStyle.fallbackAlpha]) с тем же
+ *   вертикальным градиентом/specular-бликом/rim-обводкой, что и у полноценного блюра — этого
+ *   достаточно для "глянцевого стекла" без реального размытия. `tint` стекла — тот самый
+ *   насыщенный OKLCH-тон конкретной плитки (см. KDoc [QuickActionTileColors]), НЕ нейтральный
+ *   `colorScheme.surface`, как у таб-бара — иначе все 6 плиток слились бы в один цвет и пропала
+ *   бы их идентификация друг от друга по цвету. Fallback обеспечен явным
+ *   `CompositionLocalProvider(LocalGlassBackdrop provides null)` вокруг блока плиток (2026-09-17):
+ *   одного `state = null` мало — `AdaptiveScaffold` провайдит backdrop-local выше по дереву, и без
+ *   изоляции плитки читали бы записываемый ими же слой (рекурсия record→draw, SIGILL в
+ *   skiko-харнессе desktopTest).
  */
 @Suppress("LongParameterList") // 6 независимых навигационных колбэков плиток + layout-настройки.
 @Composable
@@ -108,29 +113,40 @@ fun HomeQuickActions(
             QuickActionTile(strings.homeQuickActionCollections, tileColors.collections, onCollectionsClick),
         )
 
-    // Измеряем именно ту ширину, которую займёт блок плиток в текущем контейнере:
-    // на Medium ListDetailHost-панель ~360dp, на широком hero-`Row` (≥ 880dp контента)
-    // правый столбец ~290dp.
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        // 4 плитки в ряд нужны, чтобы каждая получила не менее QUICK_ACTION_MIN_USABLE_WIDTH;
-        // иначе RU-лейбл titleMedium обрезается эллипсисом.
-        val fourColumnThreshold =
-            QUICK_ACTION_MIN_USABLE_WIDTH * FOUR_COLUMN_LAYOUT +
-                dimens.spaceS * (FOUR_COLUMN_LAYOUT - 1)
-        val columns = if (maxWidth >= fourColumnThreshold) FOUR_COLUMN_LAYOUT else TWO_COLUMN_LAYOUT
+    // Изоляция от backdrop-источника: `AdaptiveScaffold` провайдит `LocalGlassBackdrop` и вешает
+    // `glassBackdropSource` на всю контентную область Compact-ветки (см. AdaptiveScaffold.kt),
+    // т.е. источник ЕСТЬ выше по дереву, и `state = null` в liquidGlass() сам по себе fallback
+    // НЕ гарантирует — нода резолвит LocalGlassBackdrop (см. LiquidGlassNode.reresolveState).
+    // Плитки лежат внутри записываемого поддерева: с реальным state их draw во время записи
+    // слоя читал бы записываемый слой — рекурсия record→draw, SIGILL по переполнению стека в
+    // skiko-харнессе desktopTest (2026-09-17). Явный `provides null` отрезает local: плитки
+    // всегда рисуются плотной тонированной заливкой, как и задумано (реальному blur здесь
+    // физически нечего размывать — плитки в потоке страницы, не поверх скролла).
+    CompositionLocalProvider(LocalGlassBackdrop provides null) {
+        // Измеряем именно ту ширину, которую займёт блок плиток в текущем контейнере:
+        // на Medium ListDetailHost-панель ~360dp, на широком hero-`Row` (≥ 880dp контента)
+        // правый столбец ~290dp.
+        BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+            // 4 плитки в ряд нужны, чтобы каждая получила не менее QUICK_ACTION_MIN_USABLE_WIDTH;
+            // иначе RU-лейбл titleMedium обрезается эллипсисом.
+            val fourColumnThreshold =
+                QUICK_ACTION_MIN_USABLE_WIDTH * FOUR_COLUMN_LAYOUT +
+                    dimens.spaceS * (FOUR_COLUMN_LAYOUT - 1)
+            val columns = if (maxWidth >= fourColumnThreshold) FOUR_COLUMN_LAYOUT else TWO_COLUMN_LAYOUT
 
-        Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
-            tiles.chunked(columns).forEach { rowTiles ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                ) {
-                    rowTiles.forEach { tile ->
-                        QuickActionTileView(tile = tile, modifier = Modifier.weight(1f))
+            Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
+                tiles.chunked(columns).forEach { rowTiles ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+                    ) {
+                        rowTiles.forEach { tile ->
+                            QuickActionTileView(tile = tile, modifier = Modifier.weight(1f))
+                        }
+                        // Последний ряд может быть короче остальных — заполняем пустыми
+                        // весами, чтобы последняя плитка не растягивалась на всю ширину ряда.
+                        repeat(columns - rowTiles.size) { Spacer(modifier = Modifier.weight(1f)) }
                     }
-                    // Последний ряд может быть короче остальных — заполняем пустыми
-                    // весами, чтобы последняя плитка не растягивалась на всю ширину ряда.
-                    repeat(columns - rowTiles.size) { Spacer(modifier = Modifier.weight(1f)) }
                 }
             }
         }
@@ -165,9 +181,10 @@ private fun QuickActionTileView(
     val glassStyle =
         LiquidGlassStyle(
             blurRadius = dimens.glassBlurRadius,
-            // Не используется на пути отрисовки: state = null ниже всегда берёт fallbackAlpha
-            // (нет backdrop-источника, физически нечего размывать/тонировать поверх блюра — см.
-            // KDoc [HomeQuickActions]). Значение заполнено для структурной полноты стиля (и на
+            // Не используется на пути отрисовки: блок плиток изолирован от backdrop-local'а
+            // (`CompositionLocalProvider(LocalGlassBackdrop provides null)` в [HomeQuickActions]),
+            // поэтому всегда берётся fallbackAlpha (реальному blur физически нечего размывать —
+            // см. KDoc [HomeQuickActions]). Значение заполнено для структурной полноты стиля (и на
             // случай, если плитки когда-нибудь переедут под реальный backdrop-blur).
             tintAlpha = colors.glassTintAlpha,
             tint = tile.glass.tint,
