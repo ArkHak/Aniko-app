@@ -238,8 +238,9 @@ interface Strings {
     // теперь это дочерний экран, открываемый шестерёнкой из `ProfileScreen`, см. её KDoc); заодно
     // используется как `contentDescription` этой шестерёнки. `settingsMyProfile` убран — пункт
     // «Мой профиль» удалён из `SettingsScreen` (профиль сам стал вкладкой таб-бара, обратная
-    // ссылка была бы циклом). `settingsTheme` остался тем же ключом, хотя `AnixThemePicker`
-    // физически переехал на `ProfileScreen` — переиспользуется как заголовок секции темы там же.
+    // ссылка была бы циклом). `settingsTheme` временно (P13.T2 → 2026-09-11) переиспользовался как
+    // заголовок секции темы на `ProfileScreen` — живой фидбек пользователя развернул этот перенос,
+    // ключ снова заголовок секции темы на `SettingsScreen`, там же, где и был исходно.
     val settingsTitle: String
     val settingsSignOut: String
     val settingsDesignGallery: String

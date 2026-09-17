@@ -11,10 +11,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -27,6 +29,7 @@ import com.aniko.app.di.AppIconHelper
 import com.aniko.data.theme.AppIconStore
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLanguagePicker
+import com.aniko.ui.component.AnixThemePicker
 import com.aniko.ui.component.ChipRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.testing.AnixTestTags
@@ -37,28 +40,30 @@ import org.koin.compose.viewmodel.koinViewModel
 /**
  * Экран настроек: галерея дизайн-токенов, уведомления, переключатель языка (P5.T9 — канонический
  * дом переключателя языка; с 2026-09-08 единственный — desktop-дубль в `sidebarFooter`
- * `AdaptiveScaffold` удалён по запросу пользователя: обрезался на малой высоте сайдбара) и
- * выход из аккаунта.
+ * `AdaptiveScaffold` удалён по запросу пользователя: обрезался на малой высоте сайдбара),
+ * переключатель темы и выход из аккаунта.
  *
  * P13.T2 (сверка с мокапом Claude Design) убрала отсюда два пункта:
  * - «Мой профиль» — раньше этот экран был вкладкой таб-бара и открывал профиль сам, теперь
  *   наоборот: [com.aniko.app.feature.profile.ProfileScreen] стал вкладкой, а этот экран открывается
  *   ИЗ него (шестерёнка в его `TopAppBar`) — обратная навигация сюда через «Мой профиль» была бы
- *   бессмысленным циклом;
- * - переключатель темы (`AnixThemePicker`) — физически переехал в `ProfileScreen.kt`
- *   (`ProfileContent`), мокап рисует его прямо под шапкой профиля. Переключатель языка НЕ
- *   переехал вместе с ним — решение принято по умолчанию (план оставлял выбор): мокап явно требует
- *   переноса только Theme, а язык остаётся здесь как единственная точка переключения.
+ *   бессмысленным циклом. Это решение остаётся в силе.
+ * - переключатель темы (`AnixThemePicker`) — физически переехал в `ProfileScreen.kt` под мокап
+ *   Claude Design. **Живой фидбек пользователя (2026-09-11) развернул именно эту часть решения**:
+ *   тема вернулась сюда, на своё место рядом с языком ([languageTag]/[onLanguageTagChange]) —
+ *   [themeMode]/[onThemeModeChange] снова параметры этого экрана, `AnixThemePicker` снова
+ *   рисуется здесь (см. [SettingsPickerListItem] ниже, тот же паттерн, что у пункта языка).
  *
  * Из-за первого пункта экран больше не таб-рут — теперь это дочерний маршрут со своим `TopAppBar`
  * (заголовок + кнопка «назад» на [onBack]), тем же паттерном, что [NotificationSettingsScreen]/
  * `TokenGalleryScreen`.
  *
- * Язык читается/пишется через [languageTag]/[onLanguageTagChange], а не через свой Koin-инжект
- * `LocaleStore` внутри `SettingsViewModel` — экран остаётся тонким прокси без собственного стейта
- * (см. критерий миграции на MVI-контракт в журнале Фазы 5: `SettingsViewModel` НЕ мигрирует).
+ * Язык и тема читаются/пишутся через параметры экрана ([languageTag]/[onLanguageTagChange],
+ * [themeMode]/[onThemeModeChange]), а не через свой Koin-инжект `LocaleStore`/`ThemeStore` внутри
+ * `SettingsViewModel` — экран остаётся тонким прокси без собственного стейта (см. критерий
+ * миграции на MVI-контракт в журнале Фазы 5: `SettingsViewModel` НЕ мигрирует).
  */
-@Suppress("LongParameterList", "LongMethod") // 7 опциональных колбэков/параметров одного плоского
+@Suppress("LongParameterList", "LongMethod") // 9 опциональных колбэков/параметров одного плоского
 // экрана без собственного стейта (см. KDoc выше про критерий немиграции на MVI) — группировка
 // в data class ради обхода линта добавила бы косвенность без пользы для читаемости; тело —
 // линейный плоский список пунктов (ListItem), разбиение на приватную функцию-прокси добавило бы
@@ -71,6 +76,8 @@ fun SettingsScreen(
     onNotificationsClick: () -> Unit = {},
     languageTag: String? = null,
     onLanguageTagChange: (String?) -> Unit = {},
+    themeMode: String? = null,
+    onThemeModeChange: (String?) -> Unit = {},
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val strings = LocalStrings.current
@@ -119,6 +126,16 @@ fun SettingsScreen(
                                     contentDescription = strings.settingsNotificationsSection
                                 },
                     )
+                    // Возвращено сюда по запросу пользователя (2026-09-11) — было перенесено на
+                    // ProfileScreen в P13.T2, теперь снова стоит рядом с языком, на прежнем месте
+                    // (см. KDoc SettingsScreen).
+                    SettingsPickerListItem(headline = strings.settingsTheme) {
+                        AnixThemePicker(
+                            currentMode = themeMode,
+                            onSelect = onThemeModeChange,
+                            modifier = Modifier.padding(top = dimens.spaceXs),
+                        )
+                    }
                     SettingsPickerListItem(headline = strings.settingsLanguage) {
                         AnixLanguagePicker(
                             currentTag = languageTag,
@@ -174,6 +191,11 @@ fun SettingsScreen(
  * `TopAppBar` экрана настроек — вынесена из [SettingsScreen] отдельной функцией (detekt
  * `LongMethod`: экран стал дочерним маршрутом со своим `TopAppBar` в P13.T2, тело функции
  * перестало укладываться в лимит).
+ *
+ * Живой фидбек пользователя (2026-09-11, тот же «белая полоска» баг, что и на `ProfileScreen` —
+ * см. KDoc её `TopAppBar`): дефолтный `containerColor` M3 `TopAppBar` (surface) не совпадает с
+ * фоном тела экрана (`colorScheme.background`) — явно красим шапку в тот же фон, чтобы она
+ * визуально сливалась со страницей.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -191,14 +213,15 @@ private fun SettingsTopBar(onBack: () -> Unit) {
                 AnixIcon(name = "arrow_back", contentDescription = null)
             }
         },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
     )
 }
 
 /**
- * Строка настроек «заголовок + чипы выбора» — каркас для пункта языка (изначально общий с темой,
- * пока `AnixThemePicker` не переехал на `ProfileScreen` в P13.T2; функция осталась отдельной ради
- * симметрии с тем, как аналогичная строка используется на `ProfileScreen` для темы). У пункта нет
- * своего `onClick` — переключение происходит внутри [content] (см. `AnixLanguagePicker`), поэтому
+ * Строка настроек «заголовок + чипы выбора» — общий каркас для пунктов темы и языка (та же
+ * функция обслуживала пункт темы и до P13.T2, и после её разворота по запросу пользователя
+ * 2026-09-11 — см. KDoc [SettingsScreen]). У пункта нет своего `onClick` — переключение
+ * происходит внутри [content] (см. `AnixThemePicker`/`AnixLanguagePicker`), поэтому
  * `clearAndSetSemantics` здесь не нужен.
  */
 @Composable

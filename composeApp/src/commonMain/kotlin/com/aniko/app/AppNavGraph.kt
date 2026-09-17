@@ -122,9 +122,13 @@ internal fun DetailPaneRoute.toDestination(): AnixDestination =
  * (честный вывод расследования, не переоценивать). Оставлено как отдельное валидное улучшение:
  * bottom-таб-бары по конвенции Material Design (см. Now-in-Android) не анимируют переключение
  * между вкладками верхнего уровня — мгновенный переход здесь корректен сам по себе, независимо от
- * того, решает ли он замеченный джанк целиком. Только эти четыре маршрута: `titleDetailRoutes`/
- * `chromeRoutes` ниже (drill-down на карточку релиза/комментарии/плеер/настройки) сохраняют
- * дефолтный fade — он уместен для перехода "вглубь", не между вкладками.
+ * того, решает ли он замеченный джанк целиком. `titleDetailRoutes`/`chromeRoutes` ниже (drill-down
+ * на карточку релиза/комментарии/плеер/настройки) сохраняют дефолтный fade — он уместен для
+ * перехода "вглубь", не между вкладками. Единственное исключение — `AnixDestination.Profile`
+ * в `chromeRoutes`: это 5-я вкладка таб-бара (см. [com.aniko.app.navigation.AnixSection]),
+ * поэтому она обязана переключаться так же мгновенно, как и эти четыре, хотя физически объявлена
+ * в другой функции (её `composable` читает `themeStore`/навигацию в `actions`, которых нет у
+ * этой группы маршрутов, см. KDoc `chromeRoutes`).
  */
 private fun NavGraphBuilder.listSectionRoutes(
     navController: NavHostController,
@@ -227,16 +231,26 @@ private fun NavGraphBuilder.titleDetailRoutes(
  * P13.T2 развернула прежний поток: раньше `Settings` был вкладкой таб-бара, а `Profile` —
  * дочерним экраном («Настройки» → «Мой профиль»). Теперь `Profile` сам вкладка таб-бара
  * (см. [AnixSection]), а `Settings` — дочерний маршрут, открываемый шестерёнкой из `TopAppBar`
- * `ProfileScreen.kt` ([ProfileScreen.onSettingsClick]). Тема (`AnixThemePicker`) физически
- * переехала на `ProfileScreen` вместе с `AchievementsSection` (мокап рисует переключатель темы
- * прямо под шапкой профиля) — поэтому здесь `themeStore` читается уже для `AnixDestination.Profile`,
- * а не для `Settings`. Язык (`AnixLanguagePicker`) остаётся и в `Settings`. Desktop-дубль
+ * `ProfileScreen.kt` ([ProfileScreen.onSettingsClick]).
+ *
+ * Живой фидбек пользователя (2026-09-11) развернул часть P13.T2 про тему: `AnixThemePicker`
+ * переезжает ОБРАТНО на `SettingsScreen` (был там до P13.T2, затем P13.T2 перенёс его на
+ * `ProfileScreen` под мокап — теперь пользователь явно попросил вернуть) — отсюда `themeStore`
+ * читается снова для `AnixDestination.Settings`, а не для `Profile`. Язык (`AnixLanguagePicker`)
+ * этой правкой не тронут — остаётся в `Settings`, как и был всё это время. Desktop-дубль
  * переключателя в футере сайдбара (`sidebarFooter` `AdaptiveScaffold`), удалённый 2026-09-08
  * (обрезался на малой высоте сайдбара и дублировал пункт «Язык»), возвращён 2026-09-15 —
  * осознанное отклонение от того решения: актуальный desktop-артборд мокапа рисует переключатель
  * языка внизу сайдбара (margin 0 8px, фон --w05, radius 10), а обрезание устранено компоновкой
  * слота (футер после weight-спейсера в конце колонки, не в потоке пунктов). Дубль с Settings
  * осознанный — мокап содержит оба.
+ *
+ * `AnixDestination.Profile` ниже явно оверрайдит `enterTransition`/`exitTransition` на `None` —
+ * это 5-я вкладка таб-бара (см. [AnixSection]), обязана переключаться так же мгновенно, как
+ * четыре маршрута `listSectionRoutes` (см. её подробный KDoc), просто физически объявлена здесь,
+ * а не там, по причинам выше (тема/навигация в `actions`), не по причине другого UX-поведения.
+ * Остальные маршруты этой функции (Settings/Notifications/Feed/Collections/TokenGallery/
+ * NotificationSettings) — дочерние drill-down экраны, дефолтный fade для них уместен.
  */
 private fun NavGraphBuilder.chromeRoutes(
     navController: NavHostController,
@@ -245,16 +259,24 @@ private fun NavGraphBuilder.chromeRoutes(
 ) {
     composable<AnixDestination.Settings> {
         val languageTag by localeStore.languageTag.collectAsStateWithLifecycle()
+        val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
         SettingsScreen(
             onBack = { navController.popBackStack() },
             onDesignGalleryClick = { navController.navigate(AnixDestination.TokenGallery) },
             onNotificationsClick = { navController.navigate(AnixDestination.NotificationSettings) },
             languageTag = languageTag,
             onLanguageTagChange = localeStore::setLanguageTag,
+            themeMode = themeMode,
+            onThemeModeChange = themeStore::setThemeMode,
         )
     }
-    composable<AnixDestination.Profile> {
-        val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
+    composable<AnixDestination.Profile>(
+        // Profile — 5-я вкладка таб-бара (см. KDoc функции выше и KDoc `listSectionRoutes`) —
+        // должна переключаться так же мгновенно, как Home/Search/Schedule/Library, а не с
+        // дефолтным 700ms fade `navigation-compose`.
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None },
+    ) {
         ProfileScreen(
             onSettingsClick = { navController.navigate(AnixDestination.Settings) },
             onNotificationsClick = { navController.navigate(AnixDestination.Notifications) },
@@ -267,8 +289,6 @@ private fun NavGraphBuilder.chromeRoutes(
             // Track A (точное соответствие макету): ссылка "My Lists →" в шапке профиля ведёт на
             // тот же маршрут, что и вкладка таб-бара `Library` (см. KDoc `ProfileScreen.onOpenLists`).
             onOpenLists = { navController.navigate(AnixDestination.Library) },
-            themeMode = themeMode,
-            onThemeModeChange = themeStore::setThemeMode,
         )
     }
     composable<AnixDestination.Notifications> {

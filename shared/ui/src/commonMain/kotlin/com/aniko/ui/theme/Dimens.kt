@@ -72,8 +72,12 @@ data class AnixDimens(
     val bannerHeight: Dp = 230.dp,
     /** Высота баннера-карусели на desktop (Expanded) — 220dp по макету Claude Design (строка 757). */
     val bannerHeightExpanded: Dp = 220.dp,
-    /** Высота плитки быстрого действия на главном экране (Фаза 7, P7.T1). */
-    val quickActionTileHeight: Dp = 88.dp,
+    /** Высота плитки быстрого действия на главном экране (Фаза 7, P7.T1; 68dp — живой фидбек
+     *  пользователя 2026-09-11: было 88dp, с однострочным центрированным лейблом это давало
+     *  слишком много пустого поля вокруг мелкого текста ("топорно"). 68dp — компактнее, но
+     *  заметно выше [minTouchTarget] (48dp), тач-таргет не страдает; см. KDoc
+     *  `HomeQuickActions.QuickActionTileView` про сопутствующее увеличение шрифта лейбла). */
+    val quickActionTileHeight: Dp = 68.dp,
     /** Радиус backdrop-blur материала Liquid Glass (2026-09-11, feature/liquid-glass-tab-bar) —
      *  см. KDoc [com.aniko.ui.glass.LiquidGlass]/[com.aniko.ui.glass.LiquidGlassStyle.blurRadius]. */
     val glassBlurRadius: Dp = 24.dp,

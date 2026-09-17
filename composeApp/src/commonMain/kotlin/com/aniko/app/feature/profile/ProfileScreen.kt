@@ -5,7 +5,6 @@
 
 package com.aniko.app.feature.profile
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -38,7 +36,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,7 +44,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -71,7 +68,6 @@ import com.aniko.ui.component.AnixAvatar
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLoadingState
-import com.aniko.ui.component.AnixThemePicker
 import com.aniko.ui.component.ChipRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
@@ -110,14 +106,18 @@ import org.koin.compose.viewmodel.koinViewModel
  * - `TopAppBar` больше не показывает кнопку «назад» (`onBack` убран из параметров) — этот экран
  *   теперь таб-рут, как `Home`/`Library`/`Schedule`, у которых своей кнопки назад тоже нет;
  * - вместо этого в `actions` появилась шестерёнка ([onSettingsClick]) — единственный оставшийся
- *   путь на `SettingsScreen` (см. её KDoc про то, что она больше не таб-бара);
- * - [themeMode]/[onThemeModeChange] переехали сюда вместе с `AnixThemePicker` (физически теперь
- *   рисуется в [ProfileContent] прямо под шапкой, как в мокапе) — раньше их держал `SettingsScreen`.
+ *   путь на `SettingsScreen` (см. её KDoc про то, что она больше не таб-бара).
+ *
+ * P13.T2 также переносила сюда переключатель темы (`AnixThemePicker`) вместе с `AchievementsSection`
+ * под мокап Claude Design. Живой фидбег пользователя (2026-09-11) развернул именно эту часть
+ * решения: тема вернулась на `SettingsScreen` (см. её KDoc) — `ProfileScreen` больше не принимает
+ * `themeMode`/`onThemeModeChange` и не рисует переключатель темы.
  */
-@Suppress("LongMethod", "LongParameterList") // themeMode/onThemeModeChange добавлены аддитивно к уже
-// существовавшему плоскому набору параметров (тот же случай, что и `AnixSessionGate`/
-// `SettingsScreen`) — группировка в data class ради обхода линта добавила бы косвенность без
-// пользы, экран остаётся тонким прокси без собственного стейта темы (владелец — `ThemeStore`).
+@Suppress("LongMethod", "LongParameterList") // Экран остаётся тонким прокси без собственного
+// стейта; оставшихся параметров (5 колбэков + viewModel) всё ещё достаточно, чтобы сработало
+// detekt-правило LongParameterList, даже после удаления themeMode/onThemeModeChange —
+// группировка в data class ради обхода линта добавила бы косвенность без пользы (тот же
+// аргумент, что и раньше).
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
@@ -126,8 +126,6 @@ fun ProfileScreen(
     onSettingsClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onOpenLists: () -> Unit = {},
-    themeMode: String? = null,
-    onThemeModeChange: (String?) -> Unit = {},
     viewModel: ProfileViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -149,6 +147,13 @@ fun ProfileScreen(
                         onSettingsClick = onSettingsClick,
                     )
                 },
+                // Живой фидбек пользователя (2026-09-11, «белая полоска над шапкой профиля»):
+                // M3 TopAppBar красится в свой дефолтный containerColor (surface), который не
+                // совпадает с фоном тела экрана (`colorScheme.background` — iOS grouped
+                // background, см. KDoc `AppTheme`) — рассинхрон давал видимую полосу. Явно
+                // красим шапку в тот же фон, что и страницу, чтобы она визуально сливалась с
+                // телом (тот же приём — ниже, `SettingsTopBar` в `SettingsScreen.kt`).
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
     ) { innerPadding ->
@@ -178,7 +183,6 @@ fun ProfileScreen(
                             profile = profile,
                             privacy = privacy,
                             achievements = uiState.achievements,
-                            themeMode = themeMode,
                         ),
                     callbacks =
                         ProfilePrivacyCallbacks(
@@ -189,7 +193,6 @@ fun ProfileScreen(
                             onToggleIncognito = viewModel::toggleIncognito,
                         ),
                     onReleaseClick = onReleaseClick,
-                    onThemeModeChange = onThemeModeChange,
                     onOpenLists = onOpenLists,
                     modifier = contentModifier,
                 )
@@ -246,17 +249,16 @@ private fun ProfileTopBarActions(
 }
 
 /**
- * `profile`/`privacy`/`achievements`/`themeMode` одной группой — иначе [ProfileContent] превышала
- * бы detekt `LongParameterList` вместе с [ProfilePrivacyCallbacks]/`onReleaseClick`/
- * `onThemeModeChange`/`modifier`. [themeMode] добавлен в P13.T2 вместе с переездом
- * `AnixThemePicker` на этот экран — сгруппирован с остальным read-only состоянием профиля по той
- * же причине, что и остальные три поля.
+ * `profile`/`privacy`/`achievements` одной группой — иначе [ProfileContent] тащила бы их по
+ * отдельности вместе с [ProfilePrivacyCallbacks]/`onReleaseClick`/`modifier` (detekt
+ * `LongParameterList`). Раньше сюда же входил `themeMode` (P13.T2 переезд `AnixThemePicker` на
+ * этот экран) — поле убрано вместе с переключателем темы, который вернулся на `SettingsScreen`
+ * по запросу пользователя (2026-09-11, см. KDoc [ProfileScreen]).
  */
 private data class ProfileContentData(
     val profile: ProfileDetails,
     val privacy: ProfilePrivacy,
     val achievements: List<Achievement>,
-    val themeMode: String?,
 )
 
 /**
@@ -325,40 +327,35 @@ private fun ProfileGuestBox(
  * `Column` — «Недавно смотрели» (`LazyRow`) обязана скроллиться от края до края, как рельсы на
  * главном экране.
  *
- * P13.T2/T11 (сверка с мокапом Claude Design) добавили сюда переключатель темы сразу под шапкой
- * ([ProfileThemeSection]) — раньше он жил на `SettingsScreen`, мокап рисует его прямо под шапкой
- * профиля. [AchievementsSection] осталась на прежнем месте относительно остальных секций (порядок
- * ПО УМОЛЧАНИЮ, без пина: `Header → Theme → Highlights → FavoriteGenres → Achievements → Stats →
- * Charts → RecentlyWatched → Privacy`) — план не требовал её перемещать, только подтвердить, что
- * она есть в новой компоновке.
+ * P13.T2/T11 (сверка с мокапом Claude Design) добавляли сюда переключатель темы сразу под шапкой —
+ * живой фидбек пользователя (2026-09-11) развернул это решение: тема вернулась на `SettingsScreen`
+ * (см. её KDoc), здесь секции темы больше нет. Порядок секций теперь: `Header → Highlights →
+ * FavoriteGenres → Achievements → Stats → Charts → RecentlyWatched → Privacy`. [AchievementsSection]
+ * осталась на прежнем месте относительно остальных секций — план не требовал её перемещать.
  *
  * P16.T13 (локальный пин секции витрины) добавил переупорядочивание: если пользователь закрепил
  * одну из четырёх движимых секций ([ProfileShowcaseSection] — жанры/достижения/связка
  * `StatsGrid`+`ProfileChartsSection`/«недавно смотрели»), она рендерится СРАЗУ после
- * [ProfileHeader] (перед темой и «часами просмотра»), а остальные три — следом, в исходном
- * порядке. Без пина (`pinnedSection == null`) порядок совпадает с описанным выше дефолтом
- * байт-в-байт: `section != pinnedSection` истинно для абсолютно всех секций, `pinnedBlock == null`
- * ничего не рендерит.
+ * [ProfileHeader] (перед «часами просмотра»), а остальные три — следом, в исходном порядке. Без
+ * пина (`pinnedSection == null`) порядок совпадает с описанным выше дефолтом байт-в-байт:
+ * `section != pinnedSection` истинно для абсолютно всех секций, `pinnedBlock == null` ничего не
+ * рендерит.
  */
-@Suppress("LongParameterList", "LongMethod") // Тот же координирующий блок, что и `ProfileScreen` —
-// см. её KDoc/Suppress. `onOpenLists` (P13) добавлен аддитивно к уже сгруппированным
-// data/callbacks-параметрам; P16.T13 добавил локальный пин-стор и сборку движимых секций в
-// список — оба аддитивны к уже существовавшей структуре функции, не новая ответственность.
+@Suppress("LongMethod") // Тот же координирующий блок, что и `ProfileScreen` — см. её KDoc/Suppress.
+// `onOpenLists` (P13) добавлен аддитивно к уже сгруппированным data/callbacks-параметрам;
+// P16.T13 добавил локальный пин-стор и сборку движимых секций в список — оба аддитивны к уже
+// существовавшей структуре функции, не новая ответственность.
 @Composable
 private fun ProfileContent(
     data: ProfileContentData,
     callbacks: ProfilePrivacyCallbacks,
     onReleaseClick: (Int) -> Unit,
-    onThemeModeChange: (String?) -> Unit,
     onOpenLists: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Не деструктуризация (`val (a, b, c, d) = data`): у detekt `DestructuringDeclarationWithTooManyEntries`
-    // лимит 3 компонента, а после P13.T2 в [ProfileContentData] их четыре.
     val profile = data.profile
     val privacy = data.privacy
     val achievements = data.achievements
-    val themeMode = data.themeMode
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
     val windowSize = LocalAnixWindowSize.current
@@ -445,13 +442,6 @@ private fun ProfileContent(
 
             pinnedBlock?.invoke()
 
-            ProfileThemeSection(
-                themeMode = themeMode,
-                onThemeModeChange = onThemeModeChange,
-                windowSize = windowSize,
-                modifier = sectionPadding,
-            )
-
             ProfileHighlights(profile = profile, modifier = sectionPadding)
 
             movableSections.forEach { (section, block) ->
@@ -468,101 +458,6 @@ private fun ProfileContent(
             )
             PrivacySection(privacy = privacy, callbacks = callbacks, modifier = sectionPadding)
         }
-    }
-}
-
-/**
- * Переключатель темы — переехал сюда из `SettingsScreen` в P13.T2 (сверка с мокапом Claude
- * Design: мокап рисует Theme прямо под шапкой профиля). Заголовок переиспользует
- * [Strings.settingsTheme] — тот же текст, что раньше стоял над `AnixThemePicker` на
- * `SettingsScreen`, ключ не дублировался под новое место специально.
- */
-@Composable
-private fun ProfileThemeSection(
-    themeMode: String?,
-    onThemeModeChange: (String?) -> Unit,
-    windowSize: AnixWindowSize,
-    modifier: Modifier = Modifier,
-) {
-    val dimens = AnixThemeTokens.dimens
-    val strings = LocalStrings.current
-    val isExpanded = windowSize == AnixWindowSize.Expanded
-
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement =
-            if (isExpanded) {
-                Arrangement.spacedBy(THEME_LABEL_GAP)
-            } else {
-                Arrangement.spacedBy(dimens.spaceXs)
-            },
-    ) {
-        Text(
-            text = strings.settingsTheme,
-            style =
-                if (isExpanded) {
-                    MaterialTheme.typography.titleSmall.copy(fontSize = THEME_LABEL_FONT_SIZE)
-                } else {
-                    MaterialTheme.typography.titleSmall
-                },
-            fontWeight = FontWeight.Bold,
-        )
-        if (isExpanded) {
-            val mode = themeMode ?: "light"
-            Row(horizontalArrangement = Arrangement.spacedBy(THEME_CHIP_GAP)) {
-                ThemeChip(
-                    label = strings.themeLight,
-                    selected = mode == "light",
-                    onClick = { onThemeModeChange("light") },
-                )
-                ThemeChip(
-                    label = strings.themeDark,
-                    selected = mode == "dark",
-                    onClick = { onThemeModeChange("dark") },
-                )
-            }
-        } else {
-            AnixThemePicker(currentMode = themeMode, onSelect = onThemeModeChange)
-        }
-    }
-}
-
-@Composable
-private fun ThemeChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val colors = AnixThemeTokens.colors
-    val primary = MaterialTheme.colorScheme.primary
-    val shape = RoundedCornerShape(THEME_CHIP_RADIUS)
-    val containerColor = if (selected) primary.copy(alpha = THEME_SELECTED_CONTAINER_ALPHA) else Color.Transparent
-    val borderColor = if (selected) primary.copy(alpha = THEME_SELECTED_BORDER_ALPHA) else colors.overlay09
-
-    Box(
-        modifier =
-            Modifier
-                .minimumInteractiveComponentSize()
-                .clip(shape)
-                .background(containerColor, shape)
-                .border(BorderStroke(THEME_CHIP_BORDER_WIDTH, borderColor), shape)
-                .selectable(selected = selected, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            modifier =
-                Modifier.padding(
-                    horizontal = THEME_CHIP_HORIZONTAL_PADDING,
-                    vertical = THEME_CHIP_VERTICAL_PADDING,
-                ),
-            style =
-                MaterialTheme.typography.labelMedium.copy(
-                    fontSize = THEME_CHIP_FONT_SIZE,
-                    fontWeight = FontWeight.SemiBold,
-                ),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
     }
 }
 
@@ -829,15 +724,3 @@ private val PROFILE_AVATAR_ACCENT_GAP = 3.dp
 private val AVATAR_SIZE_EXPANDED = 72.dp
 private val PROFILE_NAME_FONT_SIZE_EXPANDED = 20.sp
 private val PROFILE_HEADER_GAP_EXPANDED = 16.dp
-
-/** Desktop-вариант [ProfileThemeSection]: чипы темы по мокапу (строка 875). */
-private val THEME_LABEL_FONT_SIZE = 14.sp
-private val THEME_LABEL_GAP = 8.dp
-private val THEME_CHIP_RADIUS = 20.dp
-private val THEME_CHIP_BORDER_WIDTH = 1.dp
-private val THEME_CHIP_HORIZONTAL_PADDING = 16.dp
-private val THEME_CHIP_VERTICAL_PADDING = 8.dp
-private val THEME_CHIP_GAP = 8.dp
-private val THEME_CHIP_FONT_SIZE = 12.5.sp
-private const val THEME_SELECTED_CONTAINER_ALPHA = 0.22f
-private const val THEME_SELECTED_BORDER_ALPHA = 0.55f

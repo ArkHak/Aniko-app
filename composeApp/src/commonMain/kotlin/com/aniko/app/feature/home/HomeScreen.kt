@@ -385,6 +385,10 @@ private fun HomeHeroSection(
                 onRandomClick = onRandomClick,
                 onFeedClick = onFeedClick,
                 onCollectionsClick = onCollectionsClick,
+                // Плитки раньше шли впритык к краям экрана — единственный блок Home без
+                // горизонтального инсета (баннер выше уже применяет тот же dimens.spaceM,
+                // см. HomeBanner.kt). Живой фидбек пользователя (2026-09-11): выравниваем.
+                modifier = Modifier.padding(horizontal = dimens.spaceM),
             )
         }
     }

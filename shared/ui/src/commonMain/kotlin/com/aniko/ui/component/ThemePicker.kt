@@ -5,8 +5,10 @@ import androidx.compose.ui.Modifier
 import com.aniko.ui.i18n.LocalStrings
 
 /**
- * Компактный переключатель темы (Light/Dark) — используется на Profile под шапкой (P13.T2), по
- * образу и подобию [AnixLanguagePicker] (тот же `ChipRow`).
+ * Компактный переключатель темы (Light/Dark) — по образу и подобию [AnixLanguagePicker] (тот же
+ * `ChipRow`). Жил на `SettingsScreen`, P13.T2 временно перенесла его на `ProfileScreen` под мокап
+ * Claude Design; живой фидбек пользователя (2026-09-11) развернул перенос — переключатель снова
+ * на `SettingsScreen`, рядом с языком (см. KDoc обоих экранов).
  *
  * [currentMode] — `"light"`/`"dark"` из `ThemeStore`, `null` — «явный выбор не сделан» (первый
  * запуск). Дефолт приложения — светлая тема (макет Home в Claude Design светлый, сверка
