@@ -25,7 +25,10 @@ import com.aniko.model.Release
 import com.aniko.model.ReleaseId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
@@ -69,11 +72,14 @@ class LibraryRepository(
      * query-параметра `sort=` (P9.T2, переключатель "обратный порядок" в `LibraryScreen`):
      * вызывается заново при КАЖДОЙ загрузке страницы (в т.ч. [Paginator.refresh]), поэтому
      * тоггл во ViewModel меняет порядок без пересоздания самого `Paginator`.
+     *
+     * Элементы обогащаются прогрессом просмотра ([withWatchedPositions]) — сам `profile/list`
+     * его не отдаёт.
      */
     fun listPaginator(
         status: ListStatus,
         sort: () -> Int = defaultSort,
-    ): Paginator<Release> = Paginator { page -> myList(status, page, sort()) }
+    ): Paginator<Release> = Paginator { page -> myList(status, page, sort()).withWatchedPositions() }
 
     /** `null` — релиз не числится ни в одном списке. Прямой passthrough локальной истины, TTL не нужен. */
     fun observeListStatus(releaseId: ReleaseId): Flow<ListStatus?> = listMembershipStore.observeStatus(releaseId)
@@ -153,7 +159,10 @@ class LibraryRepository(
     ): Paged<Release> = favoriteApi.favorites(page, sort = sort).toDomain { it.toDomain() }
 
     /** Готовый пагинатор для экрана избранного. [sort] — см. KDoc [listPaginator], тот же смысл. */
-    fun favoritesPaginator(sort: () -> Int = defaultSort): Paginator<Release> = Paginator { favorites(it, sort()) }
+    fun favoritesPaginator(sort: () -> Int = defaultSort): Paginator<Release> =
+        Paginator { page ->
+            favorites(page, sort()).withWatchedPositions()
+        }
 
     fun observeFavorite(releaseId: ReleaseId): Flow<Boolean> = listMembershipStore.observeFavorite(releaseId)
 
@@ -198,6 +207,69 @@ class LibraryRepository(
 
     /** Готовый пагинатор для экрана истории просмотра. */
     fun historyPaginator(): Paginator<Release> = Paginator { page -> history(page) }
+
+    // ---- Прогресс просмотра для списков (обогащение из истории) --------------------------
+
+    private val watchedPositionsMutex = Mutex()
+    private var watchedPositionsCache: Pair<Instant, Map<ReleaseId, Int>>? = null
+
+    /**
+     * Карта `releaseId → номер последней просмотренной серии`, собранная постранично из
+     * `history/{page}`. Живая проверка 2026-09-18: `profile/list/all/{status}/{page}` отдаёт
+     * `last_view_episode: null` по всем элементам (и с `extended_mode=1` тоже), других полей
+     * прогресса в ответе нет — поэтому «N из M» во вкладках «Мои списки» достаётся только
+     * обогащением из истории, где `last_view_episode` приходит объектом эпизода (см.
+     * `LastViewEpisodeSerializer`). Кэш в памяти на [WATCHED_POSITIONS_TTL]: полная история —
+     * десятки страниц, перечитывать её на каждую вкладку расточительно.
+     */
+    private suspend fun watchedPositions(): Map<ReleaseId, Int> {
+        watchedPositionsCache?.let { (fetchedAt, cached) ->
+            if (clock.now() - fetchedAt < WATCHED_POSITIONS_TTL) return cached
+        }
+        return watchedPositionsMutex.withLock {
+            watchedPositionsCache?.let { (fetchedAt, cached) ->
+                if (clock.now() - fetchedAt < WATCHED_POSITIONS_TTL) return@withLock cached
+            }
+            val positions = mutableMapOf<ReleaseId, Int>()
+            var page = 0
+            while (page < WATCHED_POSITIONS_MAX_PAGES) {
+                val paged = history(page)
+                // История идёт от свежих записей к старым — при дублях релиза первое
+                // (свежее) значение оставляем, поэтому putIfAbsent, а не overwrite.
+                paged.items.forEach { release ->
+                    release.lastViewEpisode?.let { positions.putIfAbsent(release.id, it) }
+                }
+                if (!paged.hasNextPage) break
+                page++
+            }
+            watchedPositionsCache = clock.now() to positions
+            positions
+        }
+    }
+
+    /**
+     * Подставляет прогресс из [watchedPositions] в элементы страницы, у которых сервер не прислал
+     * свой `lastViewEpisode`. Сбой загрузки истории не роняет сам список — возвращается страница
+     * как есть (вчерашнее поведение «0 из N» лучше, чем ошибка вкладки).
+     */
+    private suspend fun Paged<Release>.withWatchedPositions(): Paged<Release> {
+        // Сбой загрузки истории не роняет сам список — emptyMap даст страницу как есть.
+        val positions = runCatching { watchedPositions() }.getOrDefault(emptyMap())
+        return if (positions.isEmpty()) {
+            this
+        } else {
+            copy(
+                items =
+                    items.map { release ->
+                        if (release.lastViewEpisode != null) {
+                            release
+                        } else {
+                            positions[release.id]?.let { release.copy(lastViewEpisode = it) } ?: release
+                        }
+                    },
+            )
+        }
+    }
 
     fun observeHistory(page: Int): Flow<Cached<Paged<Release>>> {
         val key = CacheKeys.history(page)
@@ -282,6 +354,12 @@ class LibraryRepository(
          * [favoritesPaginator].
          */
         const val SORT_RECENTLY_ADDED = 1
+
+        /** TTL in-memory кэша карты прогресса просмотра — см. [watchedPositions]. */
+        private val WATCHED_POSITIONS_TTL = 5.minutes
+
+        /** Предохранитель от бесконечного цикла при битой пагинации истории (25 × 100 = 2500 записей). */
+        private const val WATCHED_POSITIONS_MAX_PAGES = 100
 
         /** `sort=0` — обратный порядок (P9.T2, переключатель «реверс» в `LibraryScreen`). */
         const val SORT_REVERSED = 0

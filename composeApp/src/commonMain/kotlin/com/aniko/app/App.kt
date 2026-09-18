@@ -3,6 +3,7 @@ package com.aniko.app
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -10,18 +11,27 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavHostController
@@ -45,6 +55,7 @@ import com.aniko.app.navigation.rememberDetailPaneStack
 import com.aniko.app.navigation.rememberTitleNavigator
 import com.aniko.data.locale.LocaleStore
 import com.aniko.data.repository.AuthRepository
+import com.aniko.data.repository.NotificationRepository
 import com.aniko.data.session.SessionState
 import com.aniko.data.sync.SyncCoordinator
 import com.aniko.data.theme.ThemeStore
@@ -53,6 +64,7 @@ import com.aniko.ui.adaptive.AdaptiveScaffold
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.adaptive.rememberAnixWindowSize
+import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.component.AnixOfflineBanner
 import com.aniko.ui.i18n.LocalStrings
@@ -272,9 +284,57 @@ private fun AnixAppScaffold(
         migratePaneRoutes(navController, paneStack, isTwoPane = panesEnabled)
     }
 
-    // Deep links (P10.T7): DeepLinkDispatcher.pending — StateFlow, а не одноразовый callback,
-    // поэтому эта подписка отрабатывает и ссылку, пришедшую холодным стартом ДО того, как
-    // AnixAppScaffold собрался (см. KDoc DeepLinkDispatcher про доставку после логина).
+    CollectDeepLinks(navController)
+
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val selectedSection =
+        AnixSection.entries.find { section ->
+            backStackEntry?.destination?.hierarchy?.any { it.hasRoute(section.destination::class) } == true
+        }
+    val strings = LocalStrings.current
+    val navItems = remember(strings) { AnixSection.entries.map { it.toNavItem(strings) } }
+
+    // Бейдж непрочитанных уведомлений для колокольчика в футере сайдбара (Expanded, 2026-09-18 —
+    // кнопки переехали сюда из топбара профиля).
+    val unreadNotificationsCount = rememberUnreadNotificationsCount(backStackEntry)
+
+    CompositionLocalProvider(LocalTitleNavigator provides titleNavigator) {
+        AdaptiveScaffold(
+            items = navItems,
+            selectedItemId = selectedSection?.name,
+            // Плеер — "поверх" каркаса, см. KDoc `AdaptiveScaffold.showNavigationChrome`.
+            showNavigationChrome = backStackEntry?.destination?.hasRoute(AnixDestination.Player::class) != true,
+            onItemClick = { item ->
+                navController.navigateToTabRoot(AnixSection.valueOf(item.id).destination)
+            },
+            sidebarFooter = {
+                SidebarChromeActions(
+                    unreadNotificationsCount = unreadNotificationsCount,
+                    onNotificationsClick = { navController.navigate(AnixDestination.Notifications) },
+                    onSettingsClick = { navController.navigate(AnixDestination.Settings) },
+                )
+            },
+        ) { innerPadding ->
+            AnixAppScaffoldContent(
+                innerPadding = innerPadding,
+                navController = navController,
+                paneStack = paneStack,
+                titleNavigator = titleNavigator,
+                localeStore = localeStore,
+                themeStore = themeStore,
+            )
+        }
+    }
+}
+
+/**
+ * Deep links (P10.T7): DeepLinkDispatcher.pending — StateFlow, а не одноразовый callback,
+ * поэтому эта подписка отрабатывает и ссылку, пришедшую холодным стартом ДО того, как
+ * AnixAppScaffold собрался (см. KDoc DeepLinkDispatcher про доставку после логина). Вынесена из
+ * [AnixAppScaffold] отдельной функцией — иначе она превышала detekt `LongMethod`.
+ */
+@Composable
+private fun CollectDeepLinks(navController: NavHostController) {
     LaunchedEffect(navController) {
         DeepLinkDispatcher.pending.collect { url ->
             if (url != null) {
@@ -291,36 +351,72 @@ private fun AnixAppScaffold(
             }
         }
     }
+}
 
-    val backStackEntry by navController.currentBackStackEntryAsState()
-    val selectedSection =
-        AnixSection.entries.find { section ->
-            backStackEntry?.destination?.hierarchy?.any { it.hasRoute(section.destination::class) } == true
-        }
+/**
+ * Колокольчик уведомлений (с бейджем непрочитанных) и шестерёнка настроек в футере сайдбара
+ * (Expanded). Живой фидбек пользователя (2026-09-18): кнопки переехали сюда из топбара
+ * `ProfileScreen` — на десктопе они должны жить в левом нижнем углу окна, а не в шапке профиля.
+ * На Compact/Medium сайдбара нет, там те же кнопки по-прежнему рисует топбар профиля
+ * (`ProfileTopBarActions`). Стилистика и семантика (`clearAndSetSemantics`, кламп «99+»)
+ * намеренно зеркалят её.
+ */
+@Composable
+private fun SidebarChromeActions(
+    unreadNotificationsCount: Long,
+    onNotificationsClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+) {
     val strings = LocalStrings.current
-    val navItems = remember(strings) { AnixSection.entries.map { it.toNavItem(strings) } }
 
-    CompositionLocalProvider(LocalTitleNavigator provides titleNavigator) {
-        AdaptiveScaffold(
-            items = navItems,
-            selectedItemId = selectedSection?.name,
-            // Плеер — "поверх" каркаса, см. KDoc `AdaptiveScaffold.showNavigationChrome`.
-            showNavigationChrome = backStackEntry?.destination?.hasRoute(AnixDestination.Player::class) != true,
-            onItemClick = { item ->
-                navController.navigateToTabRoot(AnixSection.valueOf(item.id).destination)
-            },
-        ) { innerPadding ->
-            AnixAppScaffoldContent(
-                innerPadding = innerPadding,
-                navController = navController,
-                paneStack = paneStack,
-                titleNavigator = titleNavigator,
-                localeStore = localeStore,
-                themeStore = themeStore,
-            )
+    Row {
+        IconButton(
+            onClick = onNotificationsClick,
+            modifier =
+                Modifier.clearAndSetSemantics {
+                    contentDescription = strings.notificationsIconContentDescription
+                },
+        ) {
+            if (unreadNotificationsCount > 0) {
+                BadgedBox(badge = { Badge { Text(unreadCountLabel(unreadNotificationsCount)) } }) {
+                    AnixIcon(name = "notifications", contentDescription = null)
+                }
+            } else {
+                AnixIcon(name = "notifications", contentDescription = null)
+            }
+        }
+        IconButton(
+            onClick = onSettingsClick,
+            modifier = Modifier.clearAndSetSemantics { contentDescription = strings.settingsTitle },
+        ) {
+            AnixIcon(name = "settings", contentDescription = null, filled = true)
         }
     }
 }
+
+/**
+ * Счётчик непрочитанных уведомлений для колокольчика в футере сайдбара. Обновляется на каждую
+ * смену назначения — тот же момент, что раньше давал `LaunchedEffect` самого `ProfileScreen`
+ * (см. `ProfileViewModel.refreshUnreadNotifications`). Ошибка сети → 0, бейдж просто не рисуется.
+ */
+@Composable
+private fun rememberUnreadNotificationsCount(backStackEntry: NavBackStackEntry?): Long {
+    val notificationRepository = koinInject<NotificationRepository>()
+    var count by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(notificationRepository, backStackEntry) {
+        count = runCatching { notificationRepository.unreadBadgeCount() }.getOrDefault(0L)
+    }
+    return count
+}
+
+/** Кламп на «99+» — тот же предел, что в `ProfileScreen.unreadCountLabel`. */
+private fun unreadCountLabel(count: Long): String {
+    val capped = count > UNREAD_BADGE_MAX
+    return if (capped) UNREAD_BADGE_LABEL else count.toString()
+}
+
+private const val UNREAD_BADGE_MAX = 99L
+private const val UNREAD_BADGE_LABEL = "99+"
 
 /**
  * Тело слота `content` [AdaptiveScaffold] внутри [AnixAppScaffold] — вынесено отдельной функцией

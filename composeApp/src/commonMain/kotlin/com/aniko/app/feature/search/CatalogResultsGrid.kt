@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -167,6 +168,10 @@ private fun CatalogGrid(
 /**
  * Ячейка сетки Catalog Expanded (мокап: постер 2:3 radius 14, бейдж рейтинга top-right inset 6,
  * название 12px/600 Manrope lh 1.25, мета-строка 10.5px `--t2-58`, опциональный release-badge).
+ *
+ * Высота всех текстовых блоков фиксирована (заголовок всегда занимает 2 строки, слоты меты
+ * и бейджа резервируются даже когда данных нет) — иначе соседние ячейки одной строки
+ * `LazyVerticalGrid` имели разную внутреннюю раскладку и чип статуса «прыгал» по вертикали.
  */
 @Composable
 private fun CatalogGridItem(
@@ -211,21 +216,26 @@ private fun CatalogGridItem(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = GRID_TITLE_MAX_LINES,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.height(GRID_TITLE_BLOCK_HEIGHT),
         )
 
-        val meta = releaseMeta(strings, release)
-        if (meta != null) {
-            Text(
-                text = meta,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = GRID_META_FONT_SIZE),
-                color = colors.textSecondary58,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        Box(modifier = Modifier.height(GRID_META_SLOT_HEIGHT)) {
+            val meta = releaseMeta(strings, release)
+            if (meta != null) {
+                Text(
+                    text = meta,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = GRID_META_FONT_SIZE),
+                    color = colors.textSecondary58,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
 
-        if (release.status != ReleaseStatus.UNKNOWN) {
-            ReleaseStatusBadge(status = release.status)
+        Box(modifier = Modifier.height(GRID_BADGE_SLOT_HEIGHT)) {
+            if (release.status != ReleaseStatus.UNKNOWN) {
+                ReleaseStatusBadge(status = release.status)
+            }
         }
     }
 }
@@ -406,6 +416,13 @@ private val RATING_BADGE_INSET = 6.dp
 private val GRID_TITLE_FONT_SIZE = 12.sp
 private val GRID_TITLE_LINE_HEIGHT = 15.sp
 private const val GRID_TITLE_MAX_LINES = 2
+
+// Фиксированные высоты блоков ячейки (см. KDoc CatalogGridItem): заголовок — всегда 2 строки
+// (15.sp × 2), мета — одна строка labelSmall (lineHeight 16.sp), слот бейджа — строка labelSmall
+// плюс вертикальные паддинги бейджа (3.dp × 2).
+private val GRID_TITLE_BLOCK_HEIGHT = 30.dp
+private val GRID_META_SLOT_HEIGHT = 16.dp
+private val GRID_BADGE_SLOT_HEIGHT = 22.dp
 private val GRID_META_FONT_SIZE = 10.5.sp
 private val RELEASE_BADGE_RADIUS = 20.dp
 private val RELEASE_BADGE_BORDER_WIDTH = 1.dp

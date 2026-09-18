@@ -7,6 +7,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
 
@@ -20,8 +21,10 @@ import kotlinx.serialization.json.intOrNull
  * `Int?` не мог распарсить объектную форму и ронял парсинг всего профиля целиком
  * (`JsonConvertException`) на любом аккаунте с непустой историей просмотра.
  *
- * Объектная форма не даёт достоверного номера серии (только `position`/`releaseId`, не сам номер
- * эпизода) — деградирует в `null`, а не выдумывает значение.
+ * Объектная форма несёт номер серии в поле `position` (его же используют `EpisodeApi` при
+ * отметке просмотра) — сериализатор достаёт его, чтобы списки («Мои списки», история)
+ * показывали реальное число просмотренных серий, а не вечный «0 из N». Полей с номером нет —
+ * деградирует в `null`, а не выдумывает значение.
  */
 internal object LastViewEpisodeSerializer : KSerializer<Int?> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("LastViewEpisode", PrimitiveKind.INT)
@@ -39,7 +42,10 @@ internal object LastViewEpisodeSerializer : KSerializer<Int?> {
 
     override fun deserialize(decoder: Decoder): Int? {
         val jsonDecoder = decoder as? JsonDecoder ?: return null
-        val element = jsonDecoder.decodeJsonElement()
-        return (element as? JsonPrimitive)?.intOrNull
+        return when (val element = jsonDecoder.decodeJsonElement()) {
+            is JsonPrimitive -> element.intOrNull
+            is JsonObject -> (element["position"] as? JsonPrimitive)?.intOrNull
+            else -> null
+        }
     }
 }

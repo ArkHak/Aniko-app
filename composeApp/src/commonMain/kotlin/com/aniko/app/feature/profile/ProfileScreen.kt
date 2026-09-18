@@ -116,10 +116,11 @@ import org.koin.compose.viewmodel.koinViewModel
  *
  * Unified Expanded title (2026-09-18): на [com.aniko.ui.adaptive.AnixWindowSize.Expanded] заголовок
  * страницы — [ExpandedScreenTitle] (тот же атом, что у Каталога/Библиотеки/Расписания), встроенный
- * в контент ([ProfileContent]), а не текст `TopAppBar.title` — тот на Expanded теперь пустой,
- * `TopAppBar` остаётся только носителем колокольчика уведомлений/шестерёнки настроек
- * ([ProfileTopBarActions]), которым больше негде рендериться (сайдбар/App.kt их не показывает).
- * На Compact/Medium `TopAppBar.title` не меняется — заголовок там был и остаётся частью топбара.
+ * в контент ([ProfileContent]), а не текст `TopAppBar.title`. С 2026-09-18 (живой фидбек
+ * пользователя) на Expanded `TopAppBar` не рисуется вовсе: колокольчик уведомлений и шестерёнка
+ * настроек переехали в футер сайдбара (`SidebarChromeActions` в `App.kt`), и контент профиля
+ * поднялся к верху окна. На Compact/Medium `TopAppBar` с заголовком и [ProfileTopBarActions]
+ * остаётся — там сайдбара нет.
  */
 @Suppress("LongMethod", "LongParameterList") // Экран остаётся тонким прокси без собственного
 // стейта; оставшихся параметров (5 колбэков + viewModel) всё ещё достаточно, чтобы сработало
@@ -147,26 +148,29 @@ fun ProfileScreen(
     Scaffold(
         modifier = modifier.testTag(AnixTestTags.PROFILE_SCREEN_ROOT),
         topBar = {
-            TopAppBar(
-                // Desktop (Expanded): заголовок переехал в контент как [ExpandedScreenTitle]
-                // (см. KDoc экрана выше и `ProfileContent`) — здесь он больше не рисуется, но сам
-                // `TopAppBar` остаётся: колокольчику/шестерёнке в `actions` ниже больше негде жить.
-                title = { if (windowSize != AnixWindowSize.Expanded) Text(strings.profileTitle) },
-                actions = {
-                    ProfileTopBarActions(
-                        unreadNotificationsCount = uiState.unreadNotificationsCount,
-                        onNotificationsClick = onNotificationsClick,
-                        onSettingsClick = onSettingsClick,
-                    )
-                },
-                // Живой фидбек пользователя (2026-09-11, «белая полоска над шапкой профиля»):
-                // M3 TopAppBar красится в свой дефолтный containerColor (surface), который не
-                // совпадает с фоном тела экрана (`colorScheme.background` — iOS grouped
-                // background, см. KDoc `AppTheme`) — рассинхрон давал видимую полосу. Явно
-                // красим шапку в тот же фон, что и страницу, чтобы она визуально сливалась с
-                // телом (тот же приём — ниже, `SettingsTopBar` в `SettingsScreen.kt`).
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-            )
+            // Desktop (Expanded): топбар не рисуется вовсе — заголовок живёт в контенте как
+            // [ExpandedScreenTitle] (см. KDoc экрана выше и `ProfileContent`), а колокольчик/
+            // шестерёнка переехали в футер сайдбара (`SidebarChromeActions`, `App.kt`). Без
+            // топбара контент поднимается к верху окна (запрос пользователя 2026-09-18).
+            if (windowSize != AnixWindowSize.Expanded) {
+                TopAppBar(
+                    title = { Text(strings.profileTitle) },
+                    actions = {
+                        ProfileTopBarActions(
+                            unreadNotificationsCount = uiState.unreadNotificationsCount,
+                            onNotificationsClick = onNotificationsClick,
+                            onSettingsClick = onSettingsClick,
+                        )
+                    },
+                    // Живой фидбек пользователя (2026-09-11, «белая полоска над шапкой профиля»):
+                    // M3 TopAppBar красится в свой дефолтный containerColor (surface), который не
+                    // совпадает с фоном тела экрана (`colorScheme.background` — iOS grouped
+                    // background, см. KDoc `AppTheme`) — рассинхрон давал видимую полосу. Явно
+                    // красим шапку в тот же фон, что и страницу, чтобы она визуально сливалась с
+                    // телом (тот же приём — ниже, `SettingsTopBar` в `SettingsScreen.kt`).
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                )
+            }
         },
     ) { innerPadding ->
         val profile = uiState.profile

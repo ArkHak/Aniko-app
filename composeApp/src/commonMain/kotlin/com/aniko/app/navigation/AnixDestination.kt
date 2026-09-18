@@ -24,8 +24,9 @@ sealed interface AnixDestination {
      *
      * До P13.T2 был вкладкой таб-бара (см. [AnixSection]) и сам открывал [Profile] пунктом «Мой
      * профиль». После сверки с мокапом Claude Design поток развернулся: [Profile] стал вкладкой
-     * таб-бара, а этот маршрут — дочерний экран, открываемый шестерёнкой из `TopAppBar`
-     * `ProfileScreen.kt`. Переключатель темы отсюда переехал на [Profile] (мокап рисует его прямо
+     * таб-бара, а этот маршрут — дочерний экран, открываемый шестерёнкой (на Compact/Medium — из
+     * `TopAppBar` `ProfileScreen.kt`, на Expanded — из футера сайдбара, `SidebarChromeActions` в
+     * `App.kt`). Переключатель темы отсюда переехал на [Profile] (мокап рисует его прямо
      * под шапкой профиля); переключатель языка остался здесь.
      */
     @Serializable
@@ -46,10 +47,11 @@ sealed interface AnixDestination {
     data object NotificationSettings : AnixDestination
 
     /**
-     * Список уведомлений в приложении (P16.T18), открывается из колокольчика в `TopAppBar`
-     * `ProfileScreen.kt` — тот же приём, что у [Settings] (шестерёнка рядом). Своя лента, а не
-     * параметр [Profile]: своя пагинация ([com.aniko.data.repository.NotificationRepository]),
-     * тот же архитектурный выбор, что у [ReleaseComments] относительно `ReleaseDetails`.
+     * Список уведомлений в приложении (P16.T18), открывается из колокольчика — в `TopAppBar`
+     * `ProfileScreen.kt` на Compact/Medium, в футере сайдбара (`SidebarChromeActions`, `App.kt`)
+     * на Expanded. Своя лента, а не параметр [Profile]: своя пагинация
+     * ([com.aniko.data.repository.NotificationRepository]), тот же архитектурный выбор, что у
+     * [ReleaseComments] относительно `ReleaseDetails`.
      */
     @Serializable
     data object Notifications : AnixDestination

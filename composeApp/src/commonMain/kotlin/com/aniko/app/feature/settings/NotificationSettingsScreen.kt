@@ -121,23 +121,7 @@ private fun NotificationSettingsContent(
                     .widthIn(max = dimens.contentMaxWidth),
         ) {
             if (permission != null && !permission.isGranted) {
-                ListItem(
-                    headlineContent = { Text(strings.settingsNotificationsPermissionRequired) },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    trailingContent = {
-                        // Подтверждено на устройстве (Фаза 11, T9): M3 Button не сливает свой Text{}
-                        // в озвучиваемый узел (тот же паттерн, что и остальные M3-компоненты фазы).
-                        Button(
-                            onClick = permission::request,
-                            modifier =
-                                Modifier.clearAndSetSemantics {
-                                    contentDescription = strings.settingsNotificationsPermissionGrant
-                                },
-                        ) {
-                            Text(strings.settingsNotificationsPermissionGrant)
-                        }
-                    },
-                )
+                PermissionRequestItem(permission = permission, strings = strings)
                 HorizontalDivider()
             }
 
@@ -176,6 +160,32 @@ private fun NotificationSettingsContent(
             }
         }
     }
+}
+
+/** Плашка «нужно разрешение на уведомления» с кнопкой запроса. Вынесена из
+ *  [NotificationSettingsContent] — иначе она превышала detekt `LongMethod`. */
+@Composable
+private fun PermissionRequestItem(
+    permission: NotificationPermissionState,
+    strings: Strings,
+) {
+    ListItem(
+        headlineContent = { Text(strings.settingsNotificationsPermissionRequired) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        trailingContent = {
+            // Подтверждено на устройстве (Фаза 11, T9): M3 Button не сливает свой Text{}
+            // в озвучиваемый узел (тот же паттерн, что и остальные M3-компоненты фазы).
+            Button(
+                onClick = permission::request,
+                modifier =
+                    Modifier.clearAndSetSemantics {
+                        contentDescription = strings.settingsNotificationsPermissionGrant
+                    },
+            ) {
+                Text(strings.settingsNotificationsPermissionGrant)
+            }
+        },
+    )
 }
 
 @Composable

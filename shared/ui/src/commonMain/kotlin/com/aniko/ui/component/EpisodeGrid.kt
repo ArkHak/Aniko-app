@@ -124,7 +124,7 @@ private fun EpisodeCell(
             Modifier
                 .defaultMinSize(minWidth = cellMinSize, minHeight = cellMinSize)
                 .clip(shape)
-                .background(containerColor.copy(alpha = alpha), shape)
+                .background(containerColor.copy(alpha = containerColor.alpha * alpha), shape)
                 .border(BorderStroke(borderWidth, borderColor.copy(alpha = borderColor.alpha * alpha)), shape)
                 .semantics { this.contentDescription = contentDescription }
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick),

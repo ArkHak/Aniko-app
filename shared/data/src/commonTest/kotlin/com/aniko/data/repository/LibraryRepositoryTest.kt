@@ -296,4 +296,138 @@ class LibraryRepositoryTest {
 
             assertTrue(fixture.queue.snapshot().isEmpty())
         }
+
+    // ---- Обогащение списков прогрессом из истории (2026-09-18) ----------------------------
+
+    /** Вариант фикстуры с диспетчеризацией по пути — обогащение дёргает и список, и историю. */
+    private fun fixtureByPath(responses: Map<String, String>): LibraryRepository {
+        val mockEngine =
+            MockEngine { request ->
+                val body = responses[request.url.encodedPath] ?: error("Unexpected path: ${request.url.encodedPath}")
+                respond(
+                    content = body,
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+            }
+        val httpClient =
+            HttpClient(mockEngine) {
+                install(ContentNegotiation) { json(AnixJson) }
+            }
+        val membership = FakeListMembershipStore()
+        val queue = FakeSyncQueueStore()
+        val worker =
+            SyncQueueWorker(
+                queue = queue,
+                membership = membership,
+                progress = FakeEpisodeProgressStore(),
+                profileListApi = ProfileListApi(httpClient),
+                favoriteApi = FavoriteApi(httpClient),
+                historyApi = HistoryApi(httpClient),
+                episodeApi = EpisodeApi(httpClient),
+                clock = FakeClock(now),
+            )
+        return LibraryRepository(
+            profileListApi = ProfileListApi(client = httpClient),
+            favoriteApi = FavoriteApi(client = httpClient),
+            historyApi = HistoryApi(client = httpClient),
+            listMembershipStore = membership,
+            releaseCacheStore = FakeReleaseCacheStore(),
+            releaseListStore = FakeReleaseListStore(),
+            syncQueueStore = queue,
+            syncQueueWorker = worker,
+            clock = FakeClock(now),
+        )
+    }
+
+    private val listItemWithoutProgressJson =
+        """{"id":186,"title_ru":"Тестовый релиз","episodes_total":12,"last_view_episode":null}"""
+
+    private fun historyPageWithPosition(position: Int?): String =
+        """
+        {
+            "code": 0,
+            "content": [
+                {
+                    "id": 186,
+                    "title_ru": "Тестовый релиз",
+                    "last_view_episode": ${position?.let { """{"@id":1,"releaseId":186,"position":$it}""" } ?: "null"}
+                }
+            ],
+            "current_page": 0,
+            "total_page_count": 1
+        }
+        """.trimIndent()
+
+    @Test
+    fun listPaginator_enrichesWatchedPosition_fromHistoryWhenListOmitsIt() =
+        runTest {
+            // Живая проверка 2026-09-18: profile/list отдаёт last_view_episode=null всегда,
+            // history — объектом эпизода; «N из M» в списках собирается из неё.
+            val repository =
+                fixtureByPath(
+                    mapOf(
+                        "/profile/list/all/1/0" to
+                            """{"code":0,"content":[$listItemWithoutProgressJson],"current_page":0,"total_page_count":1}""",
+                        "/history/0" to historyPageWithPosition(5),
+                    ),
+                )
+            val paginator = repository.listPaginator(ListStatus.WATCHING)
+
+            paginator.loadNext()
+
+            val items = paginator.state.value.items
+            assertEquals(5, items.first().lastViewEpisode)
+        }
+
+    @Test
+    fun listPaginator_historyFailure_keepsListAsIs() =
+        runTest {
+            // Сбой истории не роняет сам список — страница возвращается без прогресса.
+            val mockEngine =
+                MockEngine { request ->
+                    when (request.url.encodedPath) {
+                        "/profile/list/all/1/0" ->
+                            respond(
+                                content =
+                                    """{"code":0,"content":[$listItemWithoutProgressJson],"current_page":0,"total_page_count":1}""",
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                            )
+                        else -> respond(content = "boom", status = HttpStatusCode.InternalServerError)
+                    }
+                }
+            val httpClient = HttpClient(mockEngine) { install(ContentNegotiation) { json(AnixJson) } }
+            val membership = FakeListMembershipStore()
+            val queue = FakeSyncQueueStore()
+            val repository =
+                LibraryRepository(
+                    profileListApi = ProfileListApi(client = httpClient),
+                    favoriteApi = FavoriteApi(client = httpClient),
+                    historyApi = HistoryApi(client = httpClient),
+                    listMembershipStore = membership,
+                    releaseCacheStore = FakeReleaseCacheStore(),
+                    releaseListStore = FakeReleaseListStore(),
+                    syncQueueStore = queue,
+                    syncQueueWorker =
+                        SyncQueueWorker(
+                            queue = queue,
+                            membership = membership,
+                            progress = FakeEpisodeProgressStore(),
+                            profileListApi = ProfileListApi(httpClient),
+                            favoriteApi = FavoriteApi(httpClient),
+                            historyApi = HistoryApi(httpClient),
+                            episodeApi = EpisodeApi(httpClient),
+                            clock = FakeClock(now),
+                        ),
+                    clock = FakeClock(now),
+                )
+            val paginator = repository.listPaginator(ListStatus.WATCHING)
+
+            paginator.loadNext()
+
+            val state = paginator.state.value
+            assertEquals(1, state.items.size)
+            assertNull(state.items.first().lastViewEpisode)
+        }
 }
