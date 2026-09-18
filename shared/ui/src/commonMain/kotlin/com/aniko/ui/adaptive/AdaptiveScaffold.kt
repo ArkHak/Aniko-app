@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ProvidableCompositionLocal
@@ -19,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.aniko.ui.glass.LocalGlassBackdrop
 import com.aniko.ui.glass.glassBackdropSource
 import com.aniko.ui.glass.rememberGlassBackdropState
+import com.aniko.ui.theme.AnixThemeTokens
 
 /**
  * Адаптивный каркас приложения (P5.T5): bottom bar на [AnixWindowSize.Compact], nav rail на
@@ -135,8 +138,25 @@ fun AdaptiveScaffold(
                     header = sidebarHeader,
                     footer = sidebarFooter,
                 )
+                // Продуктовый запрос (2026-09-17): «добавить ограничительные линии между меню и
+                // контентом в десктопе» — до этого границу сайдбара нёс только тон
+                // sidebarBackgroundColor() (см. её KDoc в SidebarSlot.kt), который читался слабо.
+                // Дефолты VerticalDivider (DividerDefaults.Thickness/color = outlineVariant) — тот
+                // же волосяной разделитель, что HorizontalDivider() без параметров уже рисует по
+                // проекту (FeedScreen/CollectionsScreen/CatalogResultsGrid), поэтому явные
+                // thickness/color здесь не задаются.
+                VerticalDivider()
                 Scaffold(
-                    modifier = Modifier.weight(1f),
+                    // Живая проверка продуктом (2026-09-17, скриншот экрана «Каталог»): контент
+                    // (CatalogFilterPanel/SearchScreen — заголовок «Каталог») начинался вплотную к
+                    // VerticalDivider выше, без отступа — «тут надо добавить отступ от линии,
+                    // везде надо добавить одинаковый отступ». Отступ задан здесь один раз (а не в
+                    // каждом экране), чтобы гарантированно быть одинаковым во всех местах,
+                    // использующих AdaptiveScaffold в Expanded. Сторону сайдбара трогать не
+                    // нужно — его контент (пункты меню) уже не касается линии: SIDEBAR_OUTER_PADDING
+                    // (см. SidebarSlot.kt) даёт 12dp между items и правым краем Surface, где рисуется
+                    // разделитель.
+                    modifier = Modifier.weight(1f).padding(start = AnixThemeTokens.dimens.spaceM),
                     containerColor = Color.Transparent, // см. комментарий в ветке Compact выше
                     snackbarHost = snackbarHost,
                 ) { innerPadding -> movableContent(innerPadding) }

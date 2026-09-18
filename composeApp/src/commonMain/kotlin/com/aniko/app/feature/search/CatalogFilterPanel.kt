@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.aniko.model.AnixGenres
 import com.aniko.model.CatalogFilter
 import com.aniko.ui.component.AnixFilterChipRow
+import com.aniko.ui.component.ExpandedScreenTitle
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.theme.AnixThemeTokens
@@ -60,47 +61,38 @@ fun CatalogFilterPanel(
 ) {
     val strings = LocalStrings.current
 
-    Column(
-        modifier = modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(PANEL_SECTION_GAP),
-    ) {
-        Text(
-            text = strings.navCatalog,
-            style =
-                MaterialTheme.typography.displaySmall.copy(
-                    fontSize = TITLE_FONT_SIZE,
-                    fontWeight = FontWeight.ExtraBold,
-                    lineHeight = TITLE_LINE_HEIGHT,
-                ),
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+    // Заголовок вынесен из общего Arrangement.spacedBy(PANEL_SECTION_GAP): ExpandedScreenTitle
+    // сам задаёт отступ вокруг себя (единый паттерн для всех Expanded-заголовков, см. его KDoc),
+    // поэтому зазор до вкладок ниже — только встроенный, без удвоения зазором панели.
+    Column(modifier = modifier.verticalScroll(rememberScrollState())) {
+        ExpandedScreenTitle(text = strings.navCatalog)
 
-        CatalogTabRow(selected = tab, onSelect = onTabSelected)
+        Column(verticalArrangement = Arrangement.spacedBy(PANEL_SECTION_GAP)) {
+            CatalogTabRow(selected = tab, onSelect = onTabSelected)
 
-        // Мокап (строка 800, `catalogIsAll`): секции фильтров живут только под вкладкой «Все» —
-        // «Новинки» — отдельная сортировка каталога без собственного набора фильтров на панели.
-        if (tab == CatalogTab.All) {
-            FilterSection(title = strings.catalogFiltersTitle) {
-                STATUS_OPTIONS.forEach { option ->
-                    CatalogFilterChip(
-                        label = option.label(strings),
-                        selected = filter.statusId == option.id,
-                        selectedColor = MaterialTheme.colorScheme.secondary,
-                        onClick = { onStatusToggle(option.id) },
-                    )
+            // Мокап (строка 800, `catalogIsAll`): секции фильтров живут только под вкладкой «Все» —
+            // «Новинки» — отдельная сортировка каталога без собственного набора фильтров на панели.
+            if (tab == CatalogTab.All) {
+                FilterSection(title = strings.catalogFiltersTitle) {
+                    STATUS_OPTIONS.forEach { option ->
+                        CatalogFilterChip(
+                            label = option.label(strings),
+                            selected = filter.statusId == option.id,
+                            selectedColor = MaterialTheme.colorScheme.secondary,
+                            onClick = { onStatusToggle(option.id) },
+                        )
+                    }
                 }
-            }
 
-            FilterSection(title = strings.navCatalog) {
-                AnixGenres.popular.forEach { genre ->
-                    CatalogFilterChip(
-                        label = genre,
-                        selected = genre in filter.genres,
-                        selectedColor = MaterialTheme.colorScheme.primary,
-                        onClick = { onGenreToggle(genre) },
-                    )
+                FilterSection(title = strings.navCatalog) {
+                    AnixGenres.popular.forEach { genre ->
+                        CatalogFilterChip(
+                            label = genre,
+                            selected = genre in filter.genres,
+                            selectedColor = MaterialTheme.colorScheme.primary,
+                            onClick = { onGenreToggle(genre) },
+                        )
+                    }
                 }
             }
         }
@@ -331,10 +323,9 @@ private val STATUS_OPTIONS =
         StatusOption(STATUS_ID_ANNOUNCE) { it.releaseStatusAnnounce },
     )
 
-/** Зазор между заголовком/вкладками/секциями панели (мокап: gap 18px). */
+/** Зазор между вкладками и секциями фильтров панели (мокап: gap 18px); заголовок больше не в
+ *  этой группе — его собственный отступ задаёт [ExpandedScreenTitle]. */
 private val PANEL_SECTION_GAP = 18.dp
-private val TITLE_FONT_SIZE = 20.sp
-private val TITLE_LINE_HEIGHT = 24.sp
 private val TAB_GAP = 6.dp
 private val TAB_RADIUS = 9.dp
 private val TAB_HORIZONTAL_PADDING = 12.dp

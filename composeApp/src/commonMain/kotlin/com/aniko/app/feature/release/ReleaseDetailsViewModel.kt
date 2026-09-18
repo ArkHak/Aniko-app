@@ -200,7 +200,7 @@ class ReleaseDetailsViewModel(
                 episodes = emptyList(),
                 isEpisodesStepLoading = true,
                 episodesStepError = null,
-                watchedOverrides = emptySet(),
+                watchedOverrides = emptyMap(),
                 localToggleOverrides = emptyMap(),
             )
         }
@@ -229,7 +229,7 @@ class ReleaseDetailsViewModel(
                 episodes = emptyList(),
                 isEpisodesStepLoading = true,
                 episodesStepError = null,
-                watchedOverrides = emptySet(),
+                watchedOverrides = emptyMap(),
                 localToggleOverrides = emptyMap(),
             )
         }
@@ -344,7 +344,7 @@ class ReleaseDetailsViewModel(
                 sources = sources,
                 selectedSourceId = source.id,
                 episodes = episodes,
-                watchedOverrides = emptySet(),
+                watchedOverrides = emptyMap(),
                 localToggleOverrides = emptyMap(),
             )
         }
@@ -412,7 +412,7 @@ class ReleaseDetailsViewModel(
                     sources = sources,
                     selectedSourceId = source.id,
                     episodes = episodes,
-                    watchedOverrides = emptySet(),
+                    watchedOverrides = emptyMap(),
                     localToggleOverrides = emptyMap(),
                 )
             }

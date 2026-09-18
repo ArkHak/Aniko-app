@@ -37,6 +37,7 @@ import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.adaptive.LocalGlassBottomInset
 import com.aniko.ui.component.AnixContentState
+import com.aniko.ui.component.ExpandedScreenTitle
 import com.aniko.ui.component.HorizontalPosterRail
 import com.aniko.ui.component.TitleCard
 import com.aniko.ui.i18n.LocalStrings
@@ -132,42 +133,58 @@ private fun HomeContent(
         modifier = modifier.fillMaxSize().testTag(AnixTestTags.HOME_SCREEN_ROOT),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().widthIn(max = dimens.contentMaxWidth),
-                // Liquid Glass (2026-09-11): нижний паддинг = обычный spaceM + фактическая высота
-                // плавающего таб-бара (`LocalGlassBottomInset`, `0.dp` вне Compact/до первого
-                // измерения бара) — иначе последний элемент рельсы прятался бы под баром вместо
-                // того, чтобы быть видимым СКВОЗЬ него (см. KDoc `LocalGlassBottomInset`/`App.kt`).
-                contentPadding =
-                    PaddingValues(
-                        top = dimens.spaceM,
-                        bottom = dimens.spaceM + LocalGlassBottomInset.current,
-                    ),
-                // Desktop (Expanded): мокап Claude Design (строка 757) задаёт gap 28dp между
-                // секциями Home — не токен `spaceL` (24dp), Compact/Medium сохраняют прежний
-                // отступ.
-                verticalArrangement =
-                    Arrangement.spacedBy(
-                        if (windowSize == AnixWindowSize.Expanded) HOME_EXPANDED_SECTION_GAP else dimens.spaceL,
-                    ),
-            ) {
-                // `AnixThemeTokens.dimens` — @Composable-аксессор, читать его внутри
-                // `LazyListScope`-функции (`homeContentItems`, не composable) нельзя: вычисляем
-                // ширину постера рельс здесь, в composable-скоупе, и передаём значением.
-                val railPosterWidth = if (windowSize.isTwoPane) dimens.posterWidthL else dimens.posterWidth
-                homeContentItems(
-                    state = state,
-                    windowSize = windowSize,
-                    strings = strings,
-                    viewModel = viewModel,
-                    onReleaseClick = onReleaseClick,
-                    onCatalogClick = onCatalogClick,
-                    onScheduleClick = onScheduleClick,
-                    onFilterClick = onFilterClick,
-                    onFeedClick = onFeedClick,
-                    onCollectionsClick = onCollectionsClick,
-                    railPosterWidth = railPosterWidth,
-                )
+            // Desktop (Expanded): заголовок вынесен из LazyColumn/её Arrangement.spacedBy(
+            // HOME_EXPANDED_SECTION_GAP) в обычный Column-контейнер вокруг неё — тот же приём,
+            // что уже применён в Catalog/Library/Schedule (см. KDoc ExpandedScreenTitle):
+            // ExpandedScreenTitle несёт собственный вертикальный отступ, а элемент LazyColumn
+            // получил бы ДОПОЛНИТЕЛЬНО gap 28dp сверху от Arrangement — отступ бы удвоился.
+            // widthIn(max = contentMaxWidth) переехал сюда же (раньше был на LazyColumn) — сам
+            // Column теперь центрируется в Box, LazyColumn просто занимает всё оставшееся место.
+            Column(modifier = Modifier.fillMaxSize().widthIn(max = dimens.contentMaxWidth)) {
+                if (windowSize == AnixWindowSize.Expanded) {
+                    ExpandedScreenTitle(text = strings.navHome)
+                }
+
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    // Liquid Glass (2026-09-11): нижний паддинг = обычный spaceM + фактическая
+                    // высота плавающего таб-бара (`LocalGlassBottomInset`, `0.dp` вне Compact/до
+                    // первого измерения бара) — иначе последний элемент рельсы прятался бы под
+                    // баром вместо того, чтобы быть видимым СКВОЗЬ него (см. KDoc
+                    // `LocalGlassBottomInset`/`App.kt`). На Expanded верхний паддинг ДО баннера
+                    // теперь только этот (без отдельного заголовка внутри списка) — заголовок
+                    // выше уже задал свой отступ сам.
+                    contentPadding =
+                        PaddingValues(
+                            top = dimens.spaceM,
+                            bottom = dimens.spaceM + LocalGlassBottomInset.current,
+                        ),
+                    // Desktop (Expanded): мокап Claude Design (строка 757) задаёт gap 28dp между
+                    // секциями Home — не токен `spaceL` (24dp), Compact/Medium сохраняют прежний
+                    // отступ.
+                    verticalArrangement =
+                        Arrangement.spacedBy(
+                            if (windowSize == AnixWindowSize.Expanded) HOME_EXPANDED_SECTION_GAP else dimens.spaceL,
+                        ),
+                ) {
+                    // `AnixThemeTokens.dimens` — @Composable-аксессор, читать его внутри
+                    // `LazyListScope`-функции (`homeContentItems`, не composable) нельзя: вычисляем
+                    // ширину постера рельс здесь, в composable-скоупе, и передаём значением.
+                    val railPosterWidth = if (windowSize.isTwoPane) dimens.posterWidthL else dimens.posterWidth
+                    homeContentItems(
+                        state = state,
+                        windowSize = windowSize,
+                        strings = strings,
+                        viewModel = viewModel,
+                        onReleaseClick = onReleaseClick,
+                        onCatalogClick = onCatalogClick,
+                        onScheduleClick = onScheduleClick,
+                        onFilterClick = onFilterClick,
+                        onFeedClick = onFeedClick,
+                        onCollectionsClick = onCollectionsClick,
+                        railPosterWidth = railPosterWidth,
+                    )
+                }
             }
         }
     }
@@ -190,8 +207,11 @@ private fun LazyListScope.homeContentItems(
     railPosterWidth: Dp,
 ) {
     // Мобильный макет Claude Design (2026-09-08): на телефоне Home открывается
-    // брендом + приветствием по времени суток; на Medium/Expanded заголовка нет
-    // (десктопный/планшетный артборд начинается сразу с баннера).
+    // брендом + приветствием по времени суток; на Medium заголовка нет вообще
+    // (планшетный артборд начинается сразу с баннера). Desktop (Expanded) с этого раунда тоже
+    // получил заголовок-страницу — [ExpandedScreenTitle], но он рендерится ВЫШЕ этой
+    // `LazyColumn` (см. [HomeContent]), а не как её item — иначе его встроенный отступ
+    // удвоился бы с `Arrangement.spacedBy(HOME_EXPANDED_SECTION_GAP)`.
     if (windowSize == AnixWindowSize.Compact) {
         item(key = "home_greeting_header") {
             HomeGreetingHeader()

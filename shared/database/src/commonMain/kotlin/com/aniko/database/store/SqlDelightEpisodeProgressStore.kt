@@ -33,12 +33,12 @@ class SqlDelightEpisodeProgressStore(
     override fun observeWatchedPositions(
         releaseId: ReleaseId,
         sourceId: Int,
-    ): Flow<Set<Int>> =
+    ): Flow<Map<Int, Boolean>> =
         database.episodeProgressQueries
             .observeWatchedPositions(releaseId.toLong(), sourceId.toLong())
             .asFlow()
             .mapToList(dispatcher)
-            .map { positions -> positions.map { it.toInt() }.toSet() }
+            .map { rows -> rows.associate { it.position.toInt() to it.is_watched } }
 
     override suspend fun setWatched(
         releaseId: ReleaseId,

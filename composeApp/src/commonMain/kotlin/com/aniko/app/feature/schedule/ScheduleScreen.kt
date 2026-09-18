@@ -44,6 +44,7 @@ import com.aniko.ui.adaptive.LocalGlassBottomInset
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.component.ChipRow
+import com.aniko.ui.component.ExpandedScreenTitle
 import com.aniko.ui.component.ProgressRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
@@ -142,61 +143,56 @@ private fun ScheduleContent(
     val columnsListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(vertical = dimens.spaceM),
-        verticalArrangement = Arrangement.spacedBy(dimens.spaceM),
-    ) {
-        // Track A (сверка Compact-раскладки, 2026-09-04): макет хочет 20sp ExtraBold(800) вместо
-        // дефолтного titleLarge (22sp Bold) — общий заголовок экрана, не специфичен раскладке
-        // дней ниже (Compact/Medium/Expanded различаются только в ScheduleDaysList/
-        // ScheduleColumns), поэтому правится как есть.
-        Text(
-            text = title,
-            style =
-                MaterialTheme.typography.titleLarge.copy(
-                    fontSize = 20.sp,
-                    lineHeight = 26.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                ),
-            modifier = Modifier.padding(horizontal = dimens.spaceM),
-        )
+    // Track A (сверка Compact-раскладки, 2026-09-04): общий заголовок экрана, не специфичен
+    // раскладке дней ниже (Compact/Medium/Expanded различаются только в ScheduleDaysList/
+    // ScheduleColumns) — теперь [ExpandedScreenTitle], единый атом для заголовков-страниц (см.
+    // его KDoc). Заголовок вынесен из общего Arrangement.spacedBy(dimens.spaceM)/вертикального
+    // паддинга колонки — он сам задаёт свой отступ, остаток контента собран во вложенную колонку
+    // со своим нижним паддингом, иначе отступ бы удвоился на границе заголовка.
+    Column(modifier = Modifier.fillMaxSize()) {
+        ExpandedScreenTitle(text = title)
 
-        when (windowSize) {
-            AnixWindowSize.Expanded ->
-                ScheduleExpandedGrid(
-                    schedule = schedule,
-                    strings = strings,
-                    today = today,
-                    onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
-                )
+        Column(
+            modifier = Modifier.fillMaxSize().padding(bottom = dimens.spaceM),
+            verticalArrangement = Arrangement.spacedBy(dimens.spaceM),
+        ) {
+            when (windowSize) {
+                AnixWindowSize.Expanded ->
+                    ScheduleExpandedGrid(
+                        schedule = schedule,
+                        strings = strings,
+                        today = today,
+                        onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
+                    )
 
-            AnixWindowSize.Medium -> {
-                DaySelector(
-                    selectedDay = selectedDay,
-                    today = today,
-                    strings = strings,
-                    onDaySelected = { day ->
-                        onDaySelected(day)
-                        val index = WeekDay.entries.indexOf(day)
-                        coroutineScope.launch { columnsListState.animateScrollToItem(index) }
-                    },
-                )
-                ScheduleColumns(
-                    schedule = schedule,
-                    strings = strings,
-                    listState = columnsListState,
-                    today = today,
-                    onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
-                )
+                AnixWindowSize.Medium -> {
+                    DaySelector(
+                        selectedDay = selectedDay,
+                        today = today,
+                        strings = strings,
+                        onDaySelected = { day ->
+                            onDaySelected(day)
+                            val index = WeekDay.entries.indexOf(day)
+                            coroutineScope.launch { columnsListState.animateScrollToItem(index) }
+                        },
+                    )
+                    ScheduleColumns(
+                        schedule = schedule,
+                        strings = strings,
+                        listState = columnsListState,
+                        today = today,
+                        onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
+                    )
+                }
+
+                AnixWindowSize.Compact ->
+                    ScheduleDaysList(
+                        schedule = schedule,
+                        strings = strings,
+                        today = today,
+                        onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
+                    )
             }
-
-            AnixWindowSize.Compact ->
-                ScheduleDaysList(
-                    schedule = schedule,
-                    strings = strings,
-                    today = today,
-                    onReleaseClick = { releaseId -> titleNavigator.openTitle(releaseId) },
-                )
         }
     }
 }

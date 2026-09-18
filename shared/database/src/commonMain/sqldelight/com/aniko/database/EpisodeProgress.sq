@@ -27,5 +27,9 @@ ON CONFLICT(release_id, source_id, position) DO UPDATE SET
 observeWatched:
 SELECT is_watched FROM episodeProgress WHERE release_id = ? AND source_id = ? AND position = ?;
 
+-- Весь известный локальный статус (и watched, и явный unwatched) источника релиза — БЕЗ фильтра
+-- по is_watched. Фильтр `is_watched = 1` тут раньше терял явный локальный false (снятая пользователем
+-- отметка "просмотрено" неотличима от строки, которую вообще не трогали) — баг, описанный в KDoc
+-- `EpisodeProgressStore.observeWatchedPositions` и `mergeWatchedOverrides` (ReleaseDetailsContract.kt).
 observeWatchedPositions:
-SELECT position FROM episodeProgress WHERE release_id = ? AND source_id = ? AND is_watched = 1;
+SELECT position, is_watched FROM episodeProgress WHERE release_id = ? AND source_id = ?;

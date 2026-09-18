@@ -69,6 +69,7 @@ import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.component.ChipRow
+import com.aniko.ui.component.ExpandedScreenTitle
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.testing.AnixTestTags
@@ -112,6 +113,13 @@ import org.koin.compose.viewmodel.koinViewModel
  * под мокап Claude Design. Живой фидбег пользователя (2026-09-11) развернул именно эту часть
  * решения: тема вернулась на `SettingsScreen` (см. её KDoc) — `ProfileScreen` больше не принимает
  * `themeMode`/`onThemeModeChange` и не рисует переключатель темы.
+ *
+ * Unified Expanded title (2026-09-18): на [com.aniko.ui.adaptive.AnixWindowSize.Expanded] заголовок
+ * страницы — [ExpandedScreenTitle] (тот же атом, что у Каталога/Библиотеки/Расписания), встроенный
+ * в контент ([ProfileContent]), а не текст `TopAppBar.title` — тот на Expanded теперь пустой,
+ * `TopAppBar` остаётся только носителем колокольчика уведомлений/шестерёнки настроек
+ * ([ProfileTopBarActions]), которым больше негде рендериться (сайдбар/App.kt их не показывает).
+ * На Compact/Medium `TopAppBar.title` не меняется — заголовок там был и остаётся частью топбара.
  */
 @Suppress("LongMethod", "LongParameterList") // Экран остаётся тонким прокси без собственного
 // стейта; оставшихся параметров (5 колбэков + viewModel) всё ещё достаточно, чтобы сработало
@@ -130,6 +138,7 @@ fun ProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = LocalStrings.current
+    val windowSize = LocalAnixWindowSize.current
 
     // Обновляет бейдж непрочитанных уведомлений при каждой рекомпозиции экрана — в т.ч. при
     // возврате из `NotificationsScreen` (см. KDoc `ProfileUiState.unreadNotificationsCount`).
@@ -139,7 +148,10 @@ fun ProfileScreen(
         modifier = modifier.testTag(AnixTestTags.PROFILE_SCREEN_ROOT),
         topBar = {
             TopAppBar(
-                title = { Text(strings.profileTitle) },
+                // Desktop (Expanded): заголовок переехал в контент как [ExpandedScreenTitle]
+                // (см. KDoc экрана выше и `ProfileContent`) — здесь он больше не рисуется, но сам
+                // `TopAppBar` остаётся: колокольчику/шестерёнке в `actions` ниже больше негде жить.
+                title = { if (windowSize != AnixWindowSize.Expanded) Text(strings.profileTitle) },
                 actions = {
                     ProfileTopBarActions(
                         unreadNotificationsCount = uiState.unreadNotificationsCount,
@@ -403,60 +415,69 @@ private fun ProfileContent(
         )
     val pinnedBlock = movableSections.firstOrNull { it.first == pinnedSection }?.second
 
+    // Общая часть для обеих раскладок — ширина/скролл/вертикальные отступы. Горизонтальный
+    // spaceM Expanded-ветки НЕ здесь (см. ниже): раньше он висел прямо на этом Column и
+    // одинаково давил на все дети, включая заголовок — с приходом [ExpandedScreenTitle] (он же
+    // несёт свой spaceM по горизонтали) это удвоило бы отступ заголовка. Отступ переехал на
+    // вложенный `Column` с остальными секциями (см. `sectionsModifier` ниже), заголовок
+    // остаётся вне него — тот же приём, что уже применён в Catalog/Library/Schedule.
     val columnModifier =
-        if (isExpanded) {
-            Modifier
-                .fillMaxSize()
-                .widthIn(max = dimens.contentMaxWidth)
-                .verticalScroll(rememberScrollState())
-                // Раньше Expanded-ветка обнуляла горизонтальные отступы секций
-                // (`sectionPadding = Modifier`) и не добавляла свой — контент печатался вплотную
-                // к краям окна (ревью F5, 2026-09-17). Остальные Expanded-экраны (Home/Schedule)
-                // используют `spaceM` по горизонтали — тот же токен и здесь.
-                .padding(horizontal = dimens.spaceM)
-                .padding(top = dimens.spaceM, bottom = dimens.spaceM + LocalGlassBottomInset.current)
-        } else {
-            Modifier
-                .fillMaxSize()
-                .widthIn(max = dimens.contentMaxWidth)
-                .verticalScroll(rememberScrollState())
-                // Liquid Glass (2026-09-11): нижний паддинг учитывает высоту плавающего
-                // таб-бара — см. KDoc `LocalGlassBottomInset`/аналогичное место в
-                // `HomeScreen.kt`. Профиль — таб-рут (см. KDoc [ProfileScreen] про P13.T2),
-                // поэтому у него тот же bottom bar под ним, что и у остальных корневых вкладок.
-                .padding(top = dimens.spaceM, bottom = dimens.spaceM + LocalGlassBottomInset.current)
-        }
+        Modifier
+            .fillMaxSize()
+            .widthIn(max = dimens.contentMaxWidth)
+            .verticalScroll(rememberScrollState())
+            // Liquid Glass (2026-09-11): нижний паддинг учитывает высоту плавающего таб-бара —
+            // см. KDoc `LocalGlassBottomInset`/аналогичное место в `HomeScreen.kt`. Профиль —
+            // таб-рут (см. KDoc [ProfileScreen] про P13.T2), поэтому у него тот же bottom bar
+            // под ним, что и у остальных корневых вкладок (в т.ч. на Expanded).
+            .padding(top = dimens.spaceM, bottom = dimens.spaceM + LocalGlassBottomInset.current)
+
+    // Раньше Expanded-ветка обнуляла горизонтальные отступы секций (`sectionPadding = Modifier`)
+    // и не добавляла свой — контент печатался вплотную к краям окна (ревью F5, 2026-09-17).
+    // Остальные Expanded-экраны (Home/Schedule) используют `spaceM` по горизонтали — тот же
+    // токен и здесь, только на уровне секций, не заголовка (см. комментарий выше).
+    val sectionsModifier = if (isExpanded) Modifier.padding(horizontal = dimens.spaceM) else Modifier
 
     Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
-        Column(
-            modifier = columnModifier,
-            horizontalAlignment = if (isExpanded) Alignment.Start else Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
-        ) {
-            ProfileHeader(
-                profile = profile,
-                onOpenLists = onOpenLists,
-                windowSize = windowSize,
-                modifier = sectionPadding,
-            )
-
-            pinnedBlock?.invoke()
-
-            ProfileHighlights(profile = profile, modifier = sectionPadding)
-
-            movableSections.forEach { (section, block) ->
-                if (section != pinnedSection) block()
+        Column(modifier = columnModifier) {
+            // Desktop (Expanded): единый заголовок-страница [ExpandedScreenTitle] — тот же атом,
+            // что и у Каталога/Библиотеки/Расписания (см. его KDoc), встроенный в контент вместо
+            // прежнего `TopAppBar.title` (см. KDoc [ProfileScreen]). На Compact/Medium заголовок
+            // остаётся в `TopAppBar`, здесь ничего не рисуется.
+            if (isExpanded) {
+                ExpandedScreenTitle(text = strings.profileTitle)
             }
 
-            HorizontalDivider(modifier = sectionPadding)
+            Column(
+                modifier = sectionsModifier,
+                horizontalAlignment = if (isExpanded) Alignment.Start else Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(dimens.spaceL),
+            ) {
+                ProfileHeader(
+                    profile = profile,
+                    onOpenLists = onOpenLists,
+                    windowSize = windowSize,
+                    modifier = sectionPadding,
+                )
 
-            Text(
-                text = strings.profilePrivacyTitle,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = sectionPadding,
-            )
-            PrivacySection(privacy = privacy, callbacks = callbacks, modifier = sectionPadding)
+                pinnedBlock?.invoke()
+
+                ProfileHighlights(profile = profile, modifier = sectionPadding)
+
+                movableSections.forEach { (section, block) ->
+                    if (section != pinnedSection) block()
+                }
+
+                HorizontalDivider(modifier = sectionPadding)
+
+                Text(
+                    text = strings.profilePrivacyTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = sectionPadding,
+                )
+                PrivacySection(privacy = privacy, callbacks = callbacks, modifier = sectionPadding)
+            }
         }
     }
 }

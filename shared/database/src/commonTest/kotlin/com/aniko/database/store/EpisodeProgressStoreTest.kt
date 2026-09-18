@@ -43,7 +43,7 @@ class EpisodeProgressStoreTest {
         }
 
     @Test
-    fun observeWatchedPositions_returnsOnlyWatchedPositionsForSource() =
+    fun observeWatchedPositions_returnsFullStateIncludingUnwatchedForSource() =
         runTest {
             store.setWatched(1, sourceId = 2, position = 1, isWatched = true, updatedAt = Instant.fromEpochMilliseconds(1_000))
             store.setWatched(1, sourceId = 2, position = 2, isWatched = false, updatedAt = Instant.fromEpochMilliseconds(1_000))
@@ -51,6 +51,8 @@ class EpisodeProgressStoreTest {
             // Другой источник той же серии — не должен попасть в выборку.
             store.setWatched(1, sourceId = 9, position = 1, isWatched = true, updatedAt = Instant.fromEpochMilliseconds(1_000))
 
-            assertEquals(setOf(1, 3), store.observeWatchedPositions(1, sourceId = 2).first())
+            // Позиция 2 — явный локальный false — должна остаться в карте, а не выпасть из выборки
+            // (баг, который это исправление устраняет: явный unwatch неотличим от "не трогали").
+            assertEquals(mapOf(1 to true, 2 to false, 3 to true), store.observeWatchedPositions(1, sourceId = 2).first())
         }
 }

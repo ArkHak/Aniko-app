@@ -45,11 +45,11 @@ data class ReleaseDetailsUiState(
     val isEpisodesStepLoading: Boolean = false,
     val episodesStepError: LoadError? = null,
     // --- D4: мерж watched/unwatched для EpisodeGrid текущего selectedSourceId ---
-    // Позиции, которые локальный стор (EpisodeRepository.observeWatchedPositions) считает
-    // просмотренными — исторический оверрайд поверх Episode.isWatched с сервера. См. KDoc
-    // [mergeWatchedOverrides] про известное ограничение: этот набор НЕ умеет выразить "локально
-    // явно снята отметка" отдельно от "локально не трогали вообще".
-    val watchedOverrides: Set<Int> = emptySet(),
+    // Весь известный локальный статус источника (EpisodeRepository.observeWatchedPositions) —
+    // позиция → is_watched, исторический оверрайд поверх Episode.isWatched с сервера. Несёт ОБЕ
+    // стороны явного локального статуса (и watched=true, и явный unwatched=false), не только
+    // положительную — см. KDoc [mergeWatchedOverrides].
+    val watchedOverrides: Map<Int, Boolean> = emptyMap(),
     // Явные тогглы, сделанные ПРЯМО НА ЭТОМ ЭКРАНЕ за время текущей сессии (долгий тап по ячейке
     // EpisodeGrid, см. ReleaseDetailsViewModel.toggleWatched) — единственный способ в рамках
     // публичного API трека C корректно выразить обе стороны D4 ("локальный watched=true бьёт
@@ -87,29 +87,22 @@ data class PlayTarget(
  * Порядок приоритета на позицию:
  * 1. [ReleaseDetailsUiState.localToggleOverrides] — явный тоггл пользователя в этой сессии этого
  *    экрана, выигрывает всегда (обе стороны: и watched=true, и unwatched=false).
- * 2. [ReleaseDetailsUiState.watchedOverrides] — исторический локальный стор, ТОЛЬКО положительная
- *    сторона (см. ниже про ограничение).
- * 3. `episode.isWatched` с сервера — дефолт.
- *
- * Известное ограничение фундамента (не устранимо в пределах территории трека C —
- * `EpisodeProgressStore`/`EpisodeRepository` в `shared/database`/`shared/data` вне зоны
- * ответственности): публичный `EpisodeRepository.observeWatchedPositions` отдаёт только позиции
- * с `is_watched = 1`, поэтому "локально снятая до открытия этого экрана отметка" неотличима от
- * "локально вообще не трогали" — обе дают отсутствие в [ReleaseDetailsUiState.watchedOverrides].
- * Из-за этого через [watchedOverrides] корректно работает только половина D4 (локальный
- * watched=true бьёт серверный false). Вторую половину (локальный unwatched=false бьёт серверный
- * true) выражает [localToggleOverrides] — но только для тогглов, сделанных в текущей сессии этого
- * экрана, не для истории до его открытия.
+ * 2. [ReleaseDetailsUiState.watchedOverrides] — весь известный локальный статус из
+ *    `EpisodeProgressStore` (позиция → is_watched), обе стороны: и локальный watched=true бьёт
+ *    серверный false, и локальный явный unwatched=false бьёт серверный true — в том числе для
+ *    отметок, снятых/поставленных ДО открытия этого экрана (история, не только текущая сессия).
+ * 3. `episode.isWatched` с сервера — дефолт, если позиция вообще не встречалась локально.
  */
 fun List<Episode>.mergeWatchedOverrides(
-    watchedOverrides: Set<Int>,
+    watchedOverrides: Map<Int, Boolean>,
     localToggleOverrides: Map<Int, Boolean>,
 ): List<Episode> {
     if (watchedOverrides.isEmpty() && localToggleOverrides.isEmpty()) return this
     return map { episode ->
         val merged =
             localToggleOverrides[episode.position]
-                ?: (episode.position in watchedOverrides || episode.isWatched)
+                ?: watchedOverrides[episode.position]
+                ?: episode.isWatched
         if (merged == episode.isWatched) episode else episode.copy(isWatched = merged)
     }
 }

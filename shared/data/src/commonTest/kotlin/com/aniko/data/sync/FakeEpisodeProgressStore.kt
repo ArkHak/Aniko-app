@@ -26,14 +26,12 @@ class FakeEpisodeProgressStore : EpisodeProgressStore {
     override fun observeWatchedPositions(
         releaseId: ReleaseId,
         sourceId: Int,
-    ): Flow<Set<Int>> =
+    ): Flow<Map<Int, Boolean>> =
         flowOf(
             watched
                 .filterKeys { it.first == releaseId && it.second == sourceId }
-                .filterValues { it }
-                .keys
-                .map { it.third }
-                .toSet(),
+                .entries
+                .associate { (key, isWatched) -> key.third to isWatched },
         )
 
     override suspend fun setWatched(

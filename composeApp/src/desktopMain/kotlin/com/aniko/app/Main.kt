@@ -16,6 +16,7 @@ import com.aniko.app.navigation.DeepLinkDispatcher
 import com.aniko.app.window.AnikoDesktopChrome
 import com.aniko.app.window.AnixMenuBar
 import com.aniko.data.locale.LocaleStore
+import com.aniko.data.theme.ThemeStore
 import com.aniko.player.LocalDesktopWindow
 import org.koin.compose.koinInject
 
@@ -94,6 +95,15 @@ private fun runAnikoApp(args: Array<String>) {
             val localeStore = koinInject<LocaleStore>()
             val languageTag by localeStore.languageTag.collectAsStateWithLifecycle()
 
+            // Тема хрома (P5.T6 редизайн 2026-09-17): та же логика выбора, что и в App()/
+            // AppTheme (null/не "dark" → светлая, системная тема macOS не учитывается, см. KDoc
+            // AppTheme) — читается тут же напрямую, отдельно от App(), по той же причине, что и
+            // localeStore/backHandler выше (AnikoDesktopChrome рисуется СНАРУЖИ App(), не видит
+            // его CompositionLocal). См. AnikoDesktopChrome.kt/TrafficLightButtons.kt.
+            val themeStore = koinInject<ThemeStore>()
+            val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
+            val darkTheme = themeMode == "dark"
+
             AnixMenuBar(
                 onExit = ::exitApplication,
                 onBack = { backHandler() },
@@ -109,7 +119,7 @@ private fun runAnikoApp(args: Array<String>) {
             // модуле `compose-ui`, недоступен отсюда) — заводим свой публичный аналог.
             CompositionLocalProvider(LocalDesktopWindow provides window) {
                 if (USE_CUSTOM_CHROME) {
-                    AnikoDesktopChrome {
+                    AnikoDesktopChrome(darkTheme = darkTheme) {
                         App(onBackHandlerReady = { backHandler = it })
                     }
                 } else {

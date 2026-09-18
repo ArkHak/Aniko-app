@@ -3,6 +3,7 @@ package com.aniko.ui.theme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -75,3 +76,18 @@ object AnixThemeTokens {
     val colors: AnixColors
         @Composable get() = LocalAnixColors.current
 }
+
+/**
+ * Резолвит [ColorScheme] темы БЕЗ прохода через [AppTheme] (без его фонового `Box.fillMaxSize`
+ * и `SystemBarStyleEffect`) — для composable-поддеревьев, которые физически рисуются ДО вызова
+ * [AppTheme] в дереве композиции и поэтому не видят его `CompositionLocalProvider` (сиблинги, а
+ * не потомки). Единственный текущий адресат (2026-09-17): кастомный оконный хром Desktop
+ * (`composeApp` → `AnikoDesktopChrome`/`TrafficLightButtons`) — там верхняя draggable-полоса
+ * рисуется в `Main.kt` ВОКРУГ `App() { AppTheme { ... } }`, а не внутри него, так что
+ * `MaterialTheme.colorScheme` в её месте иначе разрешался бы в дефолтную (не Anix) схему M3.
+ * Не `@Composable` — сами `AnixDarkColors`/`AnixLightColors` обычные `val`, вычислений не требуют.
+ */
+fun anixColorScheme(darkTheme: Boolean): ColorScheme = if (darkTheme) AnixDarkColors else AnixLightColors
+
+/** Токен-аналог [anixColorScheme] для [AnixColors] (см. её KDoc про назначение полей). */
+fun anixExtraColors(darkTheme: Boolean): AnixColors = if (darkTheme) AnixDarkExtraColors else AnixLightExtraColors

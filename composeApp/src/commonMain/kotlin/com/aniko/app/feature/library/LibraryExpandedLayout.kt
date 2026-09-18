@@ -42,6 +42,7 @@ import com.aniko.ui.component.AnixAsyncImage
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLoadingState
+import com.aniko.ui.component.ExpandedScreenTitle
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.displayName
 import com.aniko.ui.theme.AnixThemeTokens
@@ -68,15 +69,17 @@ internal fun LibraryExpandedContent(
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
 
+    // Заголовок вынесен из общего Arrangement.spacedBy(dimens.spaceM)/горизонтального паддинга
+    // колонки: ExpandedScreenTitle сам задаёт свой отступ (единый паттерн для всех
+    // Expanded-заголовков, см. его KDoc), поэтому остаток контента (чипы + список) собран в
+    // отдельную вложенную колонку со своим горизонтальным паддингом — иначе отступ бы удвоился
+    // на границе заголовка и совпал бы с ним случайно только по горизонтали.
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
                 .widthIn(max = dimens.contentMaxWidth)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = dimens.spaceM)
-                .padding(vertical = dimens.spaceM),
-        verticalArrangement = Arrangement.spacedBy(dimens.spaceM),
+                .verticalScroll(rememberScrollState()),
     ) {
         LibraryExpandedHeader(
             title = strings.navLibrary,
@@ -84,25 +87,33 @@ internal fun LibraryExpandedContent(
             onShuffleClick = onShuffleClick,
         )
 
-        LibraryExpandedChips(
-            selectedTab = selectedTab,
-            onTabSelected = onTabSelected,
-        )
+        Column(
+            modifier = Modifier.padding(horizontal = dimens.spaceM).padding(bottom = dimens.spaceM),
+            verticalArrangement = Arrangement.spacedBy(dimens.spaceM),
+        ) {
+            LibraryExpandedChips(
+                selectedTab = selectedTab,
+                onTabSelected = onTabSelected,
+            )
 
-        LibraryExpandedListState(
-            pagingState = pagingState,
-            selectedTab = selectedTab,
-            menuReleaseId = menuReleaseId,
-            onMenuReleaseIdChange = onMenuReleaseIdChange,
-            onReleaseClick = onReleaseClick,
-            viewModel = viewModel,
-        )
+            LibraryExpandedListState(
+                pagingState = pagingState,
+                selectedTab = selectedTab,
+                menuReleaseId = menuReleaseId,
+                onMenuReleaseIdChange = onMenuReleaseIdChange,
+                onReleaseClick = onReleaseClick,
+                viewModel = viewModel,
+            )
+        }
     }
 }
 
 /**
- * Заголовок «My Lists» (Manrope 800 20px) + квадратная кнопка shuffle 32×32 radius 9
- * на фоне `overlay06` — точная копия desktop-ряда мокапа.
+ * Заголовок «My Lists» ([ExpandedScreenTitle]) + квадратная кнопка shuffle 32×32 radius 9
+ * на фоне `overlay06` — тот же desktop-ряд мокапа. Кнопка получает собственный `end`-паддинг
+ * [AnixThemeTokens.dimens.spaceM], чтобы её правый край совпадал с правым краем контента ниже
+ * (тот же токен, только применённый на вложенной колонке в [LibraryExpandedContent]) — левый край
+ * заголовка уже выровнен автоматически встроенным отступом [ExpandedScreenTitle].
  */
 @Composable
 private fun LibraryExpandedHeader(
@@ -113,20 +124,14 @@ private fun LibraryExpandedHeader(
 ) {
     val strings = LocalStrings.current
     val colors = AnixThemeTokens.colors
+    val dimens = AnixThemeTokens.dimens
 
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().padding(end = dimens.spaceM),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = title,
-            style =
-                MaterialTheme.typography.headlineMedium.copy(
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                ),
-        )
+        ExpandedScreenTitle(text = title)
 
         IconButton(
             onClick = onShuffleClick,

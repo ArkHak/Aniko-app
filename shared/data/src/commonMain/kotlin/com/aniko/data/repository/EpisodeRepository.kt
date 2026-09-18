@@ -204,11 +204,14 @@ class EpisodeRepository(
         position: Int,
     ): Flow<Boolean> = episodeProgressStore.observeWatched(releaseId, sourceId, position)
 
-    /** Все просмотренные позиции релиза в рамках источника — для массовой отрисовки списка серий. */
+    /**
+     * Весь известный локальный статус позиций релиза в рамках источника (позиция → is_watched),
+     * включая явный unwatched — прямой passthrough [episodeProgressStore].
+     */
     fun observeWatchedPositions(
         releaseId: Int,
         sourceId: Int,
-    ): Flow<Set<Int>> = episodeProgressStore.observeWatchedPositions(releaseId, sourceId)
+    ): Flow<Map<Int, Boolean>> = episodeProgressStore.observeWatchedPositions(releaseId, sourceId)
 
     suspend fun markWatched(
         releaseId: Int,

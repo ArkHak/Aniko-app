@@ -18,11 +18,18 @@ interface EpisodeProgressStore {
         position: Int,
     ): Flow<Boolean>
 
-    /** Все просмотренные позиции релиза в рамках источника — для массовой отрисовки списка серий. */
+    /**
+     * Весь известный локальный статус позиций релиза в рамках источника — позиция → is_watched,
+     * БЕЗ фильтра по значению. Раньше отдавал только позиции с `is_watched = true` (`Set<Int>`),
+     * из-за чего явный локальный "не просмотрено" был неотличим от "вообще не трогали" — карта
+     * сохраняет обе стороны, чтобы явный unwatch пользователя не откатывался обратно в watched
+     * после ухода с экрана/перезапуска (см. KDoc `mergeWatchedOverrides` в
+     * `ReleaseDetailsContract.kt`).
+     */
     fun observeWatchedPositions(
         releaseId: ReleaseId,
         sourceId: Int,
-    ): Flow<Set<Int>>
+    ): Flow<Map<Int, Boolean>>
 
     suspend fun setWatched(
         releaseId: ReleaseId,
