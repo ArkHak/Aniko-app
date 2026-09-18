@@ -44,6 +44,17 @@ import org.koin.compose.viewmodel.koinViewModel
  *   Compact/Medium тайтл открывается полноэкранным маршрутом (`AdaptiveTitleNavigator`,
  *   `panesEnabled` в `App.kt` — `true` только на `Expanded`).
  *
+ * [listPane] вызывается РОВНО из одного места композиции (фикс 2026-09-18, «каталог прыгает
+ * наверх при открытии карточки»): раньше список рисовался в двух разных позициях — отдельная
+ * early-return ветка для «ящика нет» и первый ребёнок [Box] для «ящик есть». Открытие/закрытие
+ * ящика переносило список между этими позициями, и всё его поддерево (включая `LazyGrid` со
+ * скроллом) уничтожалось и создавалось заново с позиции 0 — `rememberSaveable` здесь не
+ * спасает, потому что при переносе между call site внутри одного SaveableStateRegistry нода
+ * просто unregister'ится, не дожидаясь `performSave()`. Теперь список — всегда первый ребёнок
+ * единственного [Box], а ящик — условный второй: поддерево списка не покидает композицию, и
+ * скролл живёт сам, без каких-либо изменений в экранах-списках (Каталог/Главная/Библиотека/
+ * Расписание — все четыре чинятся этим одним местом, см. `AppNavGraph.kt`).
+ *
  * Скрим под ящиком не рисуется (в мокапе его нет — список остаётся читаемым слева от ящика);
  * клик по списку под ящиком не перехватывается специально — клик по другой карточке просто
  * заменяет содержимое ящика ([DetailPaneStack.open] сбрасывает стек до нового `Details`).
@@ -54,43 +65,43 @@ fun ListDetailHost(
     modifier: Modifier = Modifier,
     listPane: @Composable () -> Unit,
 ) {
-    val top = paneStack.top
-    if (LocalAnixWindowSize.current != AnixWindowSize.Expanded || top == null) {
-        listPane()
-        return
-    }
+    val drawerRoute =
+        if (LocalAnixWindowSize.current == AnixWindowSize.Expanded) paneStack.top else null
 
     Box(modifier = modifier.fillMaxSize()) {
         listPane()
 
-        // border-left 1px --w09 из мокапа — рисуем через drawBehind (Modifier.border умеет
-        // только все четыре стороны), поверх собственного фона ящика.
-        val borderColor = AnixThemeTokens.colors.overlay09
-        Box(
-            modifier =
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .fillMaxHeight()
-                    .width(DETAIL_DRAWER_WIDTH)
-                    // box-shadow:-24px 0 60px rgba(0,0,0,0.4) — Compose не даёт задать смещение
-                    // и размытие тени отдельно; 24dp elevation с прозрачным клипом — ближайший
-                    // встроенный эквивалент (тень уходит влево от правого ящика симметрично).
-                    .shadow(DETAIL_DRAWER_SHADOW_ELEVATION, RectangleShape, clip = false)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .drawBehind {
-                        drawLine(
-                            color = borderColor,
-                            start = Offset.Zero,
-                            end = Offset(0f, size.height),
-                            strokeWidth = DETAIL_DRAWER_BORDER_WIDTH.toPx(),
-                        )
-                    },
-        ) {
-            // key(route) обязателен: ящик живёт вне NavBackStackEntry, у него нет собственного
-            // ViewModelStoreOwner на маршрут — без key(...) koinViewModel() внутри DetailPaneContent
-            // возьмёт ОДИН И ТОТ ЖЕ ViewModelStoreOwner для всех тайтлов подряд, и при клике по
-            // другому релизу в списке пользователь увидит старые данные предыдущего тайтла.
-            key(top) { DetailPaneContent(top) }
+        if (drawerRoute != null) {
+            // border-left 1px --w09 из мокапа — рисуем через drawBehind (Modifier.border умеет
+            // только все четыре стороны), поверх собственного фона ящика.
+            val borderColor = AnixThemeTokens.colors.overlay09
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .fillMaxHeight()
+                        .width(DETAIL_DRAWER_WIDTH)
+                        // box-shadow:-24px 0 60px rgba(0,0,0,0.4) — Compose не даёт задать смещение
+                        // и размытие тени отдельно; 24dp elevation с прозрачным клипом — ближайший
+                        // встроенный эквивалент (тень уходит влево от правого ящика симметрично).
+                        .shadow(DETAIL_DRAWER_SHADOW_ELEVATION, RectangleShape, clip = false)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .drawBehind {
+                            drawLine(
+                                color = borderColor,
+                                start = Offset.Zero,
+                                end = Offset(0f, size.height),
+                                strokeWidth = DETAIL_DRAWER_BORDER_WIDTH.toPx(),
+                            )
+                        },
+            ) {
+                // key(route) обязателен: ящик живёт вне NavBackStackEntry, у него нет собственного
+                // ViewModelStoreOwner на маршрут — без key(...) koinViewModel() внутри
+                // DetailPaneContent возьмёт ОДИН И ТОТ ЖЕ ViewModelStoreOwner для всех тайтлов
+                // подряд, и при клике по другому релизу в списке пользователь увидит старые
+                // данные предыдущего тайтла.
+                key(drawerRoute) { DetailPaneContent(drawerRoute) }
+            }
         }
     }
 }

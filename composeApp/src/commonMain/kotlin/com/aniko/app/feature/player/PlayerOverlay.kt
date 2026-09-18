@@ -64,6 +64,7 @@ import com.aniko.player.EmbedVideoController
 import com.aniko.player.EmbedVideoState
 import com.aniko.player.isEpisodeFinished
 import com.aniko.player.isNearEnd
+import com.aniko.player.playerOpensFullscreen
 import com.aniko.player.secondsToEpisodeEnd
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.VoiceTypeRow
@@ -107,13 +108,18 @@ import org.koin.compose.koinInject
  * функциональная политика оверлея: если скрыть chrome не удалось, fallback — текущее поведение
  * «наш UI побеждает», никогда — потеря управления.
  *
- * @param onBack выход из экрана плеера. Используется только в no-bridge fullscreen
- * (`!state.isVideoFound`): там стрелка «назад» не может свернуть в compact, потому что
- * `CompactVideoGestureLayer` запирает embed-страницу, а мост не управляет видео. В обычном
- * bridge-fullscreen стрелка сворачивает в compact через [onCollapseFullscreen], поэтому этот
- * колбэк — fallback-выход (единственный выход на iOS без edge-swipe, см. абзац выше).
+ * @param onBack выход из экрана плеера. Используется в двух случаях: (1) no-bridge fullscreen
+ * (`!state.isVideoFound`) — там стрелка «назад» не может свернуть в compact, потому что
+ * `CompactVideoGestureLayer` запирает embed-страницу, а мост не управляет видео; (2) платформы,
+ * открывающие плеер сразу в fullscreen ([com.aniko.player.playerOpensFullscreen] == true,
+ * Desktop) — там compact-режим не самостоятельное состояние, и сворачивание в него было лишним
+ * промежуточным экраном (фикс 2026-09-18, см. KDoc `PlayerTopBar`). В bridge-fullscreen на
+ * Android/iOS стрелка сворачивает в compact через [onCollapseFullscreen], поэтому этот колбэк —
+ * fallback-выход (единственный выход на iOS без edge-swipe, см. абзац выше).
  * @param onCollapseFullscreen сворачивает fullscreen обратно в компактный режим (P13) — просто
- * смена раскладки без навигации. При `bridgeActive` именно это делает стрелка «назад».
+ * смена раскладки без навигации. При `bridgeActive` именно это делает стрелка «назад» на
+ * платформах, где compact-режим — самостоятельное состояние ([com.aniko.player.playerOpensFullscreen]
+ * == false).
  * @param onEpisodeNearEnd вызывается, когда серия подходит к концу — сюда подвешена авто-отметка
  * «просмотрено» (P8.T8). Порог — общий с баннером ([isNearEnd] из `:shared:player`), сознательно
  * один и тот же на обе фичи.
@@ -313,9 +319,15 @@ fun PlayerOverlay(
 /**
  * Стрелка «назад» + PiP-заглушка (P8.T3).
  *
- * Семантика стрелки зависит от [bridgeActive]: при активном мосте она сворачивает fullscreen
- * в compact ([onCollapseFullscreen]), при неактивном — выходит из экрана ([onBack]), чтобы не
- * запереть пользователя в неуправляемом compact-режиме.
+ * Семантика стрелки зависит от [bridgeActive] И платформы: при активном мосте она сворачивает
+ * fullscreen в compact ([onCollapseFullscreen]) — но только там, где compact-режим реально
+ * существует как самостоятельное состояние ([playerOpensFullscreen] == false, Android/iOS:
+ * плеер открывается в compact, fullscreen — расширение поверх него). На платформах, где плеер
+ * открывается сразу в fullscreen (Desktop), compact-панель пользователь никогда не видел и не
+ * выбирал — сворачивание в неё первым «назад» выглядело как лишний промежуточный экран с
+ * непонятными контролами (живой фидбек 2026-09-18), поэтому там стрелка сразу выходит из
+ * экрана ([onBack]). При неактивном мосте — тоже [onBack], чтобы не запереть пользователя в
+ * неуправляемом compact-режиме.
  */
 @Composable
 private fun PlayerTopBar(
@@ -336,7 +348,7 @@ private fun PlayerTopBar(
             contentDescription = strings.backContentDescription,
             onClick = {
                 onInteraction()
-                if (bridgeActive) {
+                if (bridgeActive && !playerOpensFullscreen()) {
                     onCollapseFullscreen()
                 } else {
                     onBack()

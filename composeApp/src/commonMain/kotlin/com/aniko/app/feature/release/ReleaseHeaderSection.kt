@@ -358,25 +358,32 @@ private fun GenreChipRow(genres: List<String>) {
     }
 }
 
-/** Расширенные метаданные (P7.T7) — только поля из [ReleaseDetails], каждое опционально. */
+/**
+ * Расширенные метаданные (P7.T7) — только поля из [ReleaseDetails], каждое опционально.
+ *
+ * Редизайн 2026-09-18 (живой фидбек пользователя, «список выглядит скучно»): вместо строк
+ * «Метка: значение» каждый пункт — [InfoRow]-плитка с тематическим эмодзи в скруглённой
+ * подложке, меткой-капшном и значением полужирным. Эмодзи — часть оформления (как иконка), а
+ * не локализуемый текст, поэтому задаются прямо здесь, а не в `Strings`.
+ */
 @Composable
 private fun MetadataSection(details: ReleaseDetails?) {
     if (details == null) return
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
 
-    Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
-        InfoRow(label = strings.titleDetailStudio, value = details.studio)
-        InfoRow(label = strings.titleDetailCountry, value = details.country)
-        InfoRow(label = strings.titleDetailAuthor, value = details.author)
-        InfoRow(label = strings.titleDetailDirector, value = details.director)
-        InfoRow(label = strings.titleDetailSeason, value = details.season)
-        InfoRow(label = strings.titleDetailReleaseDate, value = details.releaseDate)
-        InfoRow(label = strings.titleDetailAgeRating, value = details.ageRating)
-        InfoRow(label = strings.titleDetailEpisodeDuration, value = details.duration?.toString())
-        InfoRow(label = strings.titleDetailCategory, value = details.category)
-        InfoRow(label = strings.titleDetailSource, value = details.source)
-        InfoRow(label = strings.titleDetailTranslators, value = details.translators)
+    Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
+        InfoRow(emoji = "🎬", label = strings.titleDetailStudio, value = details.studio)
+        InfoRow(emoji = "🌍", label = strings.titleDetailCountry, value = details.country)
+        InfoRow(emoji = "✍️", label = strings.titleDetailAuthor, value = details.author)
+        InfoRow(emoji = "🎥", label = strings.titleDetailDirector, value = details.director)
+        InfoRow(emoji = "📅", label = strings.titleDetailSeason, value = details.season)
+        InfoRow(emoji = "🗓️", label = strings.titleDetailReleaseDate, value = details.releaseDate)
+        InfoRow(emoji = "🔞", label = strings.titleDetailAgeRating, value = details.ageRating)
+        InfoRow(emoji = "⏱️", label = strings.titleDetailEpisodeDuration, value = details.duration?.toString())
+        InfoRow(emoji = "📺", label = strings.titleDetailCategory, value = details.category)
+        InfoRow(emoji = "📖", label = strings.titleDetailSource, value = details.source)
+        InfoRow(emoji = "🎙️", label = strings.titleDetailTranslators, value = details.translators)
     }
 }
 
@@ -406,16 +413,50 @@ private fun ScreenshotRail(urls: List<String>) {
 private fun InfoRow(
     label: String,
     value: String?,
+    emoji: String? = null,
 ) {
     if (value.isNullOrBlank()) return
     val dimens = AnixThemeTokens.dimens
-    Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
-        Text(
-            text = "$label:",
-            style = MaterialTheme.typography.bodySmall,
-            color = AnixThemeTokens.colors.textSecondary60,
-        )
-        Text(text = value, style = MaterialTheme.typography.bodySmall)
+
+    // Без эмодзи (emoji == null) — прежний компактный вариант «Метка: значение» одной строкой:
+    // он остаётся в шапке рядом с постером ([WideHeaderLayout]), где плитка с подложкой была бы
+    // избыточной. Плиточный вид с эмодзи — у секции расширенных метаданных (см. [MetadataSection]).
+    if (emoji == null) {
+        Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceXs)) {
+            Text(
+                text = "$label:",
+                style = MaterialTheme.typography.bodySmall,
+                color = AnixThemeTokens.colors.textSecondary60,
+            )
+            Text(text = value, style = MaterialTheme.typography.bodySmall)
+        }
+        return
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+    ) {
+        // Эмодзи-«иконка» пункта на скруглённой подложке — визуальный якорь строки (см. KDoc
+        // [MetadataSection]). Эмодзи декоративный, поэтому без contentDescription: смысл строки
+        // целиком несут метка и значение рядом.
+        Box(
+            modifier =
+                Modifier
+                    .size(INFO_ROW_EMOJI_BOX_SIZE)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(dimens.cornerM)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text = emoji, style = MaterialTheme.typography.titleMedium)
+        }
+        Column {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = AnixThemeTokens.colors.textSecondary60,
+            )
+            Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 
@@ -1064,6 +1105,9 @@ private const val GRADE_ROUNDING_FACTOR = 100.0
 private val SCREENSHOT_WIDTH = 200.dp
 private const val SCREENSHOT_ASPECT_RATIO = 16f / 9f
 private val PLAY_SPINNER_STROKE = 2.dp
+
+/** [InfoRow] — размер квадратной подложки под эмодзи-«иконку» пункта метаданных. */
+private val INFO_ROW_EMOJI_BOX_SIZE = 36.dp
 
 // ---- Wide header genre chips: тот же визуальный язык, что у выбранного чипа
 // `AnixFilterChipRow` (primary-акцент, cornerPill, 12sp/600) — read-only, неинтерактивная копия.

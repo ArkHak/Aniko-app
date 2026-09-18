@@ -71,6 +71,13 @@ import org.koin.compose.viewmodel.koinViewModel
  * embed-страницу за жестовым слоем `CompactVideoGestureLayer`, поэтому back в no-bridge
  * fullscreen должен оставаться выходом из экрана, а не collapse.
  *
+ * Исключение — стрелка «назад» самого оверлея на платформах с [playerOpensFullscreen] == true
+ * (Desktop): там compact-режим не является самостоятельным состоянием, которое пользователь
+ * когда-либо видел, и сворачивание в него первым «назад» ощущалось как лишний промежуточный
+ * экран — см. KDoc `PlayerTopBar` в `PlayerOverlay.kt` (фикс 2026-09-18). Системный
+ * `BackHandler` ниже Desktop не затрагивает (на нём он no-op, см. `BackHandler.desktop.kt`),
+ * поэтому гейт на [playerOpensFullscreen] ему не нужен.
+ *
  * **Единственная развилка на этом экране** — обычный `if` по `controller.isSupported`, без
  * `expect/actual`: сам флаг уже разруливает окружение за нас (см. его KDoc). На всех трёх
  * платформах он теперь `true` в штатном случае (на Desktop — безусловно, статически, см. KDoc

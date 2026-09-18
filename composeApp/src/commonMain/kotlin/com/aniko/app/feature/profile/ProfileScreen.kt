@@ -434,7 +434,15 @@ private fun ProfileContent(
             // см. KDoc `LocalGlassBottomInset`/аналогичное место в `HomeScreen.kt`. Профиль —
             // таб-рут (см. KDoc [ProfileScreen] про P13.T2), поэтому у него тот же bottom bar
             // под ним, что и у остальных корневых вкладок (в т.ч. на Expanded).
-            .padding(top = dimens.spaceM, bottom = dimens.spaceM + LocalGlassBottomInset.current)
+            //
+            // Верхний паддинг — только на Compact/Medium (там заголовок живёт в `TopAppBar`, и
+            // контенту нужен воздух под ним). На Expanded он убран (2026-09-18): заголовок —
+            // [ExpandedScreenTitle] со встроенным вертикальным `spaceM`, и лишний `top = spaceM`
+            // на колонке опускал заголовок профиля ниже, чем на Каталоге/Библиотеке/Расписании.
+            .padding(
+                top = if (isExpanded) 0.dp else dimens.spaceM,
+                bottom = dimens.spaceM + LocalGlassBottomInset.current,
+            )
 
     // Раньше Expanded-ветка обнуляла горизонтальные отступы секций (`sectionPadding = Modifier`)
     // и не добавляла свой — контент печатался вплотную к краям окна (ревью F5, 2026-09-17).
