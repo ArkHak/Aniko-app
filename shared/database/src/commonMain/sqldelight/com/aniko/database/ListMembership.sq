@@ -67,3 +67,11 @@ SELECT status FROM listMembership WHERE release_id = ?;
 
 observeFavorite:
 SELECT is_favorite FROM listMembership WHERE release_id = ?;
+
+-- Вся таблица членства одним запросом — реактивный источник правды вкладок «Мои списки»
+-- (ListMembershipStore.observeAll). Один запрос вместо пары подписок observeStatus/
+-- observeFavorite на КАЖДЫЙ видимый релиз: экран сверяет со членством всю загруженную страницу
+-- целиком (десятки-сотни элементов), а таблица узкая (3 значимых поля) и растёт только на
+-- релизы, которые пользователь уже видел в каком-либо листинге или менял сам.
+observeAll:
+SELECT release_id, status, is_favorite FROM listMembership;

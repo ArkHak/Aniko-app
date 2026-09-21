@@ -1,5 +1,6 @@
 package com.aniko.database.store
 
+import com.aniko.model.ListMembership
 import com.aniko.model.ListStatus
 import com.aniko.model.ReleaseId
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +18,19 @@ import kotlin.time.Instant
 interface ListMembershipStore {
     /** `null` — релиз не числится ни в одном списке. */
     fun observeStatus(releaseId: ReleaseId): Flow<ListStatus?>
+
+    /**
+     * Вся известная локально таблица членства, `releaseId → `[ListMembership] — реактивный
+     * источник правды вкладок «Мои списки» (`LibraryRepository.observeListMemberships`).
+     *
+     * Один поток на весь экран вместо [observeStatus]/[observeFavorite] на каждый видимый
+     * релиз: вкладка сверяет со членством всю загруженную страницу целиком (см. KDoc
+     * запроса `observeAll` в `ListMembership.sq`). Релизы, которых в таблице нет, в карте
+     * просто отсутствуют — это НЕ то же самое, что [ListMembership] с `status = null`
+     * («сервер/пользователь сказал: ни в одном списке»), и вызывающая сторона обязана
+     * различать эти два случая.
+     */
+    fun observeAll(): Flow<Map<ReleaseId, ListMembership>>
 
     suspend fun setStatus(
         releaseId: ReleaseId,

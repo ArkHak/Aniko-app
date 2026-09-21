@@ -1,12 +1,15 @@
 package com.aniko.database.store
 
 import app.cash.sqldelight.coroutines.asFlow
+import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import com.aniko.database.AnikoDatabase
+import com.aniko.model.ListMembership
 import com.aniko.model.ListStatus
 import com.aniko.model.ReleaseId
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlin.time.Instant
@@ -26,6 +29,27 @@ class SqlDelightListMembershipStore(
             .asFlow()
             .mapToOneOrNull(dispatcher)
             .map { ListStatus.fromApiValue(it?.status?.toInt()) }
+
+    /**
+     * `distinctUntilChanged` — не украшение: SQLDelight будит подписчиков на КАЖДУЮ запись в
+     * таблицу, а наполнение членства серверной страницей (`LibraryRepository.syncToLocalCache`)
+     * делает по паре запросов на каждый элемент страницы, почти всегда не меняя значений. Без
+     * фильтра экран списков пересобирал бы вкладку десятки раз на одну загруженную страницу.
+     */
+    override fun observeAll(): Flow<Map<ReleaseId, ListMembership>> =
+        database.listMembershipQueries
+            .observeAll()
+            .asFlow()
+            .mapToList(dispatcher)
+            .map { rows ->
+                rows.associate { row ->
+                    row.release_id.toInt() to
+                        ListMembership(
+                            status = ListStatus.fromApiValue(row.status?.toInt()),
+                            isFavorite = row.is_favorite,
+                        )
+                }
+            }.distinctUntilChanged()
 
     override suspend fun setStatus(
         releaseId: ReleaseId,
