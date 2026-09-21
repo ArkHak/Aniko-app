@@ -79,7 +79,7 @@ val EnStrings: Strings =
         override val releaseLoadError = "Couldn't load the title"
         override val releaseDetailsLoadError = "Couldn't load additional details"
         override val releaseEpisodesLoadError = "Couldn't load episodes"
-        override val searchPlaceholder = "Anime title..."
+        override val searchPlaceholder = "Search anime…"
         override val searchEmptyPrompt = "Enter a title to find a release"
         override val searchError = "Search failed"
         override val searchNoResults = "No results found"
@@ -331,4 +331,15 @@ val EnStrings: Strings =
         override val releasePosterContentDescription: (String) -> String = { title -> "Open “$title”" }
         override val screenshotThumbnailContentDescription: (Int) -> String = { position -> "Screenshot $position" }
         override val homeQuickActionOpenContentDescription: (String) -> String = { label -> "Open $label" }
+
+        // --- Catalog toolbar: search field + filter chips ---
+        override val catalogStatusChipLabel = "Status"
+        override val catalogGenresChipLabel = "Genres"
+        override val catalogGenresChipSelected: (Int) -> String = { count -> "Genres · $count" }
+        override val catalogFilterChipActiveDescription: (String, String) -> String =
+            { label, value -> "$label: $value" }
+        override val catalogGenresChipSelectedDescription: (Int) -> String = { count -> "Genres, $count selected" }
+        override val catalogStatusClearContentDescription = "Clear status filter"
+        override val catalogGenresClearContentDescription = "Clear genre filter"
+        override val catalogFiltersResetContentDescription = "Reset all filters"
     }

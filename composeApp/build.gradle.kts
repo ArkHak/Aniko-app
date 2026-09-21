@@ -105,6 +105,9 @@ kotlin {
             // desktopTest :shared:database, но composeApp его сам не тянет (implementation там,
             // не api, и это main-classpath, не test).
             implementation(libs.sqldelight.sqlite.driver)
+            // NavigationEventDispatcher/Input для эмуляции Esc → back в харнессе (ui-desktop
+            // тянет их как implementation — на compile-classpath desktopTest не попадают).
+            implementation(libs.androidx.navigationevent.desktop)
         }
     }
 }

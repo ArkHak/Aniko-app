@@ -540,6 +540,29 @@ interface Strings {
     // кликабельных элемента на одном экране озвучивались одинаково, пользователь TalkBack не мог
     // их различить по звуку. Отдельный ключ с глаголом только для quick action плитки.
     val homeQuickActionOpenContentDescription: (label: String) -> String
+
+    // --- Каталог: единая верхняя панель поиска и чипов-фильтров (feature/catalog-toolbar-filter-chips) ---
+    // Подпись чипа «Статус» без выбора; она же заголовок его меню/шторки.
+    val catalogStatusChipLabel: String
+
+    // Подпись чипа «Жанры» без выбора; она же заголовок его меню/шторки.
+    val catalogGenresChipLabel: String
+
+    // Чип «Жанры» с выбором: «Жанры · N» (N — число выбранных жанров).
+    val catalogGenresChipSelected: (count: Int) -> String
+
+    // Доступное имя чипа с выбранным значением: «Статус: Онгоинг» (label — подпись, value — выбор).
+    val catalogFilterChipActiveDescription: (label: String, value: String) -> String
+
+    // Доступное имя чипа «Жанры» с выбором: «Жанры, выбрано: N».
+    val catalogGenresChipSelectedDescription: (count: Int) -> String
+
+    // Кнопка ✕ на активных чипах — быстрый сброс только этого фильтра.
+    val catalogStatusClearContentDescription: String
+    val catalogGenresClearContentDescription: String
+
+    // Доступное имя кнопки «Сбросить» (сбрасывает все фильтры сразу); видимая подпись — [filterChipReset].
+    val catalogFiltersResetContentDescription: String
 }
 
 /** Дефолт — [EnStrings]: тот же выбор, что `defaultLanguageTag = "en"` в `ProvideAppStrings`. */

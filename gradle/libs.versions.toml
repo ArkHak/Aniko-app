@@ -20,6 +20,9 @@ koin = "4.2.2"
 
 # --- Compose Multiplatform ecosystem (JetBrains multiplatform ports of AndroidX) ---
 navigationCompose = "2.9.2"
+# NavigationEventDispatcher/Input (Esc → back, Popup dismissOnBackPress) — compile-only для
+# smoke-харнесса (AnikoSmokeHarness). Версия = то, что ui-desktop 1.11.x резолвит транзитивно.
+navigationevent = "1.0.1"
 # ВНИМАНИЕ: 2.11.0 тянет androidx.lifecycle 2.11, который требует compileSdk 37 и AGP 9.1+.
 # compileSdk 37 сейчас недоступен в SDK, поэтому lifecycle зафиксирован на 2.10.0.
 # Поднимать вместе с AGP 9.x + compileSdk 37.
@@ -115,6 +118,7 @@ koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
 
 # Compose Multiplatform ports of AndroidX
 androidx-navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
+androidx-navigationevent-desktop = { module = "androidx.navigationevent:navigationevent-desktop", version.ref = "navigationevent" }
 androidx-lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 androidx-lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 

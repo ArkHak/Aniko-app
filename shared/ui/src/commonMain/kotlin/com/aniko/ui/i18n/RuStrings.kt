@@ -79,7 +79,7 @@ val RuStrings: Strings =
         override val releaseLoadError = "Не удалось загрузить релиз"
         override val releaseDetailsLoadError = "Не удалось загрузить дополнительную информацию"
         override val releaseEpisodesLoadError = "Не удалось загрузить серии"
-        override val searchPlaceholder = "Название аниме..."
+        override val searchPlaceholder = "Поиск аниме…"
         override val searchEmptyPrompt = "Введите название, чтобы найти релиз"
         override val searchError = "Не удалось выполнить поиск"
         override val searchNoResults = "Ничего не найдено"
@@ -333,4 +333,15 @@ val RuStrings: Strings =
         override val releasePosterContentDescription: (String) -> String = { title -> "Открыть «$title»" }
         override val screenshotThumbnailContentDescription: (Int) -> String = { position -> "Скриншот $position" }
         override val homeQuickActionOpenContentDescription: (String) -> String = { label -> "Открыть: $label" }
+
+        // --- Каталог: поле поиска и чипы-фильтры ---
+        override val catalogStatusChipLabel = "Статус"
+        override val catalogGenresChipLabel = "Жанры"
+        override val catalogGenresChipSelected: (Int) -> String = { count -> "Жанры · $count" }
+        override val catalogFilterChipActiveDescription: (String, String) -> String =
+            { label, value -> "$label: $value" }
+        override val catalogGenresChipSelectedDescription: (Int) -> String = { count -> "Жанры, выбрано: $count" }
+        override val catalogStatusClearContentDescription = "Сбросить фильтр по статусу"
+        override val catalogGenresClearContentDescription = "Сбросить фильтр по жанрам"
+        override val catalogFiltersResetContentDescription = "Сбросить все фильтры"
     }

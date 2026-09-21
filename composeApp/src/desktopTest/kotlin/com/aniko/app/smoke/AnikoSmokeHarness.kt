@@ -1,6 +1,10 @@
 package com.aniko.app.smoke
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocal
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SkikoComposeUiTest
@@ -9,7 +13,12 @@ import androidx.compose.ui.unit.Density
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.navigationevent.NavigationEventDispatcherOwner
+import androidx.navigationevent.NavigationEventInput
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -50,6 +59,60 @@ private class SmokeTestLifecycleOwner : LifecycleOwner {
     fun setState(state: Lifecycle.State) {
         registry.currentState = state
     }
+}
+
+/**
+ * Корневой [ViewModelStoreOwner] смоук-теста: `runSkikoComposeUiTest` его не очищает, поэтому без
+ * явной очистки ViewModel экранов переживали бы тест — их `viewModelScope` оставался бы живым на
+ * протяжении всего JVM-прогона. Это ломает тесты с глобальным состоянием (например,
+ * `PendingCatalogFilterLink`: «зомби»-`SearchViewModel` из прошлого теста первым подхватывает и
+ * гасит ссылку, и ViewModel текущего теста её не видит). Хранилище очищается в [runAnikoSmokeTest]
+ * сразу после `body`.
+ */
+private class SmokeTestViewModelStoreOwner : ViewModelStoreOwner {
+    override val viewModelStore = ViewModelStore()
+}
+
+/**
+ * Input-сторона навигационных событий («Esc → back») для смоук-харнесса.
+ *
+ * На реальном desktop-окне Esc обрабатывает `ComposeSceneMediator`: `BackNavigationEventInput`
+ * (ui-desktop, desktopMain) превращает его в back-событие `NavigationEventDispatcher`, до которого
+ * доходит `Popup(dismissOnBackPress)`/`DropdownMenu` и закрывается. Хедлес-окно
+ * `runSkikoComposeUiTest` mediator не создаёт: инжектированные через `performKeyInput` Esc
+ * доходят до сфокусированного слоя (popup), но обратно в dispatcher не проваливаются — штатное
+ * закрытие меню по Esc в тесте недостижимо без эмуляции этого платформенного моста. Харнесс
+ * регистрирует этот input в dispatcher-е сцены (см. [rememberSmokeBackPress]) и выдаёт тестам
+ * `pressBack` — событие идёт по тому же dispatcher-у, по которому на проде идёт Esc.
+ */
+private class SmokeBackNavigationInput : NavigationEventInput() {
+    /** Диспатчит back-событие в подключённый dispatcher (аналог Esc на реальном окне). */
+    fun pressBack() {
+        dispatchOnBackCompleted()
+    }
+}
+
+/** `LocalInternalNavigationEventDispatcherOwner` объявлен internal в ui-desktop — достаём рефлексией. */
+@Suppress("UNCHECKED_CAST")
+private val internalNavigationEventDispatcherOwnerLocal: CompositionLocal<NavigationEventDispatcherOwner> =
+    Class
+        .forName("androidx.compose.ui.platform.DefaultNavigationEventDispatcherOwner_skikoKt")
+        .getDeclaredField("LocalInternalNavigationEventDispatcherOwner")
+        .apply { isAccessible = true }
+        .get(null) as CompositionLocal<NavigationEventDispatcherOwner>
+
+/**
+ * Создаёт [SmokeBackNavigationInput], привязанный к dispatcher-у навигационных событий, который
+ * тестовая сцена провайдит в композицию (`Popup` регистрирует в нём же свой back-обработчик).
+ */
+@Composable
+private fun rememberSmokeBackPress(): () -> Unit {
+    val input = remember { SmokeBackNavigationInput() }
+    val owner = internalNavigationEventDispatcherOwnerLocal.current
+    LaunchedEffect(owner) {
+        owner.navigationEventDispatcher.addInput(input)
+    }
+    return input::pressBack
 }
 
 /**
@@ -139,6 +202,10 @@ fun noOpImageLoader(context: PlatformContext): ImageLoader = ImageLoader.Builder
  * умеет снимать пиксели (`captureToImage()` для скриншот-проверок раскладки объявлен именно на
  * классе, `ComposeUiTest.skiko.kt`), а все боевые сценарии Фазы 11 пользуются только общими
  * методами интерфейса, поэтому сужение приёмника ничего не ломает.
+ * @param pressBack (первый параметр лямбды) эмуляция Esc на реальном окне: диспатчит back-событие
+ * в dispatcher навигационных событий сцены, так что `Popup`/`DropdownMenu`/`BackHandler`
+ * отрабатывают как на проде. Платформенная конвертация Esc → back живёт в `ComposeSceneMediator`
+ * (desktopMain) и в headless-окне теста не существует — см. KDoc [SmokeBackNavigationInput].
  */
 @OptIn(ExperimentalTestApi::class)
 fun runAnikoSmokeTest(
@@ -146,7 +213,7 @@ fun runAnikoSmokeTest(
     initialToken: String? = null,
     koinDeclaration: KoinAppDeclaration? = null,
     windowSize: Size = COMPACT_WINDOW_SIZE,
-    body: SkikoComposeUiTest.() -> Unit,
+    body: SkikoComposeUiTest.(pressBack: () -> Unit) -> Unit,
 ) {
     startKoin {
         modules(databaseModule, dataModule, appModule, fakeInfraModule(apiRoutes, initialToken))
@@ -154,17 +221,24 @@ fun runAnikoSmokeTest(
     }
     disableLifecycleMainThreadEnforcement()
     val lifecycleOwner = SmokeTestLifecycleOwner()
+    val viewModelStoreOwner = SmokeTestViewModelStoreOwner()
     try {
         SingletonImageLoader.setSafe { context -> noOpImageLoader(context) }
         runSkikoComposeUiTest(size = windowSize, density = Density(1f)) {
             lifecycleOwner.setState(Lifecycle.State.RESUMED)
+            lateinit var pressBack: () -> Unit
             setContent {
-                CompositionLocalProvider(LocalLifecycleOwner provides lifecycleOwner) {
+                pressBack = rememberSmokeBackPress()
+                CompositionLocalProvider(
+                    LocalLifecycleOwner provides lifecycleOwner,
+                    LocalViewModelStoreOwner provides viewModelStoreOwner,
+                ) {
                     App()
                 }
             }
-            body()
+            body(pressBack)
             lifecycleOwner.setState(Lifecycle.State.DESTROYED)
+            viewModelStoreOwner.viewModelStore.clear()
         }
     } finally {
         stopKoin()

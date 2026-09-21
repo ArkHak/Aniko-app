@@ -72,9 +72,13 @@ import kotlin.math.roundToInt
  * - Compact/Medium — списочные строки [TitleCard] ([CatalogList], тот же паттерн пагинации, что
  *   в `LibraryScreen`/старой `SearchScreen`: `itemsIndexed` + проверка индекса относительно
  *   конца списка на каждый видимый элемент, без отдельного `LazyGridState`/`snapshotFlow`).
- * - Expanded — сетка из 5 колонок ([CatalogGrid], desktop-артборд мокапа, строка 800): постер
- *   2:3 radius 14, бейдж рейтинга top-right, название/мета-строка/опциональный release-badge под
- *   постером — своя ячейка [CatalogGridItem] (не [TitleCard]: макет хочет рейтинг СПРАВА и без
+ * - Expanded — адаптивная сетка ([CatalogGrid]): число колонок считается из ширины окна
+ *   (`GridCells.Adaptive`, минимальная ширина ячейки [GRID_MIN_CELL_WIDTH]) — на эталонном
+ *   desktop-артборде мокапа (строка 800) это те же 5 колонок, а на узком/широком окне колонок
+ *   меньше/больше, ячейки не сжимаются в «марки». Боковой колонки фильтров больше нет (фильтры —
+ *   в верхней панели `CatalogToolbar`), поэтому сетка занимает всю ширину под панелью. Ячейка —
+ *   [CatalogGridItem]: постер 2:3 radius 14, бейдж рейтинга top-right, название/мета-строка/
+ *   опциональный release-badge под постером (не [TitleCard]: макет хочет рейтинг СПРАВА и без
  *   персональных оверлеев избранного/статуса списка, которые рисует стандартная Grid-раскладка
  *   [TitleCard]).
  */
@@ -126,7 +130,7 @@ fun CatalogResultsGrid(
     }
 }
 
-/** Expanded: сетка 5 колонок, gap 16 (desktop-артборд мокапа, строка 800). */
+/** Expanded: адаптивная сетка (см. KDoc [CatalogResultsGrid]), gap 16 (desktop-артборд мокапа, строка 800). */
 @Suppress("LongParameterList") // Пагинация + рендер-зависимости ячейки, см. CatalogResultsGrid.
 @Composable
 private fun CatalogGrid(
@@ -138,13 +142,17 @@ private fun CatalogGrid(
     onLoadMore: () -> Unit,
 ) {
     LazyVerticalGrid(
-        columns = GridCells.Fixed(GRID_COLUMNS),
+        columns = GridCells.Adaptive(minSize = GRID_MIN_CELL_WIDTH),
         modifier = Modifier.fillMaxSize(),
         horizontalArrangement = Arrangement.spacedBy(GRID_GAP),
         verticalArrangement = Arrangement.spacedBy(GRID_GAP),
+        // Горизонтальные поля сетки — здесь, а не у родителя: панель `CatalogToolbar` и выдача
+        // выровнены по одним и тем же 16.dp, и сетка сама решает, сколько колонок влезет.
         contentPadding =
             PaddingValues(
-                top = dimens.spaceS,
+                start = dimens.spaceM,
+                end = dimens.spaceM,
+                top = dimens.spaceM,
                 bottom = dimens.spaceM + LocalGlassBottomInset.current,
             ),
     ) {
@@ -409,7 +417,11 @@ private val MENU_DOT_GAP = 2.dp
 
 private const val PREFETCH_THRESHOLD = 6
 
-private const val GRID_COLUMNS = 5
+/**
+ * Минимальная ширина ячейки сетки: при контенте ~1100.dp (окно 1400.dp минус сайдбар и поля) даёт
+ * 5 колонок — как в desktop-артборде мокапа; при 840.dp (нижняя граница Expanded) — 3 колонки.
+ */
+private val GRID_MIN_CELL_WIDTH = 176.dp
 private val GRID_GAP = 16.dp
 private val GRID_ITEM_VERTICAL_GAP = 7.dp
 private val RATING_BADGE_INSET = 6.dp

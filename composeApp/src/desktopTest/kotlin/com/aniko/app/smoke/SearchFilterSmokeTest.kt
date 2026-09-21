@@ -3,6 +3,7 @@ package com.aniko.app.smoke
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -16,7 +17,7 @@ import kotlin.test.Test
  * P11.T4 — поиск + фильтр.
  *
  * Нижняя навигация → «Search» ([AnixTestTags.SEARCH_SCREEN_ROOT], он же Catalog) → ввод запроса в
- * поле поиска (`strings.searchPlaceholder` как маркер поля) → результат из
+ * поле поиска (единственный узел с `SetText`, `AnixSearchField` на `BasicTextField`) → результат из
  * `search/releases/0` ([com.aniko.app.smoke.fixtures.ApiFixtures.searchReleasesPage0NoApiVersionHeader],
  * первый тайтл — «Наруто») → переключение вкладки каталога «New Arrivals» (`catalogTabNew`),
  * которая гоняет `filter/0` ([com.aniko.app.smoke.fixtures.ApiFixtures.filterPage0], первый тайтл
@@ -46,11 +47,28 @@ class SearchFilterSmokeTest {
             // текстового узла иконки, из-за которой тест был флаки под нагрузкой всего набора.
             queryField.performTextClearance()
 
-            // Фаза 11, T9 (устройство): ChipRow/AnixPoster теперь озвучивают подпись через
-            // clearAndSetSemantics{contentDescription=...}, видимый Text больше не находится.
+            // Фаза 11, T9 (устройство): вкладки/постеры озвучивают подпись через
+            // clearAndSetSemantics{contentDescription=...}, видимый Text больше не находится;
+            // сегмент «Все|Новинки» верхней панели Каталога (`CatalogToolbar`) устроен так же.
             onNodeWithContentDescription("New Arrivals").performClick()
 
-            onNodeWithContentDescription("Копэн", substring = true).assertIsDisplayed()
+            // Подпись тайтла живёт на несмёрдженном узле ячейки (родитель-пограничник сбора
+            // семантики поглощает её в merged-дереве), а выдача под фильтром приезжает после
+            // сетевого раунда — ждём появления в unmerged-дереве, затем проверяем видимость.
+            waitUntil(timeoutMillis = WAIT_MS) {
+                onAllNodesWithContentDescription(FILTER_RESULT_TITLE, substring = true, useUnmergedTree = true)
+                    .fetchSemanticsNodes()
+                    .isNotEmpty()
+            }
+            onNodeWithContentDescription(FILTER_RESULT_TITLE, substring = true, useUnmergedTree = true)
+                .assertIsDisplayed()
         }
+    }
+
+    private companion object {
+        const val WAIT_MS = 10_000L
+
+        /** Первый тайтл `filter/0` ([com.aniko.app.smoke.fixtures.ApiFixtures.filterPage0]). */
+        const val FILTER_RESULT_TITLE = "Копэн"
     }
 }

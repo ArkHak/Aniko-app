@@ -53,7 +53,18 @@ data class SearchState(
      * `genres` при этом не отправляются на сервер (эндпоинт поиска их не поддерживает).
      */
     val isSearchMode: Boolean get() = query.isNotBlank()
+
+    /**
+     * `true` — задан хотя бы один фильтр каталога: статус, жанры или скрытые в UI поля, которые
+     * может принести deep link (годы, «Дунхуа», режим исключения жанров). По нему верхняя панель
+     * показывает кнопку «Сбросить». `sort` не сравнивается: он приходит из вкладки
+     * ([CatalogTab.sort]), а не из фильтра (см. KDoc [SearchState]).
+     */
+    val hasActiveFilters: Boolean
+        get() = filter.copy(sort = NO_FILTERS.sort) != NO_FILTERS
 }
+
+private val NO_FILTERS = CatalogFilter()
 
 /** Команды экрана Catalog/Search. */
 sealed interface SearchIntent : UiIntent {
@@ -74,6 +85,15 @@ sealed interface SearchIntent : UiIntent {
     data class GenreToggled(
         val genre: String,
     ) : SearchIntent
+
+    /**
+     * Кнопка «Сбросить» верхней панели: вернуть фильтр к значению по умолчанию (статус, жанры и
+     * скрытые поля deep link). Текст поиска и вкладку «Все/Новинки» не трогает.
+     */
+    data object FiltersReset : SearchIntent
+
+    /** Быстрый сброс чипа «Жанры» (✕ на чипе / «Сбросить» в шторке): снять все выбранные жанры. */
+    data object GenresCleared : SearchIntent
 
     /** Catalog-меню «⋮» (сверка 2026-09-08): поставить релиз в список/сменить статус. */
     data class SetListStatus(
