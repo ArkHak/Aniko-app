@@ -22,6 +22,9 @@ object AnixTestTags {
     /** Корень [com.aniko.app.feature.auth.LoginScreen]. */
     const val LOGIN_SCREEN_ROOT: String = "login_screen_root"
 
+    /** Корень [com.aniko.app.feature.auth.RegisterScreen]. */
+    const val REGISTER_SCREEN_ROOT: String = "register_screen_root"
+
     /** Корень [com.aniko.app.feature.home.HomeScreen]. */
     const val HOME_SCREEN_ROOT: String = "home_screen_root"
 

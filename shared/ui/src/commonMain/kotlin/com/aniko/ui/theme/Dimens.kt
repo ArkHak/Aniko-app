@@ -66,6 +66,9 @@ data class AnixDimens(
     val chartHeight: Dp = 140.dp,
     /** Максимальная ширина контентной колонки на desktop/tablet-раскладках (Фаза 7). */
     val contentMaxWidth: Dp = 1200.dp,
+    /** Максимальная ширина формы auth-экранов (Login/Register) — на desktop форма не растягивается
+     *  на всё окно, как это происходило бы с [contentMaxWidth]. */
+    val authFormMaxWidth: Dp = 400.dp,
     /** Высота баннера-карусели на главном экране (P7.T1) для Compact/Medium — 230dp по
      *  mobile-артбордам (сверена Фазой 14, была 220dp). Desktop (Expanded) использует
      *  [bannerHeightExpanded] 220dp по макету Claude Design (строка 757). */

@@ -6,6 +6,7 @@ import com.aniko.data.playerposition.LocalPlayerPositionStore
 import com.aniko.data.playerposition.PositionKey
 import com.aniko.data.repository.EpisodeRepository
 import com.aniko.data.repository.LibraryRepository
+import com.aniko.data.voicepreference.TitleVoicePreferenceStore
 import com.aniko.model.AnixError
 import com.aniko.model.VideoHost
 import com.aniko.model.VoiceType
@@ -121,6 +122,7 @@ class PlayerViewModel(
     private val episodeRepository: EpisodeRepository,
     private val libraryRepository: LibraryRepository,
     private val positionStore: LocalPlayerPositionStore,
+    private val titleVoicePreferenceStore: TitleVoicePreferenceStore,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
@@ -281,6 +283,9 @@ class PlayerViewModel(
                     episodeRepository.matchPosition(key.releaseId, typeId, newSource.id, episodeName, key.position)
                 }.getOrDefault(key.position)
             if (loadedKey != key) return@launch // пользователь уже успел уйти с экрана/переключить снова
+            // Dubbing memory: переключение озвучки в пикере — явный выбор пары typeId+sourceId
+            // для этого тайтла, фиксируем его до перезагрузки плеера.
+            titleVoicePreferenceStore.save(key.releaseId, typeId, newSource.id)
             // `currentVoiceType = type` здесь не пишем: `load()` ниже тут же сбросит стейт в новый
             // `PlayerUiState` и сам заново подберёт тип через `resolveCurrentVoiceType` (теперь уже
             // по-настоящему — источник `newSource.id` принадлежит `typeId`, подбор найдёт его сразу).

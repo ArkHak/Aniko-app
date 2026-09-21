@@ -70,8 +70,10 @@ import com.aniko.ui.theme.AnixThemeTokens
  * Оговорка про поиск по строке: пока [SearchState.query] непуст, сервер игнорирует статус/жанры
  * (см. KDoc `SearchViewModel`); чипы при этом остаются доступными и применятся, когда поле
  * поиска очищено.
+ *
+ * Координирующий блок двух раскладок (Compact Column / Medium+Expanded Row) — цельный,
+ * поэтому `@Suppress("LongMethod")` ниже.
  */
-// Координирующий блок двух раскладок (Compact Column / Medium+Expanded Row) — цельный, см. KDoc.
 @Suppress("LongMethod")
 @Composable
 internal fun CatalogToolbar(
@@ -251,9 +253,9 @@ private fun CatalogTabSegments(
                         text = label,
                         style = MaterialTheme.typography.labelLarge,
                         color =
-                        MaterialTheme.colorScheme.onSurface.copy(
-                            alpha = if (isSelected) 1f else UNSELECTED_LABEL_ALPHA,
-                        ),
+                            MaterialTheme.colorScheme.onSurface.copy(
+                                alpha = if (isSelected) 1f else UNSELECTED_LABEL_ALPHA,
+                            ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -366,8 +368,10 @@ private fun GenresFilterChip(
  * Семантика тела — `Role.DropdownList` + `selected` (активен ли фильтр) + действия `expand`/
  * `collapse` (скринридер озвучивает свёрнутое/развёрнутое состояние); ✕ — отдельный узел-кнопка,
  * поэтому он НЕ вложен в тело (`clearAndSetSemantics` тела стёр бы его семантику).
+ *
+ * Данные чипа + два тега + тексты меню; каркас цельный (тело + ✕ + хост) — делить ради лимита
+ * вредно, поэтому `@Suppress("LongParameterList", "LongMethod")` ниже.
  */
-// Данные чипа + два тега + тексты меню; каркас цельный (тело + ✕ + хост) — делить ради лимита вредно.
 @Suppress("LongParameterList", "LongMethod")
 @Composable
 private fun FilterMenuChip(

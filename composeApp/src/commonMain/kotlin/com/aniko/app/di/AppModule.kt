@@ -1,6 +1,7 @@
 package com.aniko.app.di
 
 import com.aniko.app.feature.auth.LoginViewModel
+import com.aniko.app.feature.auth.RegisterViewModel
 import com.aniko.app.feature.collections.CollectionsViewModel
 import com.aniko.app.feature.comments.CommentsViewModel
 import com.aniko.app.feature.feed.FeedViewModel
@@ -39,6 +40,7 @@ val appModule =
         single<NotificationContentFactory> { AppNotificationContentFactory(localeStore = get()) }
         viewModelOf(::HomeViewModel)
         viewModelOf(::LoginViewModel)
+        viewModelOf(::RegisterViewModel)
         viewModelOf(::SettingsViewModel)
         // Найдено на устройстве (Фаза 11, T9): регистрация в Koin отсутствовала — экран
         // "Настройки → Уведомления" падал с NoDefinitionFoundException при каждом открытии.

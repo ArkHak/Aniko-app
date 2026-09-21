@@ -6,6 +6,7 @@ import com.aniko.data.repository.CommentRepository
 import com.aniko.data.repository.EpisodeRepository
 import com.aniko.data.repository.LibraryRepository
 import com.aniko.data.repository.ReleaseRepository
+import com.aniko.data.voicepreference.TitleVoicePreferenceStore
 import com.aniko.model.AnixError
 import com.aniko.model.Episode
 import com.aniko.model.ListStatus
@@ -52,6 +53,7 @@ class ReleaseDetailsViewModel(
     private val episodeRepository: EpisodeRepository,
     private val libraryRepository: LibraryRepository,
     private val commentRepository: CommentRepository,
+    private val titleVoicePreferenceStore: TitleVoicePreferenceStore,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ReleaseDetailsUiState())
     val uiState: StateFlow<ReleaseDetailsUiState> = _uiState.asStateFlow()
@@ -233,6 +235,8 @@ class ReleaseDetailsViewModel(
                 localToggleOverrides = emptyMap(),
             )
         }
+        // Dubbing memory: оба ID известны — фиксируем пару как последний явный выбор пользователя.
+        titleVoicePreferenceStore.save(releaseId, typeId, sourceId)
         viewModelScope.launch {
             try {
                 val episodes = episodeRepository.episodes(releaseId, typeId, sourceId)
@@ -287,13 +291,21 @@ class ReleaseDetailsViewModel(
     }
 
     /**
-     * Кнопка "Смотреть" (P7.T7) — сама проходит цепочку типы → источники → серии (первый тип,
-     * первый источник — у `VoiceType`/`EpisodeSource` в этом проекте нет поля `pinned`, см.
-     * `docs/REELWAVE_PLAN.md`, "Сейчас" по Player+озвучке — выбор первого варианта, не рискованное
-     * упрощение, а буквально то, что доступно), резолвит стартовую позицию — продолжение с
-     * `release.lastViewEpisode`, если такая серия есть в списке, иначе первая серия. По пути
-     * заполняет тот же стейт выбора серии, что и ручной флоу чипов (voiceTypes/sources/episodes),
-     * чтобы после возврата из плеера пользователь видел уже сделанный выбор, а не пустые чипы.
+     * Кнопка "Смотреть" (P7.T7) — сама проходит цепочку типы → источники → серии, резолвит
+     * стартовую позицию — продолжение с `release.lastViewEpisode`, если такая серия есть в
+     * списке, иначе первая серия. По пути заполняет тот же стейт выбора серии, что и ручной
+     * флоу чипов (voiceTypes/sources/episodes), чтобы после возврата из плеера пользователь видел
+     * уже сделанный выбор, а не пустые чипы.
+     *
+     * Dubbing memory: выбор типа/источника идёт по приоритетам — 1) явный выбор в UI (чипы этого
+     * экрана, если оба уже выбраны), 2) пара, запомненная [TitleVoicePreferenceStore] при
+     * прошлых выборах/просмотрах этого тайтла (с валидацией против свежих списков: сохранённый
+     * sourceId учитывается только в паре с его typeId — источники в Anixart отдельные записи на
+     * каждую пару тип/хост, не общий пул id), 3) первый доступный тип/источник (у `VoiceType`/
+     * `EpisodeSource` в этом проекте нет поля `pinned`, см. `docs/REELWAVE_PLAN.md`, "Сейчас" по
+     * Player+озвучке — выбор первого варианта, не рискованное упрощение, а буквально то, что
+     * доступно). Разрешённая до играбельной пары пара дополнительно записывается в стор — сам
+     * факт "Смотреть" тоже фиксирует выбор.
      *
      * Возвращает `null`, если резолвить нечего (нет типов/источников/серий) или шаг упал —
      * `ReleaseDetailsScreen` в этом случае просто не переходит в плеер, ошибка попадает в то же
@@ -320,17 +332,33 @@ class ReleaseDetailsViewModel(
     /**
      * Цепочка `types -> sources -> episodes` вынесена из [resolvePlayTarget] отдельной функцией
      * (detekt `ReturnCount`) — сама цепочка остаётся серией guard clauses (идиоматичнее вложенных
-     * `let`/`when` для линейного разрешения "первый доступный на каждом шаге").
+     * `let`/`when` для линейного разрешения "лучший доступный на каждом шаге" — приоритеты см.
+     * в KDoc [resolvePlayTarget]).
      */
     @Suppress("ReturnCount")
     private suspend fun resolvePlayTargetChain(
         releaseId: Int,
         release: Release,
     ): PlayTarget? {
-        val types = _uiState.value.voiceTypes.ifEmpty { episodeRepository.voiceTypes(releaseId) }
-        val type = types.firstOrNull() ?: return null
+        val state = _uiState.value
+        val types = state.voiceTypes.ifEmpty { episodeRepository.voiceTypes(releaseId) }
+        val saved = titleVoicePreferenceStore.load(releaseId)
+
+        val type =
+            types.firstOrNull { it.id == state.selectedTypeId }
+                ?: types.firstOrNull { it.id == saved?.typeId }
+                ?: types.firstOrNull()
+                ?: return null
+
         val sources = episodeRepository.sources(releaseId, type.id)
-        val source = sources.firstOrNull() ?: return null
+        // Сохранённый sourceId валиден только в паре со своим typeId: id источников не общий
+        // пул между типами (см. KDoc [resolveDeepLinkEpisode]).
+        val savedSourceId = saved?.takeIf { it.typeId == type.id }?.sourceId
+        val source =
+            sources.firstOrNull { it.id == state.selectedSourceId && state.selectedTypeId == type.id }
+                ?: savedSourceId?.let { id -> sources.firstOrNull { it.id == id } }
+                ?: sources.firstOrNull()
+                ?: return null
         val episodes = episodeRepository.episodes(releaseId, type.id, source.id)
         if (episodes.isEmpty()) return null
         val resumePosition = release.lastViewEpisode?.let { last -> episodes.firstOrNull { it.position == last } }
@@ -348,6 +376,8 @@ class ReleaseDetailsViewModel(
                 localToggleOverrides = emptyMap(),
             )
         }
+        // Дошли до играбельной пары — "Смотреть" само по себе фиксирует выбор (dubbing memory).
+        titleVoicePreferenceStore.save(releaseId, type.id, source.id)
         observeWatchedForSource(releaseId, source.id)
         return PlayTarget(sourceId = source.id, position = position, host = source.host)
     }
@@ -417,6 +447,8 @@ class ReleaseDetailsViewModel(
                 )
             }
             observeWatchedForSource(releaseId, source.id)
+            // Открытие серии по deep link тоже явный выбор озвучки — фиксируем пару (dubbing memory).
+            titleVoicePreferenceStore.save(releaseId, type.id, source.id)
             return PlayTarget(sourceId = source.id, position = episode.position, host = source.host)
         }
         return null

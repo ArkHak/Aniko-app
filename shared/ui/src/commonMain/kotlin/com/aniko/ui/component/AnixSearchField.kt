@@ -41,6 +41,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aniko.ui.theme.AnixThemeTokens
 
+// Публичный API поля; блок цельный (рамка/иконка/ввод/✕) — делить ради лимита вредно.
+
 /**
  * Современное поле поиска («пилюля») на [BasicTextField] — замена `OutlinedTextField` в местах,
  * где нужна плотная строка поиска фиксированной высоты.
@@ -77,7 +79,6 @@ import com.aniko.ui.theme.AnixThemeTokens
  * @param modifier модификатор корневой «пилюли» (ширину задаёт вызывающая сторона).
  * @param onSearch вызывается по IME-действию Search / Enter, до снятия фокуса.
  */
-// Публичный API поля; блок цельный (рамка/иконка/ввод/✕) — делить ради лимита вредно.
 @Suppress("LongParameterList", "LongMethod")
 @Composable
 fun AnixSearchField(

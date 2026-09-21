@@ -40,10 +40,13 @@ import com.aniko.data.sync.SyncQueueWorker
 import com.aniko.data.theme.AppIconStore
 import com.aniko.data.theme.ThemeStore
 import com.aniko.data.voicepin.LocalVoicePinStore
+import com.aniko.data.voicepreference.TitleVoicePreferenceStore
 import com.aniko.network.ApiConfig
+import com.aniko.network.IMAGE_HTTP_CLIENT_QUALIFIER
 import com.aniko.network.SessionInvalidator
 import com.aniko.network.TokenProvider
 import com.aniko.network.createAnixHttpClient
+import com.aniko.network.createAnixImageHttpClient
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -92,6 +95,7 @@ val dataModule =
         single { LocalPlayerPositionStore(settings = get()) }
         single { PlayerPreferencesStore(settings = get()) }
         single { LocalVoicePinStore(settings = get()) }
+        single { TitleVoicePreferenceStore(settings = get()) }
         single { LocalProfilePinnedSectionStore(settings = get()) }
 
         single<HttpClient> {
@@ -101,6 +105,10 @@ val dataModule =
                 sessionInvalidator = get(),
             )
         }
+
+        // Отдельный «голый» клиент для Coil/CDN-статики: без ?token=, валидатора сессии,
+        // логгера и с короткими таймаутами (см. KDoc createAnixImageHttpClient в shared:network).
+        single<HttpClient>(named(IMAGE_HTTP_CLIENT_QUALIFIER)) { createAnixImageHttpClient() }
 
         single { AuthApi(client = get()) }
         single { ReleaseApi(client = get()) }

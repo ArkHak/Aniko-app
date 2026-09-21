@@ -64,7 +64,12 @@ interface Strings {
     val listStatusShortOnHold: String
     val listStatusShortDropped: String
 
-    // --- Вход ---
+    // --- Вход и регистрация ---
+    // Редизайн auth-флоу (2026-09-21): `loginTitle` переопределён на короткий «Вход»/«Sign in»
+    // (бренд «Aniko» теперь вордмарком над формой, отдельный текст `brand`). Учётные данные —
+    // от Anixart, о чём честно говорит приглушённая сноска [loginAnixartCredentialsNote] внизу
+    // экрана. Ошибки регистрации/верификации — типизированные enum'ы в RegisterViewModel,
+    // тексты выбирает экран (та же конвенция, что и у LoginError/LoginScreen).
     val loginTitle: String
     val loginLoginLabel: String
     val loginPasswordLabel: String
@@ -74,6 +79,48 @@ interface Strings {
     val loginGenericError: String
     val loginInvalidLogin: String
     val loginInvalidPassword: String
+
+    /** Текстовая кнопка под «Войти» — открывает экран регистрации (локальная навигация AuthFlow). */
+    val loginRegisterAction: String
+
+    /** Сноска внизу auth-экранов: учётные данные общие с сервисом Anixart. */
+    val loginAnixartCredentialsNote: String
+
+    val registerTitle: String
+    val registerEmailLabel: String
+    val registerConfirmPasswordLabel: String
+    val registerSubmit: String
+
+    /** Текстовая кнопка «Назад ко входу» на экране регистрации. */
+    val registerBackToLogin: String
+
+    /** Клиентская валидация: поля «пароль» и «подтверждение пароля» не совпадают. */
+    val registerPasswordMismatch: String
+
+    /** Инфо-строка экрана ввода кода: «Код отправлен на <email>». */
+    val registerCodeSentFormat: (email: String) -> String
+
+    /** Подтверждение успешной повторной отправки кода (auth/resend). */
+    val registerCodeResent: String
+    val registerCodeLabel: String
+    val registerVerifySubmit: String
+    val registerResendCode: String
+
+    // Тексты ошибок регистрации (auth/signUp, коды 2..10 — см. RegisterError в RegisterViewModel).
+    val registerInvalidLogin: String
+    val registerInvalidEmail: String
+    val registerInvalidPassword: String
+    val registerLoginTaken: String
+    val registerEmailTaken: String
+    val registerCodeAlreadySent: String
+    val registerCodeCannotSend: String
+    val registerEmailDisallowed: String
+    val registerTooManyRegistrations: String
+    val registerGenericError: String
+
+    // Тексты ошибок подтверждения кода (auth/verify, коды 7/8 — см. VerifyError в RegisterViewModel).
+    val registerInvalidCode: String
+    val registerCodeExpired: String
 
     // --- Главная ---
     val homeContinueWatching: String

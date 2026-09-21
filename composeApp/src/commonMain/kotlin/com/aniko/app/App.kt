@@ -39,7 +39,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
-import com.aniko.app.feature.auth.LoginScreen
+import com.aniko.app.feature.auth.AuthFlow
 import com.aniko.app.navigation.AnixDestination
 import com.aniko.app.navigation.AnixSection
 import com.aniko.app.navigation.DeepLinkDispatcher
@@ -59,6 +59,7 @@ import com.aniko.data.repository.NotificationRepository
 import com.aniko.data.session.SessionState
 import com.aniko.data.sync.SyncCoordinator
 import com.aniko.data.theme.ThemeStore
+import com.aniko.network.IMAGE_HTTP_CLIENT_QUALIFIER
 import com.aniko.ui.adaptive.AdaptiveNavItem
 import com.aniko.ui.adaptive.AdaptiveScaffold
 import com.aniko.ui.adaptive.AnixWindowSize
@@ -75,6 +76,7 @@ import com.aniko.ui.theme.AppTheme
 import io.ktor.client.HttpClient
 import org.koin.compose.KoinContext
 import org.koin.compose.koinInject
+import org.koin.core.qualifier.named
 
 /**
  * Корневой Composable приложения. Одинаков для Android, Desktop и iOS —
@@ -91,17 +93,18 @@ import org.koin.compose.koinInject
 @Composable
 fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
     KoinContext {
-        val httpClient = koinInject<HttpClient>()
+        val imageHttpClient = koinInject<HttpClient>(qualifier = named(IMAGE_HTTP_CLIENT_QUALIFIER))
         val authRepository = koinInject<AuthRepository>()
         val localeStore = koinInject<LocaleStore>()
         val themeStore = koinInject<ThemeStore>()
         val syncCoordinator = koinInject<SyncCoordinator>()
         val platformContext = LocalPlatformContext.current
 
-        // Coil ходит в сеть тем же Ktor-клиентом, что и API.
-        remember(httpClient, platformContext) {
+        // Coil ходит за картинками отдельным «голым» клиентом: без ?token=, без валидатора
+        // сессии (картинка 403 ≠ разлогин), без логгера и с короткими таймаутами.
+        remember(imageHttpClient, platformContext) {
             SingletonImageLoader.setSafe { context ->
-                createAnixImageLoader(context, httpClient)
+                createAnixImageLoader(context, imageHttpClient)
             }
         }
 
@@ -183,7 +186,7 @@ fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
 /**
  * Реактивный гейт по [AuthRepository.sessionState]:
  * - [SessionState.Loading] — сплэш-лоадер, пока не прочитан токен;
- * - [SessionState.Unauthorized] — экран входа;
+ * - [SessionState.Unauthorized] — auth-флоу (вход + регистрация, см. `AuthFlow`);
  * - [SessionState.Authorized] — основной граф из пяти секций (P5.T2: добавлена Schedule).
  *
  * Также слушает [AuthRepository.sessionExpired] (401/403 от бэкенда) и показывает
@@ -213,7 +216,7 @@ private fun AnixSessionGate(
     Box(modifier = modifier.fillMaxSize()) {
         when (sessionState) {
             SessionState.Loading -> AnixLoadingBox()
-            SessionState.Unauthorized -> LoginScreen()
+            SessionState.Unauthorized -> AuthFlow()
             is SessionState.Authorized -> AnixAppScaffold(localeStore, themeStore, onBackHandlerReady)
         }
 

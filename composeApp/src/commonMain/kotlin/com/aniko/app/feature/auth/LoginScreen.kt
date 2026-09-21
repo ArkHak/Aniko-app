@@ -1,148 +1,104 @@
 package com.aniko.app.feature.auth
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
 
+/**
+ * Экран входа — часть auth-флоу (см. [AuthFlow]).
+ *
+ * Редизайн (2026-09-21): вордмарк «Aniko» над формой (см. [AuthWordmark]), под ним короткий
+ * заголовок [Strings.loginTitle] («Вход»), поля логина/пароля, основная кнопка «Войти», под ней
+ * текстовая кнопка «Регистрация» ([Strings.loginRegisterAction]) и приглушённая сноска внизу
+ * экрана. После успешного входа навигация никуда не ведёт — основной граф переключается сам
+ * в App.kt через `authRepository.sessionState`.
+ */
 @Composable
 fun LoginScreen(
+    onRegisterClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: LoginViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val dimens = AnixThemeTokens.dimens
+
+    AuthScaffold(modifier = modifier.testTag(AnixTestTags.LOGIN_SCREEN_ROOT)) {
+        LoginForm(state, viewModel, onRegisterClick)
+    }
+}
+
+@Composable
+private fun ColumnScope.LoginForm(
+    state: LoginUiState,
+    viewModel: LoginViewModel,
+    onRegisterClick: () -> Unit,
+) {
     val strings = LocalStrings.current
+    val dimens = AnixThemeTokens.dimens
 
-    // color = Color.Transparent: без этого непрозрачный surface (bg-elevated) перекрывает
-    // фоновую заливку приложения (`AppTheme`, iOS `systemGroupedBackground`), Login — единственный
-    // экран, который рисуется до AdaptiveScaffold (там containerColor уже Color.Transparent).
-    Surface(
-        modifier = modifier.fillMaxSize().testTag(AnixTestTags.LOGIN_SCREEN_ROOT),
-        color = Color.Transparent,
+    Text(
+        text = strings.loginTitle,
+        style = MaterialTheme.typography.headlineSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
+
+    OutlinedTextField(
+        value = state.login,
+        onValueChange = viewModel::onLoginChange,
+        label = { Text(strings.loginLoginLabel) },
+        singleLine = true,
+        enabled = !state.isLoading,
+        keyboardOptions =
+            KeyboardOptions(
+                keyboardType = KeyboardType.Text,
+                capitalization = KeyboardCapitalization.None,
+            ),
+        modifier = Modifier.fillMaxWidth(),
+    )
+
+    AuthPasswordField(
+        value = state.password,
+        onValueChange = viewModel::onPasswordChange,
+        label = strings.loginPasswordLabel,
+        enabled = !state.isLoading,
+    )
+
+    AuthPrimaryButton(
+        text = strings.loginSubmit,
+        onClick = viewModel::submit,
+        isLoading = state.isLoading,
+        enabled = state.login.isNotBlank() && state.password.isNotBlank(),
+    )
+
+    TextButton(
+        onClick = onRegisterClick,
+        enabled = !state.isLoading,
+        modifier = Modifier.heightIn(min = dimens.minTouchTarget),
     ) {
-        // Дизайн-leftovers (фазы 14/15): на desktop форма без ограничения растягивалась на всю
-        // ширину окна — повторяем паттерн ProfileScreen: Box + Column(widthIn(max=contentMaxWidth)).
-        // Высота формы остаётся по максимуму, содержимое центрируется вертикально.
-        Box(
-            modifier = Modifier.fillMaxSize().padding(dimens.spaceL),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxHeight()
-                        .widthIn(max = dimens.contentMaxWidth),
-                verticalArrangement = Arrangement.spacedBy(dimens.spaceM, Alignment.CenterVertically),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = strings.loginTitle,
-                    style = MaterialTheme.typography.headlineMedium,
-                    textAlign = TextAlign.Center,
-                )
+        Text(strings.loginRegisterAction)
+    }
 
-                OutlinedTextField(
-                    value = state.login,
-                    onValueChange = viewModel::onLoginChange,
-                    label = { Text(strings.loginLoginLabel) },
-                    singleLine = true,
-                    enabled = !state.isLoading,
-                    keyboardOptions =
-                        KeyboardOptions(
-                            keyboardType = KeyboardType.Text,
-                            capitalization = KeyboardCapitalization.None,
-                        ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                var passwordVisible by remember { mutableStateOf(false) }
-                OutlinedTextField(
-                    value = state.password,
-                    onValueChange = viewModel::onPasswordChange,
-                    label = { Text(strings.loginPasswordLabel) },
-                    singleLine = true,
-                    enabled = !state.isLoading,
-                    visualTransformation =
-                        if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions =
-                        KeyboardOptions(
-                            keyboardType = if (passwordVisible) KeyboardType.Text else KeyboardType.Password,
-                        ),
-                    trailingIcon = {
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                            AnixIcon(
-                                name = if (passwordVisible) "visibility_off" else "visibility",
-                                contentDescription =
-                                    if (passwordVisible) strings.loginHidePassword else strings.loginShowPassword,
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                Button(
-                    onClick = viewModel::submit,
-                    enabled = !state.isLoading && state.login.isNotBlank() && state.password.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    if (state.isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    } else {
-                        Text(strings.loginSubmit)
-                    }
-                }
-
-                val error = state.error
-                if (error != null) {
-                    Text(
-                        text = error.toMessage(strings),
-                        color = AnixThemeTokens.colors.errorText,
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-        }
+    val error = state.error
+    if (error != null) {
+        AuthErrorText(text = error.toMessage(strings))
     }
 }
 
