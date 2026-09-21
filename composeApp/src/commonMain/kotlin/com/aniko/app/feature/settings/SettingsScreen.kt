@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -26,9 +27,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.di.AppIconHelper
+import com.aniko.data.playerpreferences.PlayerPreferencesStore
 import com.aniko.data.theme.AppIconStore
+import com.aniko.player.PREFERRED_QUALITY_HEIGHTS
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLanguagePicker
 import com.aniko.ui.component.AnixThemePicker
@@ -60,6 +65,11 @@ import org.koin.compose.viewmodel.koinViewModel
  * (заголовок + кнопка «назад» на [onBack]), тем же паттерном, что [NotificationSettingsScreen]/
  * `TokenGalleryScreen`.
  *
+ * **Раздел «Воспроизведение» (default-video-quality).** «Качество видео по умолчанию» (Авто/1080p/
+ * 720p/480p/360p) пишется прямо в [PlayerPreferencesStore] (тот же приём, что `AppIconStore` ниже:
+ * настройка без своей ViewModel-логики). Она применяется при старте воспроизведения, а выбор
+ * качества внутри плеера её не перезаписывает.
+ *
  * Язык и тема читаются/пишутся через параметры экрана ([languageTag]/[onLanguageTagChange],
  * [themeMode]/[onThemeModeChange]), а не через свой Koin-инжект `LocaleStore`/`ThemeStore` внутри
  * `SettingsViewModel` — экран остаётся тонким прокси без собственного стейта (см. критерий
@@ -86,6 +96,8 @@ fun SettingsScreen(
     val dimens = AnixThemeTokens.dimens
     val appIconStore = koinInject<AppIconStore>()
     val appIconHelper = koinInject<AppIconHelper>()
+    val playerPreferences = koinInject<PlayerPreferencesStore>()
+    val preferredQualityHeight by playerPreferences.preferredQualityHeight.collectAsStateWithLifecycle()
 
     Scaffold(
         modifier = modifier.testTag(AnixTestTags.SETTINGS_SCREEN_ROOT),
@@ -147,6 +159,13 @@ fun SettingsScreen(
                             currentTag = languageTag,
                             onSelect = onLanguageTagChange,
                             modifier = Modifier.padding(top = dimens.spaceXs),
+                        )
+                    }
+                    SettingsSectionHeader(text = strings.settingsPlaybackSection)
+                    SettingsPickerListItem(headline = strings.settingsDefaultVideoQuality) {
+                        DefaultVideoQualityPicker(
+                            selectedHeight = preferredQualityHeight,
+                            onSelect = playerPreferences::setPreferredQualityHeight,
                         )
                     }
                     // P16.T21: секция скрыта, когда платформа не поддерживает несколько иконок
@@ -243,4 +262,53 @@ private fun SettingsPickerListItem(
         // странице настроек это читается белой простынёй (живой фидбек 2026-09-17) — прозрачный.
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
+}
+
+/**
+ * Заголовок раздела экрана настроек («Воспроизведение»). Помечен как `heading()` — экранные
+ * читалки перескакивают по разделам; цвет `primary` — тот же акцент, что у выбранного значения в
+ * пикерах плеера, контраст с фоном страницы не ниже AA.
+ */
+@Composable
+private fun SettingsSectionHeader(text: String) {
+    val dimens = AnixThemeTokens.dimens
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = dimens.spaceM, end = dimens.spaceM, top = dimens.spaceL, bottom = dimens.spaceXs)
+                .semantics { heading() },
+    )
+}
+
+/**
+ * Пикер «качество по умолчанию»: «Авто» + [PREFERRED_QUALITY_HEIGHTS] (1080p/720p/480p/360p) — тот же
+ * набор, который знают резолверы источников. `null` ([selectedHeight]) — «Авто»: ничего не
+ * переопределяем, играет то, что выберет хост. Подсказка объясняет ближайшее-нижнее правило и то,
+ * что ручной выбор в плеере настройку не меняет.
+ */
+@Composable
+private fun DefaultVideoQualityPicker(
+    selectedHeight: Int?,
+    onSelect: (Int?) -> Unit,
+) {
+    val strings = LocalStrings.current
+    val dimens = AnixThemeTokens.dimens
+    Column {
+        Text(
+            text = strings.settingsDefaultVideoQualityHint,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        ChipRow(
+            items = listOf<Int?>(null) + PREFERRED_QUALITY_HEIGHTS,
+            isSelected = { it == selectedHeight },
+            label = { height -> if (height == null) strings.settingsVideoQualityAuto else "${height}p" },
+            onClick = onSelect,
+            modifier = Modifier.padding(top = dimens.spaceS),
+        )
+    }
 }

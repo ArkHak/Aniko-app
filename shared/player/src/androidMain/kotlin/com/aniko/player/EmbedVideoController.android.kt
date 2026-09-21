@@ -54,6 +54,9 @@ actual class EmbedVideoController actual constructor() {
      */
     private var videoFrame: JavaScriptReplyProxy? = null
 
+    /** Применяет «качество по умолчанию» из настроек к меню хоста — один раз на источник. */
+    private val qualityApplier = PreferredQualityApplier()
+
     private val messageListener =
         WebViewCompat.WebMessageListener { _, message, sourceOrigin, _, replyProxy ->
             onBridgeMessage(sourceOrigin, message, replyProxy)
@@ -62,8 +65,11 @@ actual class EmbedVideoController actual constructor() {
     actual fun setExpectedSource(embedUrl: String) {
         originFilter = EmbedOriginFilter(embedUrl)
         videoFrame = null
+        qualityApplier.reset()
         stateFlow.value = EmbedVideoState()
     }
+
+    actual fun setPreferredQuality(heightPx: Int?) = qualityApplier.setPreferred(heightPx)
 
     /**
      * Ставит мост на [target]. Обязан быть вызван ДО первой загрузки страницы: скрипт
@@ -132,6 +138,9 @@ actual class EmbedVideoController actual constructor() {
         if (parsed.isVideoFound) {
             videoFrame = replyProxy
             stateFlow.value = parsed
+            // Видео найдено и меню качеств известно — единственный момент, когда клик по пункту меню
+            // хоста имеет смысл; применяется один раз на источник (см. PreferredQualityApplier).
+            qualityApplier.onState(parsed)?.let(::setQuality)
         } else if (videoFrame == null) {
             // Второй фрейм того же домена без видео не должен затирать состояние настоящего.
             stateFlow.value = parsed

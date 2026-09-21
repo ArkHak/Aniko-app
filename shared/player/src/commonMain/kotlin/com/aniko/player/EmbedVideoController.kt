@@ -26,6 +26,15 @@ data class EmbedVideoState(
     val availableQualities: List<String> = emptyList(),
     /** Текущее качество по данным хоста, если он его показывает. */
     val currentQuality: String? = null,
+    /**
+     * Desktop: цель идущей СЕЙЧАС смены качества (перезапуск потока с сохранением позиции);
+     * `null` — смены нет. Пока не `null`, [currentTimeMs]/[durationMs]/[isPlaying] заморожены на
+     * значениях ДО смены — UI не дёргается в 0 и позиция для «продолжить с…» не затирается.
+     * На Android/iOS всегда `null`: там качество меняет сама страница хоста.
+     */
+    val switchingQualityTo: String? = null,
+    /** Desktop: последний сбой смены качества с откатом (см. [QualitySwitchFailure]); иначе `null`. */
+    val qualitySwitchFailure: QualitySwitchFailure? = null,
 )
 
 /**
@@ -94,6 +103,18 @@ expect class EmbedVideoController() {
      */
     fun setQuality(quality: String)
 
+    /**
+     * Предпочтительное качество по умолчанию из настроек («Воспроизведение»): высота кадра в px
+     * (`1080`/`720`/`480`/`360`) либо `null` — «Авто», ничего не переопределять (поведение хоста).
+     * Применяется ОДИН раз на источник, при старте воспроизведения, и только к тому, что реально
+     * есть у источника: точное совпадение, иначе ближайшее нижнее, иначе ближайшее верхнее
+     * ([pickQualityForPreference]). Ручной выбор через [setQuality] действует на текущую серию и
+     * настройку НЕ перезаписывает; смена настройки посреди серии текущий поток не трогает.
+     * Desktop — выбирает поток до первого кадра; Android/iOS — переключает меню хоста, как только
+     * мост увидел `<video>` и список качеств ([PreferredQualityApplier]).
+     */
+    fun setPreferredQuality(heightPx: Int?)
+
     /** Снимает мост с WebView. Вызывается из [rememberEmbedVideoController], вручную не нужен. */
     fun release()
 }
@@ -107,11 +128,23 @@ expect class EmbedVideoController() {
  * в `WKWebViewConfiguration` до создания `WKWebView`. Смена серии меняет только ожидаемый
  * домен через [EmbedVideoController.setExpectedSource].
  *
+ * [preferredQualityHeight] — «качество по умолчанию» из настроек, см.
+ * [EmbedVideoController.setPreferredQuality].
+ *
  * Результат передаётся в [EmbedPlayerView] параметром `controller`.
  */
 @Composable
-fun rememberEmbedVideoController(embedUrl: String): EmbedVideoController {
+fun rememberEmbedVideoController(
+    embedUrl: String,
+    preferredQualityHeight: Int? = null,
+): EmbedVideoController {
     val controller = remember { EmbedVideoController() }
+    // Предпочтение ставим ДО первой загрузки (а не в SideEffect/LaunchedEffect): Desktop выбирает
+    // поток по нему сразу после резолва, а Android/iOS — при первом сообщении моста.
+    remember(controller, preferredQualityHeight) {
+        controller.setPreferredQuality(preferredQualityHeight)
+        preferredQualityHeight
+    }
     // Намеренно в `remember`, а не в `SideEffect`/`LaunchedEffect`: смена ожидаемого домена
     // должна произойти ДО того, как `AndroidView.update`/`WKWebView` начнут грузить новый URL,
     // иначе первые сообщения новой страницы отфильтруются по домену предыдущей.

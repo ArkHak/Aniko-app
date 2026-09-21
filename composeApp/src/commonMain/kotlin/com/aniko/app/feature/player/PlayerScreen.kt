@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.navigation.LocalTitleNavigator
+import com.aniko.data.playerpreferences.PlayerPreferencesStore
 import com.aniko.model.VideoHost
 import com.aniko.player.EmbedPlayerView
 import com.aniko.player.HideSystemBarsEffect
@@ -39,6 +40,7 @@ import com.aniko.ui.i18n.Strings
 import com.aniko.ui.testing.AnixTestTags
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -184,7 +186,12 @@ fun PlayerScreen(
                 if (source is PlaybackSource.Embed) {
                     // Мост к `<video>` внутри чужой embed-страницы: даёт play/pause/seek/скорость
                     // на Android, iOS и Desktop (JCEF, `feature/desktop-video-player`).
-                    val controller = rememberEmbedVideoController(source.url)
+                    // «Качество по умолчанию» из настроек: контроллер применяет его при старте источника
+                    // (Desktop — выбором потока до первого кадра, Android/iOS — пунктом меню хоста).
+                    // Ручной выбор ниже настройку не перезаписывает.
+                    val preferredQualityHeight by
+                        koinInject<PlayerPreferencesStore>().preferredQualityHeight.collectAsStateWithLifecycle()
+                    val controller = rememberEmbedVideoController(source.url, preferredQualityHeight)
                     val videoState by controller.state.collectAsStateWithLifecycle()
                     val pictureInPicture = rememberPlayerPictureInPicture(controller)
                     LaunchedEffect(pictureInPicture) {
@@ -209,15 +216,22 @@ fun PlayerScreen(
                     var manualQuality by remember(source.url) { mutableStateOf<String?>(null) }
                     // Оптимистичный лейбл (manualQuality) живёт только для хост-скрейпинга:
                     // там пикер предлагает то, что показывает меню хоста. Когда качества
-                    // присылает контроллер (Desktop), лейбл берём из его `currentQuality` —
-                    // показывать качество, которое движок реально играет, а не то, что UI
-                    // оптимистично выбрал (переключение могло не состояться — тогда чип врёт).
+                    // присылает контроллер (Desktop), лейбл берём из его состояния — показывать
+                    // качество, которое движок реально играет (или на которое идёт смена:
+                    // `switchingQualityTo`, рядом виден индикатор), а не то, что UI оптимистично
+                    // выбрал: переключение могло не состояться, и тогда контроллер откатился —
+                    // чип обязан показать откат, а не залипнуть на неудавшемся выборе (раньше
+                    // `manualQuality` перебивал контроллер и на Desktop — чип врал после сбоя).
                     // URL-фолбэк (`currentEmbedQuality`) — только для хост-скрейпинга: на Desktop
                     // он подставлял бы декоративный сегмент URL вместо реального качества потока.
                     val currentQuality =
-                        manualQuality
-                            ?: videoState.currentQuality
-                            ?: currentEmbedQuality(source.url).takeUnless { qualityDrivenByController }
+                        if (qualityDrivenByController) {
+                            videoState.switchingQualityTo ?: videoState.currentQuality
+                        } else {
+                            manualQuality
+                                ?: videoState.currentQuality
+                                ?: currentEmbedQuality(source.url)
+                        }
                     var showQualityPicker by remember { mutableStateOf(false) }
                     // Скорость — одним табом (как качество, P16 2026-09-10).
                     val speedRate = videoState.playbackRate
@@ -447,7 +461,7 @@ fun PlayerScreen(
                                         current = currentQuality,
                                         onSelect = { quality ->
                                             controller.setQuality(quality)
-                                            manualQuality = quality
+                                            if (!qualityDrivenByController) manualQuality = quality
                                             showQualityPicker = false
                                         },
                                         onDismiss = { showQualityPicker = false },
@@ -469,6 +483,13 @@ fun PlayerScreen(
                                         onDismiss = { showSpeedPicker = false },
                                     )
                                 }
+
+                                // Индикатор «Переключаем качество…» / уведомление об откате (Desktop) —
+                                // поверх кадра видео, в том же слое, что и пикеры.
+                                PlayerQualitySwitchStatus(
+                                    state = videoState,
+                                    modifier = Modifier.fillMaxWidth().height(videoHeight).offset(y = topOffset),
+                                )
 
                                 // P16.T7 — resume-диалог «Продолжить с M:SS / С начала», по одному
                                 // разу на переоткрытие серии ([PlayerUiState.resumePositionMs]

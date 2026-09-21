@@ -135,6 +135,10 @@ val EnStrings: Strings =
         override val playerQualityChip = { label: String -> "Quality: $label" }
         override val playerQualityTitle = "Video quality"
         override val playerSpeedTitle = "Speed"
+        override val playerQualitySwitching: (String) -> String = { quality -> "Switching quality: $quality" }
+        override val playerQualitySwitchRestored: (String, String) -> String =
+            { requested, restored -> "Couldn't switch to $requested — back to $restored" }
+        override val playerQualitySwitchFailed: (String) -> String = { requested -> "Couldn't switch to $requested" }
         override val playerBrightnessLabel = "Brightness"
         override val playerVolumeLabel = "Volume"
 
@@ -154,6 +158,12 @@ val EnStrings: Strings =
         override val appIconClassic = "Classic"
         override val appIconDream = "Dream"
         override val appIconIce = "Ice"
+        override val settingsPlaybackSection = "Playback"
+        override val settingsDefaultVideoQuality = "Default video quality"
+        override val settingsDefaultVideoQualityHint =
+            "If the source doesn't have it, the closest available quality is used. " +
+                "Changing quality in the player only affects the current episode."
+        override val settingsVideoQualityAuto = "Auto"
         override val galleryTitle = "Design tokens"
         override val galleryColorsSection = "Colors"
         override val galleryTypographySection = "Typography"

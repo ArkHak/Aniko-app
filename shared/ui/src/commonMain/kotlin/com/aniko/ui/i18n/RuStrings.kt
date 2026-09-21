@@ -136,6 +136,11 @@ val RuStrings: Strings =
         override val playerQualityChip = { label: String -> "Качество: $label" }
         override val playerQualityTitle = "Качество видео"
         override val playerSpeedTitle = "Скорость"
+        override val playerQualitySwitching: (String) -> String = { quality -> "Переключаем качество: $quality" }
+        override val playerQualitySwitchRestored: (String, String) -> String =
+            { requested, restored -> "Не удалось переключиться на $requested — снова $restored" }
+        override val playerQualitySwitchFailed: (String) -> String =
+            { requested -> "Не удалось переключиться на $requested" }
         override val playerBrightnessLabel = "Яркость"
         override val playerVolumeLabel = "Громкость"
 
@@ -155,6 +160,12 @@ val RuStrings: Strings =
         override val appIconClassic = "Классика"
         override val appIconDream = "Мечта"
         override val appIconIce = "Иней"
+        override val settingsPlaybackSection = "Воспроизведение"
+        override val settingsDefaultVideoQuality = "Качество видео по умолчанию"
+        override val settingsDefaultVideoQualityHint =
+            "Если такого нет у источника — берётся ближайшее доступное. " +
+                "Выбор качества в плеере действует только на текущую серию."
+        override val settingsVideoQualityAuto = "Авто"
         override val galleryTitle = "Дизайн-токены"
         override val galleryColorsSection = "Цвета"
         override val galleryTypographySection = "Типографика"

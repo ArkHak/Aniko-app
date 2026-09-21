@@ -64,6 +64,9 @@ object AnixTestTags {
     /** Корень [com.aniko.app.feature.player.PlayerScreen]. */
     const val PLAYER_SCREEN_ROOT: String = "player_screen_root"
 
+    /** Пилюля «Переключаем качество…» / уведомление о сбое смены качества в плеере (Desktop). */
+    const val PLAYER_QUALITY_SWITCH_STATUS: String = "player_quality_switch_status"
+
     // --- Нижняя навигация (com.aniko.ui.adaptive.AnixNavigationBar, AnixWindowSize.Compact) ---
 
     /** Сам контейнер `NavigationBar`. */

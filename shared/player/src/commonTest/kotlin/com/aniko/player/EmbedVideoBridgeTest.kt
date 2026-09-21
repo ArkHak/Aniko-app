@@ -81,4 +81,22 @@ class EmbedVideoBridgeTest {
         assertEquals("sibnet.ru", registrableDomainOf("http://video.sibnet.ru:8080/shell.php"))
         assertNull(registrableDomainOf("https://localhost"))
     }
+
+    @Test
+    fun bridgeScript_snapshotsPlaybackBeforeQualitySwitch_andRestoresItAfterReload() {
+        val script = embedBridgeScript()
+
+        // Снимок ДО клика по пункту меню хоста + восстановление после перезагрузки источника:
+        // позиция, пауза, скорость, громкость (иначе хост может «перезапустить с начала»).
+        assertTrue("qualityRestore = captureQualityRestore()" in script)
+        assertTrue("function applyQualityRestore(final)" in script)
+        assertTrue("video.currentTime = r.t" in script)
+        assertTrue("video.playbackRate = r.rate" in script)
+        assertTrue("video.volume = r.vol" in script)
+        assertTrue("video.pause()" in script)
+        // Реагируем именно на перезагрузку источника, а не на любое событие.
+        assertTrue("'emptied' || type === 'loadstart'" in script)
+        // Нет такого пункта меню — снимок сбрасывается, чтобы не «протух» до следующей загрузки.
+        assertTrue("if (!switchQuality(cmd.slice(8))) { qualityRestore = null; }" in script)
+    }
 }

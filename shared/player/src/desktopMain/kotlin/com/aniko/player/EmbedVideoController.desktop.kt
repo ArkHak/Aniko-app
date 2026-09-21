@@ -2,10 +2,17 @@
 
 package com.aniko.player
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import uk.co.caprica.vlcj.media.MediaRef
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
 
@@ -28,11 +35,19 @@ import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
  * [attach]/[detach] вызывает `EmbedPlayerView` (desktop) при создании/уничтожении VLCJ-компонента
  * видео-окна — тот же паттерн, что раньше был с `CefBrowser`/`CefClient` у JCEF-моста.
  *
- * `@Suppress("TooManyFunctions")` — как и на прежнем JCEF-мосте: размер класса задан контрактом
- * `expect class` + внутренние [attach]/[detach]/[onStreamsResolved] (вызывает `EmbedPlayerView`
- * при ресолве источника) + приватный [playStream] (единая точка запуска потока для
- * [setQuality]) — все обслуживают тот же самый мост, резать по произвольной границе ради
- * счётчика было бы хуже, чем чуть больший класс.
+ * **Потоки (важно).** События libVLC приходят на его нативный поток, а вызывать libVLC оттуда нельзя
+ * (vlcj: «вызов неэффективен, возможно странное поведение либо фатальный краш JVM»). Прежняя
+ * реализация делала именно это — `setTime`/`setPause` прямо в `playing()`. Теперь всё, что трогает
+ * автомат смены качества и (через него) плеер, идёт через `MediaPlayer.submit` — один
+ * сериализованный поток (см. [post]); события-«переключатели» (`mediaChanged`/`playing`/`error`)
+ * лишь пересылаются туда.
+ *
+ * Смена качества — целиком в [QualitySwitchCoordinator] (чистый автомат, покрыт тестами); здесь
+ * только пересылка событий и отражение его состояния в [EmbedVideoState].
+ *
+ * `@Suppress("TooManyFunctions")` — размер класса задан контрактом `expect class` + внутренними
+ * [attach]/[detach]/[startResolvedStream]/[post]/[onSwitchState] — все обслуживают тот же самый
+ * мост, резать по произвольной границе ради счётчика было бы хуже, чем чуть больший класс.
  */
 @Suppress("TooManyFunctions")
 actual class EmbedVideoController actual constructor() {
@@ -49,41 +64,36 @@ actual class EmbedVideoController actual constructor() {
     @Volatile
     private var mediaPlayer: MediaPlayer? = null
 
-    /** Качества текущего источника (лейбл «720p» → URL), присланные `EmbedPlayerView` через
-     *  [onStreamsResolved] после [DesktopStreamResolver] — единственный источник правды для
-     *  переключения качества на Desktop (у libVLC нет клиентского dropdown хоста, поэтому
-     *  переключаем САМИ, перезапуская поток; см. KDoc [setQuality]). Пустая map — хост отдал
-     *  одно качество (Sibnet) или резолв ещё не завершился. */
+    /** Автомат смены качества текущего [mediaPlayer]; пересоздаётся на каждый [attach]. */
     @Volatile
-    private var qualityStreams: Map<String, String> = emptyMap()
+    private var coordinator: QualitySwitchCoordinator? = null
 
-    /** Referer, с которым нужно стримить потоки из [qualityStreams] — тот же `Resolved.referer`,
-     *  что и у дефолтного потока (Kodik: `https://kodikplayer.com/`, AniLibria: фиксированный
-     *  домен бренда), поэтому один на все качества. `null` — Referer не нужен (Sibnet, но у него
-     *  и качеств нет; поле на будущее, см. KDoc [setQuality]). */
+    /** Таймауты загрузки потока: отдельный scope, чтобы [detach] гарантированно гасил все ожидания. */
+    private var timeoutScope: CoroutineScope? = null
+
+    /** «Качество по умолчанию» из настроек ([setPreferredQuality]); `null` — «Авто». */
+    @Volatile
+    private var preferredQualityHeight: Int? = null
+
+    /** Сколько ждать `playing` нового качества до отката. `internal var` — только ради интеграционного теста
+     *  (ждать 15 с в каждом сценарии таймаута незачем); продовый код значение не меняет. */
+    internal var qualitySwitchTimeoutMs: Long = QualitySwitchCoordinator.DEFAULT_SWITCH_TIMEOUT_MS
+
+    /** Referer, с которым нужно стримить потоки текущего источника — тот же `Resolved.referer`, что и
+     *  у дефолтного потока (Kodik: `https://kodikplayer.com/`, AniLibria: фиксированный домен
+     *  бренда), поэтому один на все качества. `null` — Referer не нужен (Sibnet). */
     @Volatile
     private var streamReferer: String? = null
 
-    /** URL потока, который реально играет сейчас — чтобы [setQuality] не перезапускал поток,
-     *  если выбрано качество, которое и так играет (опция уже выбрана в пикере). */
-    @Volatile
-    private var lastPlayedUrl: String? = null
-
-    /** Позиция (мс), на которую откатываем воспроизведение после переключения качества: читаем
-     *  ДО `media().play(newUrl)` (после него `status().time()` уже про новый поток), применяем
-     *  в `playing` нового медиа (см. [eventListener]) — до этого момента seek не имеет смысла:
-     *  длительность нового потока ещё не распарсена. `null`/0 — начать с начала. */
-    @Volatile
-    private var pendingSeekAfterSwitchMs: Long? = null
-
-    /** `true` — пользователь был на паузе в момент переключения качества: новый поток стартует
-     *  с `media().play()` (он всегда начинает играть), поэтому паузу восстанавливаем по первому
-     *  `playing` нового медиа, а не мгновенно (setPause до готовности медиа молча теряется). */
-    @Volatile
-    private var pendingPauseAfterSwitch: Boolean = false
-
     private val eventListener =
         object : MediaPlayerEventAdapter() {
+            // Подтверждение, что libVLC принял именно нашу очередную загрузку: события, пришедшие
+            // ДО него, относятся к предыдущему медиа (см. [QualitySwitchCoordinator.onMediaChanged]).
+            override fun mediaChanged(
+                mp: MediaPlayer,
+                media: MediaRef?,
+            ) = post(mp) { it.onMediaChanged() }
+
             // Первый реальный сигнал, что медиа-пайплайн реально ожил (не просто "URL резолвнулся"
             // — резолв может отдать URL, который libVLC не сможет открыть) — тем же смыслом, что и
             // isVideoFound у JS-моста ("есть на что реально смотреть"), но источник другой.
@@ -93,47 +103,37 @@ actual class EmbedVideoController actual constructor() {
             ) = stateFlow.update { it.copy(isVideoFound = true) }
 
             override fun playing(mp: MediaPlayer) {
-                // Переключение качества: позиция/пауза восстанавливаются по ПЕРВОМУ `playing`
-                // нового медиа — см. KDoc [pendingSeekAfterSwitchMs]/[pendingPauseAfterSwitch].
-                // На обычном resume после паузы оба флага `null`/`false` — ветка ничего не делает.
-                val resumeMs = pendingSeekAfterSwitchMs
-                pendingSeekAfterSwitchMs = null
-                if (resumeMs != null && resumeMs > 0L) {
-                    runCatching { mp.controls().setTime(resumeMs) }
-                }
-                if (pendingPauseAfterSwitch) {
-                    pendingPauseAfterSwitch = false
-                    runCatching { mp.controls().setPause(true) }
-                }
-                stateFlow.update { it.copy(isVideoFound = true, isPlaying = true) }
+                post(mp) { it.onPlaying() }
+                updateUnlessSwitching { it.copy(isVideoFound = true, isPlaying = true) }
             }
 
-            override fun paused(mp: MediaPlayer) = stateFlow.update { it.copy(isPlaying = false) }
+            override fun paused(mp: MediaPlayer) = updateUnlessSwitching { it.copy(isPlaying = false) }
 
-            override fun stopped(mp: MediaPlayer) = stateFlow.update { it.copy(isPlaying = false) }
+            override fun stopped(mp: MediaPlayer) = updateUnlessSwitching { it.copy(isPlaying = false) }
 
-            override fun finished(mp: MediaPlayer) = stateFlow.update { it.copy(isPlaying = false) }
+            override fun finished(mp: MediaPlayer) = updateUnlessSwitching { it.copy(isPlaying = false) }
 
             // Единственный сигнал, что libVLC ПОЛУЧИЛ резолвнутый URL, но не смог его реально
             // проиграть (неподдерживаемый формат/403 без верного Referer/битая ссылка,
             // истёкшая на середине CDN-сессия) — отдельный провал от "резолв не нашёл URL вовсе"
             // (там `isVideoFound` просто никогда не станет `true`, см. `EmbedPlayer.desktop.kt`).
-            // Откат `isVideoFound` в `false` — тот же fallback, что и у полностью неудачного
-            // резолва: `PlayerOverlay` (commonMain) деградирует до одной кнопки "назад" вместо
-            // того, чтобы держать на экране полноценные контролы над мёртвым плеером.
-            override fun error(mp: MediaPlayer) = stateFlow.update { it.copy(isVideoFound = false, isPlaying = false) }
+            // Если идёт смена качества — это провал НОВОГО потока: автомат откатится на прежнее
+            // качество, плеер «мёртвым» не объявляется. Иначе — откат `isVideoFound` в `false`, тот же
+            // fallback, что и у полностью неудачного резолва: `PlayerOverlay` (commonMain) деградирует
+            // до одной кнопки "назад" вместо полноценных контролов над мёртвым плеером.
+            override fun error(mp: MediaPlayer) = post(mp) { if (!it.onError()) markPlayerDead() }
 
             override fun timeChanged(
                 mp: MediaPlayer,
                 newTime: Long,
-            ) = stateFlow.update { it.copy(currentTimeMs = newTime.coerceAtLeast(0L)) }
+            ) = updateUnlessSwitching { it.copy(currentTimeMs = newTime.coerceAtLeast(0L)) }
 
             // 0/отрицательное — переходное состояние между сериями/до готовности медиа, не настоящая
             // нулевая длительность (тот же смысл, что и "duration = NaN" у JS-моста, см. её KDoc).
             override fun lengthChanged(
                 mp: MediaPlayer,
                 newLength: Long,
-            ) = stateFlow.update { it.copy(durationMs = newLength.takeIf { length -> length > 0L }) }
+            ) = updateUnlessSwitching { it.copy(durationMs = newLength.takeIf { length -> length > 0L }) }
 
             // vlcj 4.11.0's MediaPlayerEventListener не даёт отдельного rateChanged-события (в
             // отличие от JS-моста, где `ratechange` — реальное DOM-событие `<video>`) — скорость
@@ -141,39 +141,58 @@ actual class EmbedVideoController actual constructor() {
         }
 
     actual fun setExpectedSource(embedUrl: String) {
-        qualityStreams = emptyMap()
         streamReferer = null
-        lastPlayedUrl = null
-        pendingSeekAfterSwitchMs = null
-        pendingPauseAfterSwitch = false
+        mediaPlayer?.let { player -> post(player) { it.reset() } }
         stateFlow.value = EmbedVideoState()
     }
 
+    actual fun setPreferredQuality(heightPx: Int?) {
+        preferredQualityHeight = heightPx
+    }
+
     /**
-     * Принимает итог резолва [DesktopStreamResolver] от `EmbedPlayerView` (desktop): запоминает
-     *  [DesktopStreamResolver.Resolved.qualityStreams]/`referer` для будущих [setQuality] и
-     *  публикует качества в [EmbedVideoState] — именно этот список видит чип качества
-     *  [PlayerScreen] (`availableQualities` у других платформ заполняет JS-мост из меню хоста,
-     *  здесь меню нет — резолвер отдал список сам).
+     * Принимает итог резолва [DesktopStreamResolver] от `EmbedPlayerView` (desktop) и ЗАПУСКАЕТ поток:
+     *  публикует качества в [EmbedVideoState] — именно этот список видит чип качества [PlayerScreen]
+     *  (`availableQualities` у других платформ заполняет JS-мост из меню хоста, здесь меню нет —
+     *  резолвер отдал список сам) — и стартует поток, выбранный по «качеству по умолчанию»
+     *  ([setPreferredQuality]): точное/ближайшее нижнее/ближайшее верхнее из
+     *  [DesktopStreamResolver.Resolved.qualityStreams]; «Авто» либо источник без списка качеств
+     *  (Sibnet) — умолчание резолвера ([DesktopStreamResolver.Resolved.streamUrl]). Если
+     *  предпочтительный поток не запустится, автомат откатится на умолчание резолвера.
      *
-     * Текущее качество выводится сопоставлением `streamUrl` с URL-значениями map (дефолтный
-     *  поток резолвера — всегда один из кандидатов, см. KDoc [KodikDirectLinkResolver.resolve]);
-     *  совпадения нет только если хост отдал качества отдельно от дефолтного URL — тогда
-     *  `currentQuality` остаётся `null`, и чип показывает первый доступный вариант по договорён-
-     *  ности UI (лейбл чипа — не источник истины, переключение идёт по [setQuality]).
+     * Текущее качество выводится сопоставлением `streamUrl` с URL-значениями map (дефолтный поток
+     *  резолвера — всегда один из кандидатов, см. KDoc [KodikDirectLinkResolver.resolve]); совпадения
+     *  нет только если хост отдал качества отдельно от дефолтного URL — тогда предпочтение не
+     *  применяется (откатываться было бы некуда), играет умолчание резолвера, `currentQuality` — `null`.
      */
-    internal fun onStreamsResolved(resolved: DesktopStreamResolver.Resolved) {
-        qualityStreams = resolved.qualityStreams
+    internal fun startResolvedStream(resolved: DesktopStreamResolver.Resolved) {
+        val player = mediaPlayer ?: return
         streamReferer = resolved.referer
-        lastPlayedUrl = resolved.streamUrl
-        if (resolved.qualityStreams.isNotEmpty()) {
-            val current =
-                resolved.qualityStreams.entries
-                    .firstOrNull { (_, url) -> url == resolved.streamUrl }
-                    ?.key
-            stateFlow.update {
-                it.copy(availableQualities = resolved.qualityStreams.keys.toList(), currentQuality = current)
+        val streams = resolved.qualityStreams
+        val defaultQuality = streams.entries.firstOrNull { (_, url) -> url == resolved.streamUrl }?.key
+        if (streams.isNotEmpty()) {
+            stateFlow.update { it.copy(availableQualities = streams.keys.toList(), currentQuality = defaultQuality) }
+        }
+        val preferred = pickQualityForPreference(preferredQualityHeight, streams.keys)
+        post(player) { switcher ->
+            if (defaultQuality != null) {
+                switcher.startPlayback(streams, defaultQuality, preferred)
+            } else {
+                playDirect(player, resolved.streamUrl)
             }
+        }
+    }
+
+    /** Запуск потока без списка качеств (Sibnet / умолчание без совпадения в map) — как раньше, без автомата. */
+    private fun playDirect(
+        player: MediaPlayer,
+        url: String,
+    ) {
+        val referer = streamReferer
+        if (referer != null) {
+            player.media().play(url, ":http-referrer=$referer")
+        } else {
+            player.media().play(url)
         }
     }
 
@@ -182,6 +201,25 @@ actual class EmbedVideoController actual constructor() {
     internal fun attach(player: MediaPlayer) {
         detach()
         mediaPlayer = player
+        // InjectDispatcher: контроллер создаётся composable-функцией `rememberEmbedVideoController`,
+        // а не Koin — внедрять диспетчер некуда; scope нужен только чтобы отложенно перепostить
+        // таймаут обратно на поток плеера, конкурентной работы на нём нет.
+        @Suppress("InjectDispatcher")
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        timeoutScope = scope
+        val engine =
+            VlcQualitySwitchEngine(
+                player = player,
+                referer = { streamReferer },
+                currentTimeMs = { stateFlow.value.currentTimeMs },
+                scheduleTimeout = { token, delayMs ->
+                    scope.launch {
+                        delay(delayMs)
+                        post(player) { it.onTimeout(token) }
+                    }
+                },
+            )
+        coordinator = QualitySwitchCoordinator(engine, ::onSwitchState, qualitySwitchTimeoutMs)
         player.events().addMediaPlayerEventListener(eventListener)
     }
 
@@ -189,14 +227,13 @@ actual class EmbedVideoController actual constructor() {
     internal fun detach() {
         val player = mediaPlayer
         mediaPlayer = null
+        coordinator = null
+        timeoutScope?.cancel()
+        timeoutScope = null
         if (player != null) {
             runCatching { player.events().removeMediaPlayerEventListener(eventListener) }
         }
-        qualityStreams = emptyMap()
         streamReferer = null
-        lastPlayedUrl = null
-        pendingSeekAfterSwitchMs = null
-        pendingPauseAfterSwitch = false
         stateFlow.value = EmbedVideoState()
     }
 
@@ -232,56 +269,73 @@ actual class EmbedVideoController actual constructor() {
     }
 
     /**
-     * Переключение качества на Desktop (заменяет прежний CUT этой ветки): у libVLC нет
-     *  клиентского quality-dropdown чужого хоста, которым управлял бы старый JS-мост
-     *  ([embedBridgeScript].switchQuality) — поэтому переключаем САМИ: [DesktopStreamResolver]
-     *  отдал отдельный playable URL на каждое качество ([qualityStreams], прозондированные —
-     *  мёртвых вариантов там нет), и выбор пользователя = перезапуск потока на новом URL с
-     *  тем же `:http-referrer=`, что у дефолтного (см. KDoc [streamReferer]).
+     * Переключение качества на Desktop: у libVLC нет клиентского quality-dropdown чужого хоста,
+     *  которым управлял бы старый JS-мост ([embedBridgeScript].switchQuality) — поэтому переключаем
+     *  САМИ: [DesktopStreamResolver] отдал отдельный playable URL на каждое качество (прозондированные —
+     *  мёртвых вариантов там нет), выбор пользователя = перезапуск потока на новом URL с тем же
+     *  `:http-referrer=`, что у дефолтного.
      *
-     * Сохранение позиции: текущую позицию читаем ДО перезапуска (`status().time()`), применяем
-     *  по первому `playing` нового медиа ([pendingSeekAfterSwitchMs]) — seek до готовности
-     *  нового потока не имеет смысла (длительность ещё не распарсена, setTime потерялся бы).
-     *  Состояние паузы восстанавливается так же ([pendingPauseAfterSwitch]): `media().play()`
-     *  всегда начинает играть, и если пользователь был на паузе, новый поток останавливаем
-     *  по первому `playing`. Пользователю виден мгновенный seek при старте нового качества —
-     *  тот же UX, что даёт переключение качества в WebView-плеере хоста.
+     * Сама политика (снимок позиции/паузы/скорости/громкости ДО смены, старт нового потока сразу с той
+     *  же позиции и на паузе, если пользователь был на паузе, защита от гонок при быстром повторном
+     *  выборе, откат при ошибке/таймауте) — в [QualitySwitchCoordinator]; здесь запрос лишь уходит на
+     *  сериализованный поток плеера. Безопасный no-op там, где переключать нечего: неизвестное качество,
+     *  оно уже играет, плеер не приаттачен, качества не присланы (Sibnet/резолв ещё идёт).
      *
-     * Безопасный no-op остаётся там, где переключать нечего: неизвестное [quality] (не из
-     *  [qualityStreams]), [quality] уже играет ([lastPlayedUrl]), плеер не приаттачен,
-     *  качества не присланы (Sibnet/резолв ещё идёт) — честный no-op, как и раньше, UI это
-     *  предусматривает (чип качества не рисуется при пустом списке, см. KDoc [PlayerScreen]).
+     * Ручной выбор действует на текущий источник и на настройку «по умолчанию» НЕ влияет.
      */
     actual fun setQuality(quality: String) {
         val player = mediaPlayer ?: return
-        val url = qualityStreams[quality]
-        // null — качество не из списка/список пуст (Sibnet, резолв ещё идёт); equals lastPlayedUrl —
-        // это качество уже играет (опция уже выбрана в пикере). Оба случая — честный no-op.
-        if (url == null || url == lastPlayedUrl) return
-        pendingSeekAfterSwitchMs = player.status().time().coerceAtLeast(0L)
-        pendingPauseAfterSwitch = !stateFlow.value.isPlaying
-        playStream(player, url)
+        post(player) { it.request(quality) }
     }
 
     /**
-     * Запускает URL потока на приаттаченном плеере с сохранённым referer и обновляет
-     *  [EmbedVideoState.currentQuality] под фактически играющий вариант — единая точка запуска
-     *  для [setQuality] (первоначальный запуск дефолтного потока делает сам `EmbedPlayerView`,
-     *  см. `EmbedPlayer.desktop.kt` — ему и `onStreamsResolved` шлёт).
+     * Ставит [task] на сериализованный поток [player] (`MediaPlayer.submit`) — единственное место,
+     * откуда автомат/плеер вызываются из событий libVLC и с UI. Задача тихо отбрасывается, если к
+     * моменту исполнения плеер уже отцеплен ([detach]) — иначе очередь, которую vlcj дорабатывает при
+     * `release()`, дёргала бы уже уничтожаемый нативный плеер.
      */
-    private fun playStream(
+    private fun post(
         player: MediaPlayer,
-        url: String,
+        task: (QualitySwitchCoordinator) -> Unit,
     ) {
-        val referer = streamReferer
-        if (referer != null) {
-            player.media().play(url, ":http-referrer=$referer")
-        } else {
-            player.media().play(url)
+        val target = coordinator ?: return
+        runCatching {
+            player.submit {
+                if (mediaPlayer === player && coordinator === target) runCatching { task(target) }
+            }
         }
-        lastPlayedUrl = url
-        stateFlow.update { state ->
-            state.copy(currentQuality = qualityStreams.entries.firstOrNull { (_, stream) -> stream == url }?.key)
+    }
+
+    /**
+     * События старого потока во время смены качества не должны трогать UI-состояние
+     * (см. [EmbedVideoState.switchingQualityTo]).
+     */
+    private fun updateUnlessSwitching(transform: (EmbedVideoState) -> EmbedVideoState) {
+        stateFlow.update { if (it.switchingQualityTo != null) it else transform(it) }
+    }
+
+    /** Отражает состояние автомата смены качества в [EmbedVideoState]. Вызывается на потоке плеера. */
+    private fun onSwitchState(next: QualitySwitchState) {
+        val finished = next.switchingTo == null && stateFlow.value.switchingQualityTo != null
+        // Длительность нового медиа: `lengthChanged` во время смены игнорировался (см. updateUnlessSwitching).
+        val length = if (finished) runCatching { mediaPlayer?.status()?.length() }.getOrNull() else null
+        stateFlow.update { current ->
+            val updated =
+                current.copy(
+                    currentQuality = next.currentQuality,
+                    switchingQualityTo = next.switchingTo,
+                    qualitySwitchFailure = next.failure,
+                )
+            when {
+                next.failure?.restoredTo == null && next.failure != null ->
+                    updated.copy(isVideoFound = false, isPlaying = false)
+                length != null && length > 0L -> updated.copy(durationMs = length)
+                else -> updated
+            }
         }
+    }
+
+    private fun markPlayerDead() {
+        stateFlow.update { it.copy(isVideoFound = false, isPlaying = false, switchingQualityTo = null) }
     }
 }

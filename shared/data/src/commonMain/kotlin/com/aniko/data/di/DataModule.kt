@@ -20,6 +20,7 @@ import com.aniko.data.locale.LocaleStore
 import com.aniko.data.notification.NotificationPoller
 import com.aniko.data.notification.NotificationSyncStore
 import com.aniko.data.playerposition.LocalPlayerPositionStore
+import com.aniko.data.playerpreferences.PlayerPreferencesStore
 import com.aniko.data.profileshowcase.LocalProfilePinnedSectionStore
 import com.aniko.data.repository.AuthRepository
 import com.aniko.data.repository.CollectionRepository
@@ -89,6 +90,7 @@ val dataModule =
         single { ThemeStore(settings = get()) }
         single { AppIconStore(settings = get()) }
         single { LocalPlayerPositionStore(settings = get()) }
+        single { PlayerPreferencesStore(settings = get()) }
         single { LocalVoicePinStore(settings = get()) }
         single { LocalProfilePinnedSectionStore(settings = get()) }
 

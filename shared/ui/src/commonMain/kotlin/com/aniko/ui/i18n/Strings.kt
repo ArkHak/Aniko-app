@@ -222,6 +222,13 @@ interface Strings {
     // P16 (2026-09-10) — скорость одним табом (заголовок пикера; лейбл — playerSpeedValue).
     val playerSpeedTitle: String
 
+    // Смена качества на Desktop (default-video-quality): индикатор на время перезапуска потока и
+    // уведомление о сбое. [playerQualitySwitchRestored] — откатились на прежнее качество,
+    // [playerQualitySwitchFailed] — откатиться не удалось (плеер остаётся без картинки).
+    val playerQualitySwitching: (quality: String) -> String
+    val playerQualitySwitchRestored: (requested: String, restored: String) -> String
+    val playerQualitySwitchFailed: (requested: String) -> String
+
     // P16.T9 — вертикальные жесты полноэкранного плеера: подписи индикатора уровня.
     val playerBrightnessLabel: String
     val playerVolumeLabel: String
@@ -255,6 +262,13 @@ interface Strings {
     val appIconClassic: String
     val appIconDream: String
     val appIconIce: String
+
+    // Раздел «Воспроизведение» экрана настроек: качество видео по умолчанию. Подписи чипов
+    // 1080p/720p/480p/360p языконезависимы («${height}p»), локализуется только «Авто».
+    val settingsPlaybackSection: String
+    val settingsDefaultVideoQuality: String
+    val settingsDefaultVideoQualityHint: String
+    val settingsVideoQualityAuto: String
 
     // --- Экран-галерея токенов (P2.T12) ---
     val galleryTitle: String

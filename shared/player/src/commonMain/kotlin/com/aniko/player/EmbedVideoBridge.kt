@@ -377,7 +377,63 @@ internal fun embedBridgeScript(): String =
       }
 
       var EVENTS = ['play', 'playing', 'pause', 'ended', 'timeupdate', 'loadedmetadata',
-                    'durationchange', 'ratechange', 'seeked', 'emptied'];
+                    'durationchange', 'ratechange', 'seeked', 'emptied', 'loadstart', 'canplay'];
+
+      // Quality-switch state guard (Part B, default-video-quality). The host (Kodik/flowplayer)
+      // switches quality by rebuilding the source; depending on the skin it may forget where we
+      // were (restart from 0), reset playbackRate/volume, or resume a paused video. We snapshot
+      // the state right before clicking the host's quality item and re-apply whatever the host
+      // did NOT preserve once the new source has metadata (tolerances keep us from fighting a host
+      // that restores the position itself). A snapshot lives at most QUALITY_RESTORE_TTL_MS so a
+      // later unrelated reload (next episode) can never receive stale state.
+      var QUALITY_RESTORE_TTL_MS = 10000;
+      var QUALITY_RESTORE_TOLERANCE_S = 2;
+      var qualityRestore = null;
+
+      function captureQualityRestore() {
+        if (!video) { return null; }
+        return {
+          t: video.currentTime || 0,
+          paused: !!video.paused,
+          rate: video.playbackRate || 1,
+          vol: video.volume,
+          muted: !!video.muted,
+          reloading: false,
+          until: Date.now() + QUALITY_RESTORE_TTL_MS
+        };
+      }
+
+      function applyQualityRestore(final) {
+        var r = qualityRestore;
+        if (!r || !video) { return; }
+        if (Date.now() > r.until) { qualityRestore = null; return; }
+        var d = video.duration;
+        if (!(typeof d === 'number' && isFinite(d) && d > 0)) { return; }
+        try {
+          if (r.t > 0 && Math.abs((video.currentTime || 0) - r.t) > QUALITY_RESTORE_TOLERANCE_S) {
+            video.currentTime = r.t;
+          }
+          if (Math.abs((video.playbackRate || 1) - r.rate) > 0.01) { video.playbackRate = r.rate; }
+          if (typeof r.vol === 'number' && Math.abs(video.volume - r.vol) > 0.01) { video.volume = r.vol; }
+          if (video.muted !== r.muted) { video.muted = r.muted; }
+          if (r.paused && !video.paused) {
+            video.pause();
+          } else if (!r.paused && video.paused) {
+            var p = video.play();
+            if (p && typeof p['catch'] === 'function') { p['catch'](function () {}); }
+          }
+        } catch (e) {}
+        if (final) { qualityRestore = null; }
+      }
+
+      function onVideoEvent(type) {
+        var r = qualityRestore;
+        if (!r) { return; }
+        if (type === 'emptied' || type === 'loadstart') { r.reloading = true; return; }
+        if (!r.reloading) { return; }
+        if (type === 'loadedmetadata') { applyQualityRestore(false); }
+        else if (type === 'canplay' || type === 'playing') { applyQualityRestore(true); }
+      }
 
       function attach(v) {
         if (!v || v === video) { return; }
@@ -387,7 +443,13 @@ internal fun embedBridgeScript(): String =
         v.controls = false;
         v.removeAttribute('controls');
         for (var i = 0; i < EVENTS.length; i++) {
-          v.addEventListener(EVENTS[i], function () { send(false); }, true);
+          v.addEventListener(EVENTS[i], function (e) { onVideoEvent(e && e.type); send(false); }, true);
+        }
+        // The host may have replaced the <video> element while switching quality: a new element
+        // is by itself proof of a reload, and it may already have its metadata.
+        if (qualityRestore) {
+          qualityRestore.reloading = true;
+          applyQualityRestore(false);
         }
         send(true);
       }
@@ -405,6 +467,7 @@ internal fun embedBridgeScript(): String =
         // Layer B: refresh per-host styles on every pass — the host may rebuild the DOM,
         // and the frame already matched by domain, so the injection is safe.
         refreshHostChromeStyle();
+        if (qualityRestore && Date.now() > qualityRestore.until) { qualityRestore = null; }
         if (video && !document.contains(video)) { video = null; }
         if (video) {
           // Layer A: periodically re-check whether the host's own JS restored controls.
@@ -429,10 +492,10 @@ internal fun embedBridgeScript(): String =
           var t = (n.innerText || n.textContent || '').trim();
           if (t === q) { item = n; break; }
         }
-        if (!item) { return; }
+        if (!item) { return false; }
         if (isVisible(item)) {
           try { item.click(); } catch (e) {}
-          return;
+          return true;
         }
         // Item inside a hidden dropdown: click its container-opener first (classes
         // quality/fp-quality), then re-click the item once the menu is open.
@@ -452,6 +515,7 @@ internal fun embedBridgeScript(): String =
             if ((m.innerText || m.textContent || '').trim() === q) { try { m.click(); } catch (e2) {} break; }
           }
         }, 450);
+        return true;
       }
 
       // Host start fallback (P16 2026-09-10): we hide the WHOLE host HUD, including its big play,
@@ -524,7 +588,10 @@ internal fun embedBridgeScript(): String =
             // P16 fix 2026-09-09: client-side host quality switch (Kodik/flowplayer
             // quality-dropdown). Safe no-op when no menu exists; the player rebuilds the
             // source, the bridge keeps tracking <video> via scan().
-            switchQuality(cmd.slice(8));
+            // Snapshot BEFORE the click; dropped at once if the host has no such menu item, so a
+            // no-op switch can never leave a stale snapshot behind (see qualityRestore above).
+            qualityRestore = captureQualityRestore();
+            if (!switchQuality(cmd.slice(8))) { qualityRestore = null; }
           }
         } catch (e) {}
         send(true);

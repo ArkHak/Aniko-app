@@ -121,23 +121,27 @@ private fun DesktopVlcjPlayer(
         controller?.setExpectedSource(url)
         val resolved = DesktopStreamResolver.resolve(url, referer)
         if (resolved != null) {
-            // Качества и referer для будущего переключения качества — контроллеру (см. KDoc
-            // [EmbedVideoController.onStreamsResolved]): чип качества на Desktop заполняется из
-            // controller-списка, а setQuality перезапускает поток с этим же referer.
-            controller?.onStreamsResolved(resolved)
-            // `:http-referrer=` — media-опция libVLC (модуль access/http) для ФИНАЛЬНОГО запроса
-            // потока самим libVLC. `resolved.referer`, а НЕ внешний параметр `referer` этой
-            // функции — они могут не совпадать (Kodik: партнёрский Referer нужен только чтобы
-            // получить страницу, а CDN-хост потока ждёт свой собственный, см. KDoc
-            // [DesktopStreamResolver.Resolved.referer] за разбором). Явное ветвление вместо
-            // vararg-спреда из пустого/одноэлементного массива — так проще читается, чем собирать
-            // массив ради одного опционального аргумента (заодно не ловит detekt `SpreadOperator`).
-            val media = mediaPlayerComponent.mediaPlayer().media()
-            val streamReferer = resolved.referer
-            if (streamReferer != null) {
-                media.play(resolved.streamUrl, ":http-referrer=$streamReferer")
+            if (controller != null) {
+                // Контроллер сам выберет поток по «качеству по умолчанию» из настроек (или умолчанию
+                // резолвера), запомнит качества/referer для смены качества и запустит воспроизведение —
+                // см. KDoc [EmbedVideoController.startResolvedStream].
+                controller.startResolvedStream(resolved)
             } else {
-                media.play(resolved.streamUrl)
+                // Без контроллера (превью/тесты) — играем умолчание резолвера как есть.
+                // `:http-referrer=` — media-опция libVLC (модуль access/http) для ФИНАЛЬНОГО запроса
+                // потока самим libVLC. `resolved.referer`, а НЕ внешний параметр `referer` этой
+                // функции — они могут не совпадать (Kodik: партнёрский Referer нужен только чтобы
+                // получить страницу, а CDN-хост потока ждёт свой собственный, см. KDoc
+                // [DesktopStreamResolver.Resolved.referer] за разбором). Явное ветвление вместо
+                // vararg-спреда из пустого/одноэлементного массива — так проще читается, чем собирать
+                // массив ради одного опционального аргумента (заодно не ловит detekt `SpreadOperator`).
+                val media = mediaPlayerComponent.mediaPlayer().media()
+                val streamReferer = resolved.referer
+                if (streamReferer != null) {
+                    media.play(resolved.streamUrl, ":http-referrer=$streamReferer")
+                } else {
+                    media.play(resolved.streamUrl)
+                }
             }
         }
         // resolved == null — резолв не нашёл поток (мёртвая ссылка/неподдерживаемый хост/таймаут

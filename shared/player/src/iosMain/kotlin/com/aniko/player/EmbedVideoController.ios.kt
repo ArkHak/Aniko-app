@@ -47,13 +47,19 @@ actual class EmbedVideoController actual constructor() {
     private var userContentController: WKUserContentController? = null
     private var videoFrame: WKFrameInfo? = null
 
+    /** Применяет «качество по умолчанию» из настроек к меню хоста — один раз на источник. */
+    private val qualityApplier = PreferredQualityApplier()
+
     private val messageHandler = EmbedBridgeMessageHandler(::onBridgeMessage)
 
     actual fun setExpectedSource(embedUrl: String) {
         originFilter = EmbedOriginFilter(embedUrl)
         videoFrame = null
+        qualityApplier.reset()
         stateFlow.value = EmbedVideoState()
     }
+
+    actual fun setPreferredQuality(heightPx: Int?) = qualityApplier.setPreferred(heightPx)
 
     /** Вызывать до создания `WKWebView` — конфигурация копируется в web view конструктором. */
     internal fun install(configuration: WKWebViewConfiguration) {
@@ -113,6 +119,9 @@ actual class EmbedVideoController actual constructor() {
             return
         }
         stateFlow.value = parsed
+        // Видео найдено и меню качеств известно — единственный момент, когда клик по пункту меню
+        // хоста имеет смысл; применяется один раз на источник (см. PreferredQualityApplier).
+        if (parsed.isVideoFound) qualityApplier.onState(parsed)?.let(::setQuality)
     }
 
     private fun send(command: String) {
