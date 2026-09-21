@@ -116,15 +116,24 @@ class EpisodeGridColorSmokeTest {
         return max
     }
 
-    private fun channelDiff(a: Int, b: Int, shift: Int): Int =
-        kotlin.math.abs(((a ushr shift) and 0xFF) - ((b ushr shift) and 0xFF))
+    private fun channelDiff(
+        a: Int,
+        b: Int,
+        shift: Int,
+    ): Int = kotlin.math.abs(((a ushr shift) and 0xFF) - ((b ushr shift) and 0xFF))
 
-    private fun channelsClose(a: Int, b: Int, tolerance: Int): Boolean =
-        channelDiff(a, b, 16) <= tolerance && channelDiff(a, b, 8) <= tolerance && channelDiff(a, b, 0) <= tolerance
+    private fun channelsClose(
+        a: Int,
+        b: Int,
+        tolerance: Int,
+    ): Boolean = channelDiff(a, b, 16) <= tolerance && channelDiff(a, b, 8) <= tolerance && channelDiff(a, b, 0) <= tolerance
 
     private fun Int.hex(): String = "#%08X".format(this)
 
-    private fun saveFrame(frame: ImageBitmap, fileName: String) {
+    private fun saveFrame(
+        frame: ImageBitmap,
+        fileName: String,
+    ) {
         val pixels = frame.toPixelMap().buffer
         val image = BufferedImage(frame.width, frame.height, BufferedImage.TYPE_INT_ARGB)
         image.setRGB(0, 0, frame.width, frame.height, pixels, 0, frame.width)
