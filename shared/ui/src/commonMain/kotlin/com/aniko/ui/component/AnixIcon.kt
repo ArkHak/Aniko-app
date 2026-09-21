@@ -2,7 +2,9 @@ package com.aniko.ui.component
 
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -17,7 +19,9 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import aniko.shared.ui.generated.resources.Res
 import aniko.shared.ui.generated.resources.material_symbols_rounded
 import org.jetbrains.compose.resources.Font
@@ -46,6 +50,26 @@ import org.jetbrains.compose.resources.Font
  * размера — `AnixIcon` растягивался на них, давая иконки нижней навигации в разы больше макета.
  * M3 `Icon()` никогда не подстраивался под амбиентные constraints — всегда фиксированный дефолт,
  * если caller явно не попросил другое; исправление возвращает то же поведение.
+ *
+ * **Центровка глифа (фикс 2026-09-18, жалоба «иконки в круглых кнопках плеера смещены от
+ * центра»).** Естественная строка шрифта Material Symbols — 1.2em: ascent 1056 + descent 96 при 960
+ * единицах на em (hhea/OS/2 `material_symbols_rounded.ttf`); сам em-квадрат глифа лежит на baseline
+ * и обрамлён симметричными полями шрифта — 96 единиц над ним и 96 под ним, поэтому центр
+ * естественной строки совпадает с центром em-квадрата. Раньше `Text` рисовался в слоте высотой ровно
+ * 1em (`size(x)` вызывающего кода): движок текста сжимал высоту строки до слота, но рисовал её от
+ * верхнего края — baseline оставался на 1.1em от верха слота, и глиф оказывался НИЖЕ центра слота на
+ * 0.1em (замер офскрин-рендером Desktop в `PlayerIconCenteringTest`: 2px у иконки 24dp, 5.5px у 56dp;
+ * у каждой иконки приложения, не только в плеере). Теперь строка не сжимается: `wrapContentSize`
+ * с `unbounded = true` меряет `Text` без ограничений и центрирует его в слоте, давая выступать за слот
+ * поровну сверху и снизу, — центр em-квадрата попадает ровно в центр слота. Чтобы результат не зависел
+ * от контекста, у `Text` обнулены унаследованные из [LocalTextStyle] `lineHeight` и `letterSpacing`
+ * (внутри `Button`/чипов/`NavigationBarItem` там стоят стили label*): высота строки всегда естественная,
+ * advance глифа — ровно 1em. Горизонталь: advance = 1em, ставится по центру слота.
+ *
+ * Центрируется именно em-квадрат, как у иконок Material в любых кнопках (FAB/IconButton): оптическая
+ * компенсация несимметричных глифов заложена в самом шрифте (`play_arrow` — центр масс треугольника
+ * лежит в 0.013em от центра квадрата, а не bbox; `arrow_back`/`replay_10` смещены bbox-ом на ~0.01em
+ * по замыслу дизайнеров), поэтому дополнительного «оптического» сдвига здесь нет.
  *
  * @param name имя иконки Material Symbols (напр. "home", "arrow_back", "search") — то же имя,
  *   что в референсном мокапе и в ключах [MaterialSymbolsCodepoints.map].
@@ -123,15 +147,21 @@ fun AnixIcon(
             }
         val font = Font(resource = Res.font.material_symbols_rounded, variationSettings = variationSettings)
         val fontFamily = remember(font) { FontFamily(font) }
+        // lineHeight/letterSpacing из окружения (Button → labelLarge, NavigationBarItem → labelMedium…)
+        // обнуляются: высота строки должна быть естественной, advance — ровно 1em (см. KDoc выше).
+        val iconTextStyle = LocalTextStyle.current.copy(lineHeight = TextUnit.Unspecified, letterSpacing = 0.sp)
         Text(
             text = glyph,
             color = tint,
             fontSize = fontSize,
-            lineHeight = fontSize,
             textAlign = TextAlign.Center,
             maxLines = 1,
             softWrap = false,
             fontFamily = fontFamily,
+            style = iconTextStyle,
+            // Естественная строка шрифта (1.2em) выше слота (1em): `unbounded` даёт ей вылезти за слот
+            // поровну сверху и снизу вместо подрезки под constraints — см. KDoc «Центровка глифа».
+            modifier = Modifier.wrapContentSize(Alignment.Center, unbounded = true),
         )
     }
 }

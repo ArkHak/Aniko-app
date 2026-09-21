@@ -29,10 +29,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,7 +46,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -699,21 +698,19 @@ private fun AudioPickerHeader(
             modifier = Modifier.size(dimens.minTouchTarget),
         ) {
             // Круглая подложка 34×34 `overlay08` вокруг кнопки закрытия — точное соответствие
-            // макету (`showDubPicker`), не голая иконка без фона.
-            Box(
-                modifier =
-                    Modifier
-                        .size(AUDIO_PICKER_CLOSE_BUTTON_SIZE)
-                        .clip(CircleShape)
-                        .background(colors.overlay08),
-                contentAlignment = Alignment.Center,
-            ) {
-                AnixIcon(
-                    name = "close",
-                    contentDescription = strings.closeContentDescription,
-                    filled = true,
-                )
-            }
+            // макету (`showDubPicker`), не голая иконка без фона. Круг и центровка иконки —
+            // общий [PlayerIconCircle]; тон иконки — тема (панель пикера светлая/тёмная по теме, а не
+            // белая поверх кадра), поэтому tint не дефолтный белый оверлея, а озвучку кнопки
+            // (`closeContentDescription`) по-прежнему несёт сама иконка, как и до выноса круга.
+            PlayerIconCircle(
+                iconName = "close",
+                diameter = AUDIO_PICKER_CLOSE_BUTTON_SIZE,
+                iconSize = AUDIO_PICKER_CLOSE_ICON_SIZE,
+                background = colors.overlay08,
+                filled = true,
+                tint = LocalContentColor.current,
+                contentDescription = strings.closeContentDescription,
+            )
         }
     }
 }
@@ -721,6 +718,7 @@ private fun AudioPickerHeader(
 private const val AUDIO_PICKER_MAX_HEIGHT_FRACTION = 0.6f
 private val AUDIO_PICKER_TITLE_FONT_SIZE = 17.sp
 private val AUDIO_PICKER_CLOSE_BUTTON_SIZE = 34.dp
+private val AUDIO_PICKER_CLOSE_ICON_SIZE = 24.dp
 private val AUDIO_PICKER_GRAB_HANDLE_WIDTH = 36.dp
 private val AUDIO_PICKER_GRAB_HANDLE_HEIGHT = 5.dp
 private const val AUDIO_PICKER_GRAB_HANDLE_ALPHA = 0.4f

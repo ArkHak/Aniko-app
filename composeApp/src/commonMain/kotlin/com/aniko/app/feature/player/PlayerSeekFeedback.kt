@@ -2,12 +2,8 @@ package com.aniko.app.feature.player
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -19,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.theme.AnixThemeTokens
 import kotlinx.coroutines.delay
 
@@ -84,25 +79,22 @@ internal fun BoxScope.PlayerSeekFlashOverlay(state: PlayerSeekFlashState) {
         alpha.animateTo(0f, tween(SEEK_FLASH_FADE_OUT_MS))
         state.consume()
     }
-    Box(
+    // Декоративный отклик жеста (без contentDescription); функционал — у кнопок ±10 (см. KDoc файла).
+    // Круг и центровка иконки в нём — общий [PlayerIconCircle].
+    PlayerIconCircle(
+        iconName = if (isBack) "replay_10" else "forward_10",
+        diameter = SEEK_FLASH_CIRCLE_DP,
+        iconSize = SEEK_FLASH_ICON_DP,
+        background = SEEK_FLASH_SCRIM,
+        filled = false,
         modifier =
             Modifier
                 .align(if (isBack) Alignment.CenterStart else Alignment.CenterEnd)
                 .padding(
                     start = if (isBack) dimens.spaceM else 0.dp,
                     end = if (isBack) 0.dp else dimens.spaceM,
-                ).size(SEEK_FLASH_CIRCLE_DP)
-                .alpha(alpha.value)
-                .background(SEEK_FLASH_SCRIM, CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        AnixIcon(
-            name = if (isBack) "replay_10" else "forward_10",
-            contentDescription = null, // декоративный отклик жеста; функционал — у кнопок ±10 (см. KDoc файла)
-            tint = OVERLAY_CONTENT_COLOR,
-            modifier = Modifier.size(SEEK_FLASH_ICON_DP),
-        )
-    }
+                ).alpha(alpha.value),
+    )
 }
 
 /** Радиус плашки — тот же визуальный язык, что у центральной play/pause (52dp) и топбар-кнопок. */

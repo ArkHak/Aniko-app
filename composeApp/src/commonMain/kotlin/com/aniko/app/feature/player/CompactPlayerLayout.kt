@@ -19,9 +19,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,8 +30,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -41,7 +37,6 @@ import androidx.compose.ui.unit.sp
 import com.aniko.model.VoiceType
 import com.aniko.player.EmbedVideoController
 import com.aniko.player.EmbedVideoState
-import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
 
@@ -353,8 +348,9 @@ internal fun PlayerPillChip(
 /**
  * Круглая полупрозрачная чёрная подложка 34×34 под back/fullscreen (Track A, точное соответствие
  * макету Claude Design, `showPlayer`) — тач-таргет остаётся не меньше [AnixDimens.minTouchTarget]
- * (доступность), сама видимая подложка отдельным вложенным [Box] — макет рисует именно
- * `rgba(0,0,0,0.5)`-круг фиксированного размера, а не растянутый на весь тач-таргет.
+ * (доступность), сама видимая подложка отдельным вложенным кругом — макет рисует именно
+ * `rgba(0,0,0,0.5)`-круг фиксированного размера, а не растянутый на весь тач-таргет. Сборка круга и
+ * центровка иконки — в общем [PlayerCircleIconButton].
  */
 @Composable
 private fun CompactOverlayIconButton(
@@ -363,63 +359,40 @@ private fun CompactOverlayIconButton(
     onClick: () -> Unit,
     filled: Boolean = false,
 ) {
-    val dimens = AnixThemeTokens.dimens
-    IconButton(
+    PlayerCircleIconButton(
+        iconName = iconName,
+        contentDescription = contentDescription,
         onClick = onClick,
-        modifier =
-            Modifier
-                .size(dimens.minTouchTarget)
-                .clearAndSetSemantics { this.contentDescription = contentDescription },
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(OVERLAY_BUTTON_SIZE)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = OVERLAY_BUTTON_SCRIM_ALPHA)),
-            contentAlignment = Alignment.Center,
-        ) {
-            AnixIcon(name = iconName, contentDescription = null, filled = filled, tint = Color.White)
-        }
-    }
+        diameter = OVERLAY_BUTTON_SIZE,
+        iconSize = OVERLAY_BUTTON_ICON_SIZE,
+        background = Color.Black.copy(alpha = OVERLAY_BUTTON_SCRIM_ALPHA),
+        filled = filled,
+    )
 }
 
 /** Круглая подложка 52×52 `rgba(0,0,0,0.45)` под центральной play/pause-кнопкой (Track A) —
- *  тот же приём, что и [CompactOverlayIconButton], только свой размер/альфа по макету. */
+ *  тот же общий [PlayerCircleIconButton], что и [CompactOverlayIconButton], только свой размер/альфа
+ *  по макету. */
 @Composable
 private fun CompactPlayPauseButton(
     isPlaying: Boolean,
     onClick: () -> Unit,
     contentDescription: String,
 ) {
-    IconButton(
+    PlayerCircleIconButton(
+        iconName = if (isPlaying) "pause" else "play_arrow",
+        contentDescription = contentDescription,
         onClick = onClick,
-        modifier =
-            Modifier
-                .size(maxOf(AnixThemeTokens.dimens.minTouchTarget, PLAY_PAUSE_BUTTON_SIZE))
-                .clearAndSetSemantics { this.contentDescription = contentDescription },
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(PLAY_PAUSE_BUTTON_SIZE)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = PLAY_PAUSE_SCRIM_ALPHA)),
-            contentAlignment = Alignment.Center,
-        ) {
-            AnixIcon(
-                name = if (isPlaying) "pause" else "play_arrow",
-                filled = true,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(PLAY_PAUSE_ICON_SIZE),
-            )
-        }
-    }
+        diameter = PLAY_PAUSE_BUTTON_SIZE,
+        iconSize = PLAY_PAUSE_ICON_SIZE,
+        background = Color.Black.copy(alpha = PLAY_PAUSE_SCRIM_ALPHA),
+        filled = true,
+    )
 }
 
 /** Круг back/fullscreen-кнопки компактного оверлея (Track A, `showPlayer`). */
 private val OVERLAY_BUTTON_SIZE = 34.dp
+private val OVERLAY_BUTTON_ICON_SIZE = 24.dp
 private const val OVERLAY_BUTTON_SCRIM_ALPHA = 0.5f
 
 /** Круг центральной play/pause-кнопки (Track A, `showPlayer`). */
