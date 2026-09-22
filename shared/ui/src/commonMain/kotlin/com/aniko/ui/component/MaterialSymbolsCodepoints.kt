@@ -4,7 +4,7 @@ package com.aniko.ui.component
  * Имя иконки Material Symbols (то же имя, что принимает [AnixIcon]) → Unicode-codepoint в
  * `material_symbols_rounded.ttf` (`shared/ui/src/commonMain/composeResources/font/`).
  *
- * Ровно те 31 имя, что subsetting сохранил в шрифте (см. KDoc [AnixIcon]) — если добавляется
+ * Ровно те 32 имени, что subsetting сохранил в шрифте (см. KDoc [AnixIcon]) — если добавляется
  * новое имя иконки в проект, сначала нужно добавить его codepoint сюда, а сам глиф — в шрифт
  * (пересобрать subset через `fonttools subset`), иначе [AnixIcon] упадёт с `error(...)`.
  */
@@ -15,6 +15,7 @@ internal object MaterialSymbolsCodepoints {
         mapOf(
             "home" to 0xe9b2,
             "grid_view" to 0xe9b0,
+            "view_list" to 0xe8ef,
             "bookmark" to 0xe8e7,
             "calendar_month" to 0xebcc,
             "person" to 0xf0d3,

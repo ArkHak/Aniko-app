@@ -14,13 +14,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -36,11 +34,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aniko.data.librarypreferences.LibraryViewMode
 import com.aniko.data.paging.PagingState
 import com.aniko.model.Release
+import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.component.AnixAsyncImage
 import com.aniko.ui.component.AnixErrorState
-import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.component.ExpandedScreenTitle
 import com.aniko.ui.i18n.LocalStrings
@@ -48,108 +47,90 @@ import com.aniko.ui.i18n.displayName
 import com.aniko.ui.theme.AnixThemeTokens
 
 /**
- * Desktop (Expanded) layout for My Lists (мокап `isLists`, P13.T7): заголовок со shuffle,
- * обёртка чипов вкладок и 3-колоночная сетка горизонтальных карточек. Вынесено из
- * `LibraryScreen.kt` в отдельный файл (detekt `TooManyFunctions`) — раскладки Compact/Medium
- * этот файл не трогает, ими по-прежнему владеет `LibraryScreen.kt`.
+ * Desktop (Expanded) layout for My Lists (мокап `isLists`, P13.T7): заголовок с кнопкой вида
+ * «Список» ↔ «Сетка постеров», обёртка чипов вкладок и под ними сетка — 3-колоночные горизонтальные
+ * карточки ([LibraryExpandedListCard]) в виде «Список» либо плитки-постеры ([LibraryPosterGrid]) в
+ * виде «Сетка постеров». Вынесено из `LibraryScreen.kt` в отдельный файл (detekt
+ * `TooManyFunctions`) — раскладки Compact/Medium этот файл не трогает, ими по-прежнему владеет
+ * `LibraryScreen.kt`.
+ *
+ * Заголовок и чипы стоят над сеткой и не прокручиваются вместе с ней (как тулбар и чипы на
+ * Compact/Medium): сетка — ленивая [LibraryItemsGrid] с собственным скроллом и подгрузкой страниц,
+ * а вложить ленивый контейнер в `verticalScroll` нельзя (бесконечная высота), поэтому прежний
+ * «скроллится вся страница целиком» заменён на «скроллится только список».
  */
-@Suppress("LongParameterList") // Координирующий блок: стейт пагинации + вкладка + меню + колбэки + ViewModel.
 @Composable
 internal fun LibraryExpandedContent(
     pagingState: PagingState<Release>,
-    selectedTab: LibraryTab,
-    isShuffled: Boolean,
-    menuReleaseId: Int?,
-    onMenuReleaseIdChange: (Int?) -> Unit,
-    onReleaseClick: (Int) -> Unit,
-    onShuffleClick: () -> Unit,
+    viewMode: LibraryViewMode,
+    actions: LibraryItemActions,
+    onViewModeClick: () -> Unit,
     onTabSelected: (LibraryTab) -> Unit,
-    viewModel: LibraryViewModel,
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
 
-    // Заголовок вынесен из общего Arrangement.spacedBy(dimens.spaceM)/горизонтального паддинга
-    // колонки: ExpandedScreenTitle сам задаёт свой отступ (единый паттерн для всех
-    // Expanded-заголовков, см. его KDoc), поэтому остаток контента (чипы + список) собран в
-    // отдельную вложенную колонку со своим горизонтальным паддингом — иначе отступ бы удвоился
-    // на границе заголовка и совпал бы с ним случайно только по горизонтали.
+    // Заголовок вынесен из горизонтального паддинга колонки: ExpandedScreenTitle сам задаёт свой
+    // отступ (единый паттерн для всех Expanded-заголовков, см. его KDoc), поэтому чипы получают
+    // собственный горизонтальный паддинг, а сетка — свой через contentPadding.
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
-                .widthIn(max = dimens.contentMaxWidth)
-                .verticalScroll(rememberScrollState()),
+                .widthIn(max = dimens.contentMaxWidth),
     ) {
         LibraryExpandedHeader(
             title = strings.navLibrary,
-            isShuffled = isShuffled,
-            onShuffleClick = onShuffleClick,
+            viewMode = viewMode,
+            onViewModeClick = onViewModeClick,
         )
 
-        Column(
-            modifier = Modifier.padding(horizontal = dimens.spaceM).padding(bottom = dimens.spaceM),
-            verticalArrangement = Arrangement.spacedBy(dimens.spaceM),
-        ) {
-            LibraryExpandedChips(
-                selectedTab = selectedTab,
-                onTabSelected = onTabSelected,
-            )
+        LibraryExpandedChips(
+            selectedTab = actions.tab,
+            onTabSelected = onTabSelected,
+            modifier = Modifier.padding(horizontal = dimens.spaceM),
+        )
 
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             LibraryExpandedListState(
                 pagingState = pagingState,
-                selectedTab = selectedTab,
-                menuReleaseId = menuReleaseId,
-                onMenuReleaseIdChange = onMenuReleaseIdChange,
-                onReleaseClick = onReleaseClick,
-                viewModel = viewModel,
+                viewMode = viewMode,
+                actions = actions,
             )
         }
     }
 }
 
 /**
- * Заголовок «My Lists» ([ExpandedScreenTitle]) + квадратная кнопка shuffle 32×32 radius 9
- * на фоне `overlay06` — тот же desktop-ряд мокапа. Кнопка получает собственный `end`-паддинг
- * [AnixThemeTokens.dimens.spaceM], чтобы её правый край совпадал с правым краем контента ниже
- * (тот же токен, только применённый на вложенной колонке в [LibraryExpandedContent]) — левый край
- * заголовка уже выровнен автоматически встроенным отступом [ExpandedScreenTitle].
+ * Заголовок «My Lists» ([ExpandedScreenTitle]) + кнопка вида «Список» ↔ «Сетка постеров»
+ * ([LibraryViewModeButton], квадрат 32×32 radius 9 на фоне `overlay06`) — desktop-ряд мокапа.
+ * Кнопка — 48×48 (зона нажатия) с видимым квадратом по центру, поэтому её `end`-паддинг —
+ * [AnixThemeTokens.dimens.spaceS] (16 − 8 запаса на зону нажатия): правый край видимого квадрата
+ * совпадает с правым краем контента ниже (`spaceM`) — левый край заголовка уже выровнен
+ * автоматически встроенным отступом [ExpandedScreenTitle].
  */
 @Composable
 private fun LibraryExpandedHeader(
     title: String,
-    isShuffled: Boolean,
-    onShuffleClick: () -> Unit,
+    viewMode: LibraryViewMode,
+    onViewModeClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val strings = LocalStrings.current
-    val colors = AnixThemeTokens.colors
     val dimens = AnixThemeTokens.dimens
 
     Row(
-        modifier = modifier.fillMaxWidth().padding(end = dimens.spaceM),
+        modifier = modifier.fillMaxWidth().padding(end = dimens.spaceS),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ExpandedScreenTitle(text = title)
 
-        IconButton(
-            onClick = onShuffleClick,
-            modifier =
-                Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(colors.overlay06)
-                    .semantics { contentDescription = strings.libraryShuffle },
-        ) {
-            AnixIcon(
-                name = "shuffle",
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                filled = true,
-                tint = if (isShuffled) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-            )
-        }
+        LibraryViewModeButton(
+            currentMode = viewMode,
+            onClick = onViewModeClick,
+            visualSize = LIBRARY_VIEW_MODE_BUTTON_SIZE_EXPANDED,
+            cornerRadius = LIBRARY_EXPANDED_BUTTON_CORNER,
+        )
     }
 }
 
@@ -217,27 +198,24 @@ private fun LibraryExpandedChips(
 
 /**
  * Ветвление error/loading/empty/данные для [LibraryExpandedContent] — вынесено отдельно, чтобы
- * сама координирующая функция не разрасталась (detekt `LongMethod`).
+ * сама координирующая функция не разрасталась (detekt `LongMethod`). Данные — по виду [viewMode]:
+ * «Список» — [LibraryExpandedCards], «Сетка постеров» — [LibraryPosterGrid].
  */
-@Suppress("LongParameterList") // Тот же координирующий набор параметров, что у
-// LibraryExpandedContent, минус header/chips-специфика.
 @Composable
 private fun LibraryExpandedListState(
     pagingState: PagingState<Release>,
-    selectedTab: LibraryTab,
-    menuReleaseId: Int?,
-    onMenuReleaseIdChange: (Int?) -> Unit,
-    onReleaseClick: (Int) -> Unit,
-    viewModel: LibraryViewModel,
+    viewMode: LibraryViewMode,
+    actions: LibraryItemActions,
 ) {
     val strings = LocalStrings.current
+    val tab = actions.tab
     val items = pagingState.items
 
     when {
         pagingState.error != null && items.isEmpty() ->
             AnixErrorState(
                 message = strings.libraryLoadError,
-                onRetry = { viewModel.retry(selectedTab) },
+                onRetry = { actions.viewModel.retry(tab) },
                 modifier = Modifier.fillMaxWidth().padding(vertical = EMPTY_STATE_VERTICAL_PADDING),
             )
 
@@ -247,61 +225,38 @@ private fun LibraryExpandedListState(
             )
 
         pagingState.isEmpty ->
-            LibraryExpandedEmpty(message = selectedTab.emptyMessage(strings))
+            LibraryExpandedEmpty(message = tab.emptyMessage(strings))
 
-        else ->
-            LibraryExpandedGrid(
-                items = items,
-                pagingState = pagingState,
-                selectedTab = selectedTab,
-                menuReleaseId = menuReleaseId,
-                onMenuReleaseIdChange = onMenuReleaseIdChange,
-                onReleaseClick = onReleaseClick,
-                viewModel = viewModel,
-            )
+        viewMode == LibraryViewMode.List -> LibraryExpandedCards(pagingState = pagingState, actions = actions)
+
+        else -> LibraryPosterGrid(pagingState = pagingState, windowSize = AnixWindowSize.Expanded, actions = actions)
     }
 }
 
 /**
- * 3-колоночная сетка (gap 14) горизонтальных карточек — единственная реальная ветка данных
- * [LibraryExpandedListState].
+ * Вид «Список» на Expanded: 3 колонки (gap 14) горизонтальных карточек [LibraryExpandedListCard].
+ * Ленивая сетка с равными колонками: последняя неполная строка не растягивается на всю ширину,
+ * как растягивалась при прежней раскладке `FlowRow` с `weight(1f)`.
  */
-@Suppress("LongParameterList")
 @Composable
-private fun LibraryExpandedGrid(
-    items: List<Release>,
+private fun LibraryExpandedCards(
     pagingState: PagingState<Release>,
-    selectedTab: LibraryTab,
-    menuReleaseId: Int?,
-    onMenuReleaseIdChange: (Int?) -> Unit,
-    onReleaseClick: (Int) -> Unit,
-    viewModel: LibraryViewModel,
+    actions: LibraryItemActions,
 ) {
-    FlowRow(
-        maxItemsInEachRow = LIBRARY_EXPANDED_GRID_COLUMNS,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        items.forEachIndexed { index, release ->
-            if (index >= items.size - LIBRARY_PREFETCH_THRESHOLD) {
-                viewModel.loadMore(selectedTab)
-            }
-            LibraryExpandedListCard(
-                release = release,
-                selectedTab = selectedTab,
-                menuReleaseId = menuReleaseId,
-                onMenuReleaseIdChange = onMenuReleaseIdChange,
-                onReleaseClick = onReleaseClick,
-                viewModel = viewModel,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        if (pagingState.isLoading) {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                AnixLoadingState()
-            }
-        }
+    val dimens = AnixThemeTokens.dimens
+
+    LibraryItemsGrid(
+        pagingState = pagingState,
+        layout =
+            LibraryGridLayout(
+                columns = GridCells.Fixed(LIBRARY_EXPANDED_GRID_COLUMNS),
+                gap = LIBRARY_EXPANDED_GAP,
+                contentPadding = libraryContentPadding(horizontal = dimens.spaceM),
+            ),
+        actions = actions,
+        modifier = Modifier.fillMaxSize().testTag(LibraryTestTags.LIST_CONTENT),
+    ) { release ->
+        LibraryExpandedListCard(release = release, actions = actions)
     }
 }
 
@@ -334,15 +289,10 @@ private fun LibraryExpandedEmpty(
  * 11sp `textSecondary60`; gap 12. Арт/текстовый столбец вынесены в [LibraryExpandedCardArt]/
  * [LibraryExpandedCardInfo] — иначе тело превышает detekt `LongMethod`.
  */
-@Suppress("LongParameterList")
 @Composable
 private fun LibraryExpandedListCard(
     release: Release,
-    selectedTab: LibraryTab,
-    menuReleaseId: Int?,
-    onMenuReleaseIdChange: (Int?) -> Unit,
-    onReleaseClick: (Int) -> Unit,
-    viewModel: LibraryViewModel,
+    actions: LibraryItemActions,
     modifier: Modifier = Modifier,
 ) {
     val colors = AnixThemeTokens.colors
@@ -364,32 +314,11 @@ private fun LibraryExpandedListCard(
         LibraryExpandedCardRow(
             release = release,
             progressLabel = progressLabel,
-            onReleaseClick = onReleaseClick,
-            onMenuReleaseIdChange = onMenuReleaseIdChange,
+            onReleaseClick = actions.onReleaseClick,
+            onMenuReleaseIdChange = actions.onMenuReleaseIdChange,
         )
 
-        LibraryContextMenu(
-            expanded = menuReleaseId == release.id,
-            release = release,
-            tab = selectedTab,
-            onDismiss = { onMenuReleaseIdChange(null) },
-            onChangeStatus = { status ->
-                viewModel.changeStatus(release, status)
-                onMenuReleaseIdChange(null)
-            },
-            onToggleFavorite = {
-                viewModel.toggleFavorite(release)
-                onMenuReleaseIdChange(null)
-            },
-            onRemoveFromList = { status ->
-                viewModel.removeFromList(release, status)
-                onMenuReleaseIdChange(null)
-            },
-            onRemoveFromHistory = {
-                viewModel.removeFromHistory(release)
-                onMenuReleaseIdChange(null)
-            },
-        )
+        LibraryReleaseContextMenu(release = release, actions = actions)
     }
 }
 
@@ -484,8 +413,11 @@ private fun LibraryExpandedCardInfo(
     }
 }
 
-/** Число колонок сетки [LibraryExpandedGrid] — точное значение desktop-мокапа. */
+/** Число колонок вида «Список» на Expanded ([LibraryExpandedCards]) — точное значение desktop-мокапа. */
 private const val LIBRARY_EXPANDED_GRID_COLUMNS = 3
+
+/** Радиус скругления кнопки вида в заголовке Expanded — desktop-мокап (radius 9). */
+private val LIBRARY_EXPANDED_BUTTON_CORNER = 9.dp
 
 /** Вертикальный паддинг error/loading/empty-состояний Expanded — точное значение макета (60dp). */
 private val EMPTY_STATE_VERTICAL_PADDING = 60.dp

@@ -1,23 +1,13 @@
 package com.aniko.app.feature.library
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
@@ -32,75 +22,72 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aniko.data.librarypreferences.LibraryViewMode
 import com.aniko.data.paging.PagingState
 import com.aniko.model.ListStatus
 import com.aniko.model.ProfileDetails
 import com.aniko.model.Release
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
-import com.aniko.ui.adaptive.LocalGlassBottomInset
 import com.aniko.ui.component.AnixEmptyBox
 import com.aniko.ui.component.AnixErrorBox
 import com.aniko.ui.component.AnixIcon
 import com.aniko.ui.component.AnixLoadingBox
 import com.aniko.ui.component.ChipRow
-import com.aniko.ui.component.ListStatusChip
-import com.aniko.ui.component.ListStatusChipStyle
-import com.aniko.ui.component.ProgressRow
-import com.aniko.ui.component.ReleaseCard
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.i18n.displayName
 import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.viewmodel.koinViewModel
-import androidx.compose.foundation.lazy.itemsIndexed as itemsIndexedColumn
 
 /**
  * Экран «Мои списки»: 7 вкладок (5 статусов [ListStatus] + избранное + история), каждая —
- * своя сетка [ReleaseCard] поверх независимого пагинатора вкладки (см. [LibraryViewModel]).
+ * независимый пагинатор вкладки (см. [LibraryViewModel]).
  *
- * Смена статуса/избранного/удаление сделаны через долгое нажатие на карточке (см.
- * [ReleaseCard.onLongClick]) и контекстное меню — сознательно не свайп, так решено в плане.
- * Переключатель вкладок нарисован горизонтальным рядом чипов ([LibraryTabChips]),
- * а не M3 таб-баром, поэтому конфликта с горизонтальным скроллом нет.
+ * Смена статуса/избранного/удаление сделаны через долгое нажатие на карточке и контекстное меню
+ * ([LibraryContextMenu]) — сознательно не свайп, так решено в плане. Переключатель вкладок
+ * нарисован горизонтальным рядом чипов ([LibraryTabChips]), а не M3 таб-баром, поэтому конфликта с
+ * горизонтальным скроллом нет.
  *
  * P9.T1: заголовки вкладок статусов/избранного дополнены счётчиком из `ProfileDetails`
  * (см. [LibraryTab.title]) — у истории отдельного счётчика в `ProfileDetails` нет, вкладка
  * остаётся без числа.
  *
- * P9.T2: тулбар над сеткой ([LibraryToolbar]) — shuffle (клиентская перетасовка уже
- * загруженных элементов) и реверс (серверный `sort=`, недоступен для истории). Оба переключателя
- * подробно задокументированы в [LibraryViewModel.toggleShuffle]/[LibraryViewModel.toggleReverse].
+ * **Вид «Список» ↔ «Сетка постеров»** (2026-09-22). Два вида,
+ * [LibraryViewMode], переключает кнопка-иконка ([LibraryViewModeButton]): в тулбаре
+ * ([LibraryToolbar], Compact/Medium) или в заголовке ([LibraryExpandedHeader], Expanded).
+ * - «Список»: Compact/Medium — строки с прогрессом ([LibraryRows], на Medium раскладываются в
+ *   несколько колонок), Expanded — 3-колоночные горизонтальные карточки ([LibraryExpandedListCard]).
+ * - «Сетка постеров»: плитки [com.aniko.ui.component.TitleCard] с бейджами ([LibraryPosterGrid]) на
+ *   ВСЕХ размерах окна; на [com.aniko.ui.adaptive.AnixWindowSize.isTwoPane] минимальная ширина
+ *   постера — [com.aniko.ui.theme.AnixDimens.posterWidthL], на телефоне —
+ *   [com.aniko.ui.theme.AnixDimens.posterWidth].
+ * Пока пользователь ничего не выбирал, вид зависит от размера окна ([defaultLibraryViewMode]:
+ * Compact — список, Medium — сетка, Expanded — список), то есть ровно как до появления
+ * переключателя. Явный выбор запоминается глобально (не по вкладкам) и действует на всех размерах
+ * окна ([LibraryViewModel.setViewMode]). Долгое нажатие/контекстное меню работает одинаково во всех
+ * видах и размерах, состояния загрузки/пусто/ошибка тоже общие.
+ *
+ * P9.T2: тулбар над содержимым ([LibraryToolbar]) — кнопка вида и реверс (серверный `sort=`,
+ * недоступен для истории), см. [LibraryViewModel.toggleReverse].
  *
  * P9.T3: контент ограничен [com.aniko.ui.theme.AnixDimens.contentMaxWidth] и центрирован на
- * wide-экранах — тот же паттерн, что `HomeScreen`/P7.T2. На
- * [com.aniko.ui.adaptive.AnixWindowSize.isTwoPane] сетка дополнительно переходит на увеличенный
- * постер ([com.aniko.ui.theme.AnixDimens.posterWidthL]),
- * как рельсы Фазы 6 (`HorizontalPosterRail`) — постоянный боковой каркас (`AnixSidebar`) уже
- * есть на уровне навигации приложения (`App.kt`/`shared/ui/.../adaptive/`), самому экрану
- * заводить его ещё раз не нужно.
+ * wide-экранах — тот же паттерн, что `HomeScreen`/P7.T2.
  *
- * P13.T4: на [com.aniko.ui.adaptive.AnixWindowSize.Compact] грид постеров ([LibraryGrid]) заменён
- * на компактные горизонтальные строки ([LibraryRows]) — под мокап Claude Design, тот же паттерн
- * "48×48 арт + название + прогресс + чип справа", что уже даёт [ProgressRow] на Home (Continue
- * Watching).
+ * P13.T4: на [com.aniko.ui.adaptive.AnixWindowSize.Compact] «Список» — компактные горизонтальные
+ * строки ([LibraryRows]) — под мокап Claude Design, тот же паттерн "арт + название + прогресс +
+ * чип справа", что уже даёт [com.aniko.ui.component.ProgressRow] на Home (Continue Watching).
  *
- * P13.T7: на [com.aniko.ui.adaptive.AnixWindowSize.Expanded] вместо сетки постеров используется
- * desktop-раскладка «My Lists»: заголовок + shuffle, чипы-вкладки и 3-колоночная сетка
- * горизонтальных карточек ([LibraryExpandedListCard]) с 52×52 артом и прогресс-подписью.
- * Долгое нажатие/контекстное меню (смена статуса/избранное/удаление) работает одинаково во
- * всех раскладках — [LibraryExpandedListCard] переиспользует [LibraryContextMenu].
+ * P13.T7: на [com.aniko.ui.adaptive.AnixWindowSize.Expanded] — desktop-раскладка «My Lists»:
+ * заголовок + кнопка вида, чипы-вкладки и сетка под ними ([LibraryExpandedContent]).
  *
- * Ячейки Medium ([LibraryGrid]) и Compact ([LibraryRows]) обёрнуты в тот же overlay-контейнер
- * (`overlay045`/`overlay07`/`cornerM`), что и строки Compact.
+ * Ячейки всех видов обёрнуты в один overlay-контейнер (`overlay045`/`overlay07`/`cornerM`).
  */
 @Composable
 fun LibraryScreen(
@@ -113,10 +100,21 @@ fun LibraryScreen(
     val strings = LocalStrings.current
     val windowSize = LocalAnixWindowSize.current
     val selectedTab = uiState.selectedTab
+    // Явный выбор пользователя сильнее размера окна; null — «не выбирал» (см. LibraryUiState.viewMode).
+    val viewMode = uiState.viewMode ?: windowSize.defaultLibraryViewMode()
+    val onViewModeClick = { viewModel.setViewMode(viewMode.toggled()) }
 
     // Id релиза, для которого сейчас открыто контекстное меню — не Release целиком, чтобы меню
     // не "залипало" на устаревших данных карточки, если пагинатор успел обновить список.
     var menuReleaseId by remember { mutableStateOf<Int?>(null) }
+    val actions =
+        LibraryItemActions(
+            tab = selectedTab,
+            menuReleaseId = menuReleaseId,
+            onMenuReleaseIdChange = { menuReleaseId = it },
+            onReleaseClick = onReleaseClick,
+            viewModel = viewModel,
+        )
 
     // Track A (сверка Compact-раскладки, 2026-09-04): дефолтный цвет M3 Surface непрозрачен и
     // перекрывает корневую заливку приложения (`AppTheme`, iOS `systemGroupedBackground`) —
@@ -156,74 +154,27 @@ fun LibraryScreen(
                 if (windowSize == AnixWindowSize.Expanded) {
                     LibraryExpandedContent(
                         pagingState = uiState.pagingState,
-                        selectedTab = selectedTab,
-                        isShuffled = uiState.isShuffled,
-                        menuReleaseId = menuReleaseId,
-                        onMenuReleaseIdChange = { menuReleaseId = it },
-                        onReleaseClick = onReleaseClick,
-                        onShuffleClick = { viewModel.toggleShuffle(selectedTab) },
+                        viewMode = viewMode,
+                        actions = actions,
+                        onViewModeClick = onViewModeClick,
                         onTabSelected = { tab -> viewModel.selectTab(tab) },
-                        viewModel = viewModel,
                     )
                 } else {
                     Column(modifier = Modifier.fillMaxSize().widthIn(max = dimens.contentMaxWidth)) {
-                        val pagingState = uiState.pagingState
-
                         LibraryToolbar(
                             tab = selectedTab,
-                            itemCount = pagingState.items.size,
-                            isShuffled = uiState.isShuffled,
+                            itemCount = uiState.pagingState.items.size,
+                            viewMode = viewMode,
                             isReversed = uiState.isReversed,
-                            onShuffleClick = { viewModel.toggleShuffle(selectedTab) },
+                            onViewModeClick = onViewModeClick,
                             onReverseClick = { viewModel.toggleReverse(selectedTab) },
                         )
-
-                        when {
-                            pagingState.error != null && pagingState.items.isEmpty() ->
-                                AnixErrorBox(
-                                    // P2.T10: не показываем `error.message` напрямую — это текст исключения
-                                    // AnixError (технический, на английском, только для логов/debug), не
-                                    // локализованный UI-текст. Всегда локализованный fallback.
-                                    message = strings.libraryLoadError,
-                                    onRetry = { viewModel.retry(selectedTab) },
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-
-                            pagingState.items.isEmpty() && (pagingState.isLoading || pagingState.isRefreshing) ->
-                                AnixLoadingBox(
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-
-                            pagingState.isEmpty ->
-                                AnixEmptyBox(
-                                    message = selectedTab.emptyMessage(strings),
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-
-                            // P13.T4: грид ([LibraryGrid]) остаётся на Medium, Compact — новые
-                            // компактные строки ([LibraryRows]), см. KDoc класса.
-                            else ->
-                                if (windowSize.isTwoPane) {
-                                    LibraryGrid(
-                                        pagingState = pagingState,
-                                        windowSize = windowSize,
-                                        selectedTab = selectedTab,
-                                        menuReleaseId = menuReleaseId,
-                                        onMenuReleaseIdChange = { menuReleaseId = it },
-                                        onReleaseClick = onReleaseClick,
-                                        viewModel = viewModel,
-                                    )
-                                } else {
-                                    LibraryRows(
-                                        pagingState = pagingState,
-                                        selectedTab = selectedTab,
-                                        menuReleaseId = menuReleaseId,
-                                        onMenuReleaseIdChange = { menuReleaseId = it },
-                                        onReleaseClick = onReleaseClick,
-                                        viewModel = viewModel,
-                                    )
-                                }
-                        }
+                        LibraryCompactContent(
+                            pagingState = uiState.pagingState,
+                            viewMode = viewMode,
+                            windowSize = windowSize,
+                            actions = actions,
+                        )
                     }
                 }
             }
@@ -255,214 +206,56 @@ private fun LibraryTabChips(
 }
 
 /**
- * Сетка [ReleaseCard] — Medium (P9.T3). Каждая ячейка обёрнута в overlay-контейнер
- * (`overlay045`/`overlay07`/`cornerM` + `spaceXs` padding) — тот же паттерн, что и строки
- * [LibraryRows] на Compact и [NewEpisodeCard] на Home. На Compact вместо неё — [LibraryRows].
+ * Содержимое вкладки на Compact/Medium под тулбаром: ветвление ошибка/загрузка/пусто/данные, а для
+ * данных — вид [viewMode]: «Список» ([LibraryRows]) или «Сетка постеров» ([LibraryPosterGrid]).
  */
-@Suppress("LongParameterList", "LongMethod") // Координирующий блок: пагинация + ширина экрана +
-// вкладка + меню-стейт + колбэк клика + viewModel (тот же паттерн передачи viewModel во внутренний
-// composable, что уже у HomeScreen/SearchScreen). LongMethod: ячейки с overlay-контейнером и
-// контекстное меню остаются линейным телом сетки — вынос ячейки в отдельный composable добавил бы
-// косвенность ради счётчика строк (тот же приём, что WatchAndFavoriteRow/ReleaseHeaderSection).
 @Composable
-private fun LibraryGrid(
+private fun LibraryCompactContent(
     pagingState: PagingState<Release>,
+    viewMode: LibraryViewMode,
     windowSize: AnixWindowSize,
-    selectedTab: LibraryTab,
-    menuReleaseId: Int?,
-    onMenuReleaseIdChange: (Int?) -> Unit,
-    onReleaseClick: (Int) -> Unit,
-    viewModel: LibraryViewModel,
+    actions: LibraryItemActions,
 ) {
-    val dimens = AnixThemeTokens.dimens
-    val colors = AnixThemeTokens.colors
-    val cardShape = RoundedCornerShape(dimens.cornerM)
+    val strings = LocalStrings.current
+    val tab = actions.tab
 
-    LazyVerticalGrid(
-        columns =
-            GridCells.Adaptive(
-                minSize = if (windowSize.isTwoPane) dimens.posterWidthL else dimens.posterWidth,
-            ),
-        contentPadding = PaddingValues(vertical = dimens.spaceM, horizontal = dimens.spaceS),
-        horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-        verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        itemsIndexed(pagingState.items, key = { _, release -> release.id }) { index, release ->
-            if (index >= pagingState.items.size - LIBRARY_PREFETCH_THRESHOLD) {
-                viewModel.loadMore(selectedTab)
-            }
-            Box {
-                Box(
-                    modifier =
-                        Modifier
-                            .clip(cardShape)
-                            .background(colors.overlay045, cardShape)
-                            .border(LIBRARY_GRID_CARD_BORDER_WIDTH, colors.overlay07, cardShape)
-                            .padding(dimens.spaceXs),
-                ) {
-                    ReleaseCard(
-                        release = release,
-                        onClick = { onReleaseClick(release.id) },
-                        onLongClick = { onMenuReleaseIdChange(release.id) },
-                    )
-                }
-                LibraryContextMenu(
-                    expanded = menuReleaseId == release.id,
-                    release = release,
-                    tab = selectedTab,
-                    onDismiss = { onMenuReleaseIdChange(null) },
-                    onChangeStatus = { status ->
-                        viewModel.changeStatus(release, status)
-                        onMenuReleaseIdChange(null)
-                    },
-                    onToggleFavorite = {
-                        viewModel.toggleFavorite(release)
-                        onMenuReleaseIdChange(null)
-                    },
-                    onRemoveFromList = { status ->
-                        viewModel.removeFromList(release, status)
-                        onMenuReleaseIdChange(null)
-                    },
-                    onRemoveFromHistory = {
-                        viewModel.removeFromHistory(release)
-                        onMenuReleaseIdChange(null)
-                    },
-                )
-            }
-        }
+    when {
+        pagingState.error != null && pagingState.items.isEmpty() ->
+            AnixErrorBox(
+                // P2.T10: не показываем `error.message` напрямую — это текст исключения
+                // AnixError (технический, на английском, только для логов/debug), не
+                // локализованный UI-текст. Всегда локализованный fallback.
+                message = strings.libraryLoadError,
+                onRetry = { actions.viewModel.retry(tab) },
+                modifier = Modifier.fillMaxSize(),
+            )
 
-        if (pagingState.isLoading) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                AnixLoadingBox(modifier = Modifier.fillMaxWidth())
-            }
-        }
+        pagingState.items.isEmpty() && (pagingState.isLoading || pagingState.isRefreshing) ->
+            AnixLoadingBox(modifier = Modifier.fillMaxSize())
+
+        pagingState.isEmpty ->
+            AnixEmptyBox(message = tab.emptyMessage(strings), modifier = Modifier.fillMaxSize())
+
+        viewMode == LibraryViewMode.List -> LibraryRows(pagingState = pagingState, actions = actions)
+
+        else -> LibraryPosterGrid(pagingState = pagingState, windowSize = windowSize, actions = actions)
     }
 }
 
 /**
- * P13.T4: компактные горизонтальные строки на Compact-ширине — под мокап Claude Design
- * (DesignSync `Reelwave Prototype.dc.html`, секция `isLists`/`activeListItems`): 48×48 арт +
- * название + подпись прогресса слева, статус-чип списка справа. Переиспользует [ProgressRow]
- * (тот же компонент, что уже рисует "Продолжить смотреть" на Home и по KDoc [ProgressRow]
- * задуман под трёх потребителей, включая Мои списки) — только с [ListStatusChip] в `trailing`
- * вместо пустого слота.
- *
- * Долгое нажатие → то же [LibraryContextMenu], что и у грида: [ProgressRow.onLongClick] заведён
- * через `combinedClickable`, поведение (смена статуса/избранное/удаление) не отличается от
- * Medium/Expanded — меняется только внешний вид строки, не логика.
- *
- * У истории и части «избранного» `release.myListStatus` может быть `null` (релиз не состоит ни
- * в одном статусном списке) — тогда чип справа просто не рисуется ([trailing] `null`), а не
- * подставляется выдуманный статус.
+ * P9.T2: тулбар над содержимым вкладки: счётчик «N тайтлов» слева, справа — кнопка вида
+ * «Список» ↔ «Сетка постеров» ([LibraryViewModeButton], порядок: [вид] [реверс]) и реверс. Реверс
+ * скрыт для [LibraryTab.History] — у `HistoryApi` нет параметра `sort` (см. её KDoc), показывать для
+ * неё переключатель было бы обманчиво. Активный реверс подсвечивается цветом `primary`.
  */
-@Suppress("LongParameterList", "LongMethod")
-// LongParameterList: См. LibraryGrid — тот же координирующий паттерн, минус windowSize (Compact
-// всегда один размер строки, ширина экрана строкам не нужна).
-// LongMethod: Track A (сверка Compact-раскладки, 2026-09-04) добавил контейнер-modifier
-// (фон/бордер/radius) вокруг ProgressRow — тело осталось линейным, разбиение добавило бы
-// косвенность ради счётчика строк.
-@Composable
-private fun LibraryRows(
-    pagingState: PagingState<Release>,
-    selectedTab: LibraryTab,
-    menuReleaseId: Int?,
-    onMenuReleaseIdChange: (Int?) -> Unit,
-    onReleaseClick: (Int) -> Unit,
-    viewModel: LibraryViewModel,
-) {
-    val dimens = AnixThemeTokens.dimens
-    val colors = AnixThemeTokens.colors
-
-    LazyColumn(
-        // Liquid Glass (2026-09-11): нижний паддинг учитывает высоту плавающего таб-бара — эта
-        // функция рендерится только на Compact (см. её KDoc/call site выше), где сама и только
-        // сама живёт нижняя навигация; `LibraryGrid` (Medium/Expanded, nav rail/sidebar) инсет не
-        // читает. См. KDoc `LocalGlassBottomInset`/аналогичное место в `HomeScreen.kt`.
-        contentPadding =
-            PaddingValues(
-                start = dimens.spaceS,
-                end = dimens.spaceS,
-                top = dimens.spaceM,
-                bottom = dimens.spaceM + LocalGlassBottomInset.current,
-            ),
-        verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        itemsIndexedColumn(pagingState.items, key = { _, release -> release.id }) { index, release ->
-            if (index >= pagingState.items.size - LIBRARY_PREFETCH_THRESHOLD) {
-                viewModel.loadMore(selectedTab)
-            }
-            Box {
-                ProgressRow(
-                    posterUrl = release.posterUrl,
-                    title = release.title,
-                    watchedEpisodes = release.lastViewEpisode,
-                    totalEpisodes = release.episodesTotal,
-                    onClick = { onReleaseClick(release.id) },
-                    onLongClick = { onMenuReleaseIdChange(release.id) },
-                    trailing = {
-                        release.myListStatus?.let { status ->
-                            ListStatusChip(status, style = ListStatusChipStyle.Full)
-                        }
-                    },
-                    // Track A (сверка Compact-раскладки, 2026-09-04): макет оборачивает строку
-                    // "Мои списки" в контейнер w045/w07/radius12 — снаружи через modifier, сам
-                    // ProgressRow.kt (общий и на Home Continue Watching) не тронут.
-                    modifier =
-                        Modifier
-                            .clip(RoundedCornerShape(dimens.cornerM))
-                            .background(colors.overlay045)
-                            .border(1.dp, colors.overlay07, RoundedCornerShape(dimens.cornerM)),
-                )
-                LibraryContextMenu(
-                    expanded = menuReleaseId == release.id,
-                    release = release,
-                    tab = selectedTab,
-                    onDismiss = { onMenuReleaseIdChange(null) },
-                    onChangeStatus = { status ->
-                        viewModel.changeStatus(release, status)
-                        onMenuReleaseIdChange(null)
-                    },
-                    onToggleFavorite = {
-                        viewModel.toggleFavorite(release)
-                        onMenuReleaseIdChange(null)
-                    },
-                    onRemoveFromList = { status ->
-                        viewModel.removeFromList(release, status)
-                        onMenuReleaseIdChange(null)
-                    },
-                    onRemoveFromHistory = {
-                        viewModel.removeFromHistory(release)
-                        onMenuReleaseIdChange(null)
-                    },
-                )
-            }
-        }
-
-        if (pagingState.isLoading) {
-            item {
-                AnixLoadingBox(modifier = Modifier.fillMaxWidth())
-            }
-        }
-    }
-}
-
-/**
- * P9.T2: тулбар shuffle/реверс над сеткой вкладки. Shuffle доступен всегда (клиентская операция
- * над уже загруженным списком, см. [LibraryViewModel.toggleShuffle]), отключён только при
- * `itemCount <= 1`, когда перетасовывать нечего. Реверс скрыт для [LibraryTab.History] — у
- * `HistoryApi` нет параметра `sort` (см. её KDoc), показывать для неё переключатель было бы
- * обманчиво. Активный переключатель подсвечивается цветом `primary`.
- */
-@Suppress("LongParameterList") // Координирующий блок: вкладка + счётчик + 2 состояния тогглов + 2 колбэка + modifier.
+@Suppress("LongParameterList") // Координирующий блок: вкладка + счётчик + вид + реверс + 2 колбэка + modifier.
 @Composable
 private fun LibraryToolbar(
     tab: LibraryTab,
     itemCount: Int,
-    isShuffled: Boolean,
+    viewMode: LibraryViewMode,
     isReversed: Boolean,
-    onShuffleClick: () -> Unit,
+    onViewModeClick: () -> Unit,
     onReverseClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -473,8 +266,8 @@ private fun LibraryToolbar(
     Row(
         modifier = modifier.fillMaxWidth().padding(horizontal = dimens.spaceS),
         // Track A (сверка Compact-раскладки, 2026-09-04): макет добавляет счётчик "N titles"
-        // слева от shuffle/реверс — SpaceBetween вместо End, чтобы счётчик и кнопки разошлись по
-        // разным краям строки.
+        // слева от кнопок — SpaceBetween вместо End, чтобы счётчик и кнопки разошлись по разным
+        // краям строки.
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -485,29 +278,11 @@ private fun LibraryToolbar(
         )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // Подтверждено на устройстве (Фаза 11, T9): IconButton не сливает
-            // Icon.contentDescription в свой кликабельный узел (тот же паттерн, что и остальные
-            // M3-компоненты этой фазы) — явный clearAndSetSemantics на самом IconButton.
-            // Track A: макет рисует shuffle маленькой квадратной кнопкой 28×28 с фоном overlay06
-            // — обёрнуто снаружи модификатором, сам IconButton внутри не тронут.
-            IconButton(
-                onClick = onShuffleClick,
-                enabled = itemCount > 1,
-                modifier =
-                    Modifier
-                        .size(SHUFFLE_BUTTON_SIZE)
-                        .clip(RoundedCornerShape(dimens.cornerS))
-                        .background(colors.overlay06)
-                        .clearAndSetSemantics { contentDescription = strings.libraryShuffle },
-            ) {
-                AnixIcon(
-                    name = "shuffle",
-                    contentDescription = null,
-                    filled = true,
-                    tint = if (isShuffled) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                )
-            }
+            LibraryViewModeButton(currentMode = viewMode, onClick = onViewModeClick)
             if (tab != LibraryTab.History) {
+                // Подтверждено на устройстве (Фаза 11, T9): IconButton не сливает
+                // Icon.contentDescription в свой кликабельный узел (тот же паттерн, что и остальные
+                // M3-компоненты этой фазы) — явный clearAndSetSemantics на самом IconButton.
                 IconButton(
                     onClick = onReverseClick,
                     modifier = Modifier.clearAndSetSemantics { contentDescription = strings.libraryReverseSort },
@@ -523,14 +298,6 @@ private fun LibraryToolbar(
         }
     }
 }
-
-/** Track A (сверка Compact-раскладки, 2026-09-04): размер квадратной кнопки shuffle в тулбаре
- *  (см. [LibraryToolbar]) — точное значение макета, не токен [AnixThemeTokens.dimens] (единственный
- *  потребитель — этот тулбар). */
-private val SHUFFLE_BUTTON_SIZE = 28.dp
-
-/** Толщина бордера overlay-контейнера ячейки [LibraryGrid] (тот же 1dp, что у [LibraryRows]). */
-private val LIBRARY_GRID_CARD_BORDER_WIDTH = 1.dp
 
 /**
  * Меню долгого нажатия: смена статуса (кроме текущего), тоггл избранного и удаление,

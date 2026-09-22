@@ -16,6 +16,7 @@ import com.aniko.data.api.ReleaseApi
 import com.aniko.data.api.ReleaseCommentApi
 import com.aniko.data.api.ScheduleApi
 import com.aniko.data.api.SearchApi
+import com.aniko.data.librarypreferences.LibraryPreferencesStore
 import com.aniko.data.locale.LocaleStore
 import com.aniko.data.notification.NotificationPoller
 import com.aniko.data.notification.NotificationSyncStore
@@ -94,6 +95,7 @@ val dataModule =
         single { AppIconStore(settings = get()) }
         single { LocalPlayerPositionStore(settings = get()) }
         single { PlayerPreferencesStore(settings = get()) }
+        single { LibraryPreferencesStore(settings = get()) }
         single { LocalVoicePinStore(settings = get()) }
         single { TitleVoicePreferenceStore(settings = get()) }
         single { LocalProfilePinnedSectionStore(settings = get()) }

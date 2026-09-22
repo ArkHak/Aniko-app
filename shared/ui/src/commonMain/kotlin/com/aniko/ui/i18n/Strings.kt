@@ -149,9 +149,11 @@ interface Strings {
     val libraryMoveToStatus: (status: String) -> String
 
     // P9.T1: заголовок вкладки со счётчиком ("Смотрю (12)"). P9.T2: content description для
-    // тулбара shuffle/реверс над сеткой.
+    // тулбара реверса над списком. Кнопка вида «Список»/«Сетка постеров» (2026-09-22): подпись
+    // описывает действие, то есть вид, НА который переключимся.
     val libraryTabCountFormat: (title: String, count: Int) -> String
-    val libraryShuffle: String
+    val libraryShowAsGrid: String
+    val libraryShowAsList: String
     val libraryReverseSort: String
 
     /** Track A (сверка Compact-раскладки, 2026-09-04): счётчик "N titles" слева в [LibraryToolbar]

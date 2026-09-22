@@ -84,7 +84,8 @@ val RuStrings: Strings =
         override val libraryRemoveFromHistory = "Удалить из истории"
         override val libraryMoveToStatus: (String) -> String = { status -> "В «$status»" }
         override val libraryTabCountFormat: (String, Int) -> String = { title, count -> "$title ($count)" }
-        override val libraryShuffle = "Перемешать"
+        override val libraryShowAsGrid = "Показать сеткой"
+        override val libraryShowAsList = "Показать списком"
         override val libraryReverseSort = "Обратный порядок"
 
         // Track A: упрощённая русская плюрализация (не идеальная, но нормальный вид для типичных

@@ -2,6 +2,8 @@ package com.aniko.app.feature.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aniko.data.librarypreferences.LibraryPreferencesStore
+import com.aniko.data.librarypreferences.LibraryViewMode
 import com.aniko.data.paging.Paginator
 import com.aniko.data.paging.PagingState
 import com.aniko.data.repository.LibraryRepository
@@ -47,9 +49,10 @@ sealed class LibraryTab {
 data class LibraryUiState(
     val selectedTab: LibraryTab = DEFAULT_TAB,
     val pagingState: PagingState<Release> = PagingState(),
-    /** P9.T2: активна ли клиентская перетасовка вкладки [selectedTab] прямо сейчас — см. KDoc
-     *  [LibraryViewModel.toggleShuffle]. */
-    val isShuffled: Boolean = false,
+    /** Явно выбранный пользователем вид («Список»/«Сетка постеров»), общий для всех вкладок и
+     *  размеров окна — см. [LibraryViewModel.setViewMode]. `null` — выбора не было: вид по умолчанию
+     *  выбирает экран по размеру окна (ViewModel про окна не знает). */
+    val viewMode: LibraryViewMode? = null,
     /** P9.T2: `sort=` вкладки [selectedTab] сейчас обратный (см. KDoc [LibraryViewModel.toggleReverse]). */
     val isReversed: Boolean = false,
     /** P9.T1: счётчики вкладок статусов/избранного — `null`, пока не загружены (или гость без
@@ -101,6 +104,7 @@ data class LibraryUiState(
 class LibraryViewModel(
     private val libraryRepository: LibraryRepository,
     private val profileRepository: ProfileRepository,
+    private val libraryPreferences: LibraryPreferencesStore,
 ) : ViewModel() {
     private val paginators = mutableMapOf<LibraryTab, Paginator<Release>>()
 
@@ -112,9 +116,6 @@ class LibraryViewModel(
     /** P9.T2: `sort=` (см. [LibraryRepository.SORT_RECENTLY_ADDED]/[LibraryRepository.SORT_REVERSED])
      *  на вкладку — отсутствие ключа значит "по умолчанию" (не реверс). */
     private val reversedByTab = MutableStateFlow<Map<LibraryTab, Boolean>>(emptyMap())
-
-    /** P9.T2: id элементов вкладки в порядке клиентской перетасовки — см. [toggleShuffle]. */
-    private val shuffleOrderByTab = MutableStateFlow<Map<LibraryTab, List<ReleaseId>>>(emptyMap())
 
     /** P9.T1: счётчики вкладок, источник — `ProfileDetails` (тот же профиль, что `ProfileScreen`). */
     private val profileState = MutableStateFlow<ProfileDetails?>(null)
@@ -157,34 +158,27 @@ class LibraryViewModel(
         combine(
             tabContent,
             hiddenIdsByTab,
-            shuffleOrderByTab,
             reversedByTab,
             profileState,
-        ) { content, hiddenByTab, shuffleByTab, reversedByTabValue, profile ->
+            libraryPreferences.viewMode,
+        ) { content, hiddenByTab, reversedByTabValue, profile, viewMode ->
             val tab = content.tab
             val isReversed = reversedByTabValue[tab] == true
             val visibleItems = content.visibleItems(hiddenByTab[tab].orEmpty(), isReversed)
-            // Перетасовка вкладки считается активной, только пока набор видимых id не изменился
-            // относительно момента тоггла (см. KDoc toggleShuffle) — подгрузка страницы/смена
-            // статуса/удаление естественно "гасят" её здесь, без явного сброса состояния.
-            val shuffleOrder = shuffleByTab[tab]
-            val visibleIds = visibleItems.map { it.id }
-            val activeShuffleOrder = shuffleOrder?.takeIf { it.toSet() == visibleIds.toSet() }
-            val orderedItems =
-                if (activeShuffleOrder != null) {
-                    val indexById = activeShuffleOrder.withIndex().associate { (index, id) -> id to index }
-                    visibleItems.sortedBy { indexById.getValue(it.id) }
-                } else {
-                    visibleItems
-                }
             LibraryUiState(
                 selectedTab = tab,
-                pagingState = content.pagingState.copy(items = orderedItems),
-                isShuffled = activeShuffleOrder != null,
+                pagingState = content.pagingState.copy(items = visibleItems),
+                viewMode = viewMode,
                 isReversed = isReversed,
                 profile = profile,
             )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), LibraryUiState())
+        }.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+            // Сохранённый вид известен сразу (StateFlow), поэтому первый кадр уже рисуется им, а не видом
+            // по умолчанию для размера окна, который через кадр сменился бы выбором пользователя.
+            LibraryUiState(viewMode = libraryPreferences.viewMode.value),
+        )
 
     init {
         refreshCounts()
@@ -256,7 +250,7 @@ class LibraryViewModel(
 
     /**
      * P9.T2: переключает `sort=` вкладки [tab] и перезапрашивает её с первой страницы —
-     * НЕ клиентская перестановка (в отличие от [toggleShuffle]): без похода на сервер порядок был
+     * НЕ клиентская перестановка: без похода на сервер порядок был
      * бы верным только для уже загруженных страниц, а не для списка целиком. [Paginator] не
      * пересоздаётся — [sortFor] читается заново при каждой его загрузке страницы (см. KDoc
      * [LibraryRepository.listPaginator]), поэтому здесь достаточно поменять [reversedByTab] и
@@ -273,28 +267,12 @@ class LibraryViewModel(
     }
 
     /**
-     * P9.T2: клиентская перетасовка уже загруженных элементов вкладки [tab] — без запроса к API
-     * (в отличие от [toggleReverse]). Порядок фиксируется как список id на момент нажатия и живёт
-     * в [shuffleOrderByTab]; [uiState] считает его активным, только пока набор видимых id вкладки
-     * не поменялся (см. комбинирование в [uiState]) — так подгрузка следующей страницы (набор
-     * вырос), смена статуса/избранного/удаление (набор сократился) или переключение [toggleReverse]
-     * (новый серверный порядок) естественно "гасят" перетасовку без явной инвалидации здесь.
-     *
-     * Читает [uiState] (уже собранный список вкладки), а не сырой `Paginator.state`, — иначе набор
-     * id для сравнения в [uiState] разъехался бы с тем, что реально видит пользователь.
+     * Запоминает выбранный пользователем вид экрана («Список»/«Сетка постеров») — один на все
+     * вкладки и все размеры окна, переживает перезапуск ([LibraryPreferencesStore]). Клиентская
+     * операция: список вкладки и запросы к API от вида не зависят.
      */
-    fun toggleShuffle(tab: LibraryTab) {
-        val currentIds =
-            uiState.value.pagingState.items
-                .map { it.id }
-        val activeOrder = shuffleOrderByTab.value[tab]
-        val isActive = activeOrder != null && activeOrder.toSet() == currentIds.toSet()
-        shuffleOrderByTab.value =
-            if (isActive) {
-                shuffleOrderByTab.value - tab
-            } else {
-                shuffleOrderByTab.value + (tab to currentIds.shuffled())
-            }
+    fun setViewMode(mode: LibraryViewMode) {
+        libraryPreferences.setViewMode(mode)
     }
 
     /**
