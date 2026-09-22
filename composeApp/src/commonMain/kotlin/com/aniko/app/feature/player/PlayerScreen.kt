@@ -125,6 +125,11 @@ fun PlayerScreen(
     viewModel: PlayerViewModel = koinViewModel(),
 ) {
     val host = VideoHost.fromKey(hostKey)
+    // Здесь всегда ИСХОДНЫЕ параметры маршрута, даже после смены озвучки (`selectVoiceType` их не
+    // меняет). Экран может покинуть композицию и войти в неё снова (см. KDoc
+    // [PlayerUiState.isFullscreen]) — эффект тогда вызовет `load` с тем же ключом, и это no-op, пока
+    // источник грузится/загружен: ViewModel помнит принятый ключ маршрута отдельно от реально
+    // загруженного и не откатывает выбранную озвучку (см. `PlayerViewModel.load`).
     LaunchedEffect(releaseId, sourceId, position, hostKey) {
         viewModel.load(releaseId, sourceId, position, host)
     }
@@ -254,7 +259,29 @@ fun PlayerScreen(
                     // `LoadKey` и перезапустит цепочку. В back stack всегда ровно один Player —
                     // «назад» из любой серии возвращает на экран, откуда открыли плеер
                     // (детали/список), а не копится стек из серий.
-                    val openNextEpisode = { navigator.openPlayer(releaseId, sourceId, position + 1, host) }
+                    //
+                    // releaseId/sourceId/position/host параметров этой функции — ИСХОДНЫЕ параметры
+                    // маршрута. После [PlayerViewModel.selectVoiceType] они расходятся с реально
+                    // загруженным источником: другой `sourceId` (другая озвучка), `position` внутри
+                    // неё не обязан совпадать с маршрутным (см. KDoc `EpisodeRepository.matchPosition`
+                    // про то, что номерация серий не совпадает между источниками), а маршрутный `host`
+                    // и вовсе не пересчитывается при смене озвучки. Берём вместо них РЕАЛЬНО
+                    // загруженный источник: `state.positionKey` — тот же ключ, что и у сохранения
+                    // позиции воспроизведения (releaseId/sourceId/position загруженного источника), и
+                    // `source.host` — его хост (`PlaybackSource.host`, выставляется
+                    // `EpisodeRepository.resolveEpisodeTarget` при каждой (пере)загрузке, домен URL
+                    // приоритетнее переданного). Фолбэк на параметры маршрута недостижим на практике:
+                    // кнопка «Следующая серия» видна только внутри уже загруженного `Embed`-источника,
+                    // когда `positionKey` уже выставлен вместе с ним (см. `PlayerViewModel.startLoad`).
+                    val nextEpisodeSourceKey = state.positionKey
+                    val openNextEpisode = {
+                        navigator.openPlayer(
+                            nextEpisodeSourceKey?.releaseId ?: releaseId,
+                            nextEpisodeSourceKey?.sourceId ?: sourceId,
+                            (nextEpisodeSourceKey?.episodeOrdinal ?: position) + 1,
+                            source.host,
+                        )
+                    }
 
                     if (controller.isSupported) {
                         // P16.T7 — сохранение позиции воспроизведения в `LocalPlayerPositionStore`
@@ -284,18 +311,25 @@ fun PlayerScreen(
                         }
                         // Финальное сохранение по dispose (уход с экрана/смена серии) — то, что
                         // не успел троттлинг выше.
-                        DisposableEffect(releaseId, sourceId, position, controller) {
+                        // Ключ — РЕАЛЬНО загруженный источник (`state.positionKey`), а не параметры
+                        // маршрута: после смены озвучки (`selectVoiceType`) маршрут остаётся прежним, и
+                        // запись под ним положила бы позицию новой озвучки в ключ исходной. `positionKey`
+                        // выставляется вместе с `source`, так что внутри этой ветки он не `null`.
+                        val loadedPositionKey = state.positionKey
+                        DisposableEffect(loadedPositionKey, controller) {
                             onDispose {
                                 val snapshot = controller.state.value
                                 // Явный ключ: к моменту dispose (смена серии/озвучки) loadedKey в VM
                                 // может указывать уже на новую серию (ревью Волны 3, P3).
-                                viewModel.onControllerDisposed(
-                                    releaseId = releaseId,
-                                    sourceId = sourceId,
-                                    position = position,
-                                    currentMs = snapshot.currentTimeMs,
-                                    durationMs = snapshot.durationMs,
-                                )
+                                loadedPositionKey?.let { loaded ->
+                                    viewModel.onControllerDisposed(
+                                        releaseId = loaded.releaseId,
+                                        sourceId = loaded.sourceId,
+                                        position = loaded.episodeOrdinal,
+                                        currentMs = snapshot.currentTimeMs,
+                                        durationMs = snapshot.durationMs,
+                                    )
+                                }
                             }
                         }
                         // P16.T7 — «Продолжить» из resume-диалога: перемотка откладывается до

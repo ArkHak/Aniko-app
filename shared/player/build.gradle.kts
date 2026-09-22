@@ -48,5 +48,11 @@ kotlin {
             // kotlin("plugin.serialization") в этом модуле, он здесь не нужен.
             implementation(libs.kotlinx.serialization.json)
         }
+
+        desktopTest.dependencies {
+            // Только для юнит-тестов резолверов: подмена ответов `/ftor` и зондов CDN без сети и
+            // без libVLC (`KodikDefaultQualityResolveTest`).
+            implementation(libs.ktor.client.mock)
+        }
     }
 }

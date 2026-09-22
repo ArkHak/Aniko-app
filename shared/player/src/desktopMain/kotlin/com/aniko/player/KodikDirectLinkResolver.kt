@@ -49,11 +49,11 @@ import java.util.Base64
  * Оригинал после расшифровки ещё зондирует достижимость выбранного CDN-манифеста
  * (`probeKodikManifest` — Kodik иногда редиректит на edge-хосты, недоступные с части сетей) и,
  * если недоступен, СДАЁТСЯ целиком (даже не пробуя другое качество). Этот порт делает не совсем то
- * же самое, а немного лучше: зондирует КАЖДОГО кандидата по приоритету качества
- * ([QUALITY_PRIORITY]) и берёт первый реально достижимый — то же зондирование
- * ([followMediaRedirects]), но не сдаётся после первой неудачи, если хост отдал несколько
- * качеств. Дешёвая правка (тот же вызов в цикле вместо одного), а устойчивость к "верхнее
- * качество недоступно с этой сети, а 480p — доступно" заметно выше.
+ * же самое, а немного лучше: зондирует КАЖДОГО кандидата по приоритету качества (от лучшего к
+ * худшему, 1080p → 720p → 480p → 360p, см. [decryptAndRank]) и берёт первый реально достижимый —
+ * то же зондирование ([followMediaRedirects]), но не сдаётся после первой неудачи, если хост
+ * отдал несколько качеств. Дешёвая правка (тот же вызов в цикле вместо одного), а устойчивость к
+ * "верхнее качество недоступно с этой сети, а 480p — доступно" заметно выше.
  *
  * `@Suppress("TooManyFunctions")` — все 14 функций обслуживают РОВНО один связный алгоритм в три
  * шага (см. выше), разнесённый по маленьким именованным функциям ради читаемости каждого шага —
@@ -67,10 +67,11 @@ internal object KodikDirectLinkResolver {
      *  пирамиды `if/else`.
      *
      *  Переключение качества (Desktop, этой же веткой): [decryptAndRank] возвращает кандидатов с
-     *  лейблами качества, дефолтный поток — первый реально доступный по приоритету (то же
-     *  зондирование [followMediaRedirects] по [probeReachable] с кэшем, чтобы дефолт не зондить
-     *  дважды), а в `qualityStreams` попадают ВСЕ достижимые качества — UI предлагает переключение
-     *  только на то, что реально проиграется (мёртвое качество хуже отсутствия чипа). */
+     *  лейблами качества от лучшего к худшему, дефолтный поток («Авто») — первый реально доступный
+     *  из них, то есть ЛУЧШЕЕ достижимое качество (то же зондирование [followMediaRedirects] по
+     *  [probeReachable] с кэшем, чтобы дефолт не зондить дважды), а в `qualityStreams` попадают
+     *  ВСЕ достижимые качества в том же порядке «от лучшего к худшему» — UI предлагает
+     *  переключение только на то, что реально проиграется (мёртвое качество хуже отсутствия чипа). */
     @Suppress("ReturnCount")
     suspend fun resolve(
         client: HttpClient,
@@ -152,13 +153,22 @@ internal object KodikDirectLinkResolver {
         return "${PLAYER_ORIGIN}ftor?$query"
     }
 
-    /** Кандидаты потока (лейбл качества → URL), отсортированные по приоритету качества
-     *  (1080 → 720 → 480 → 360, затем что осталось) — вызывающая сторона зондирует их по очереди,
-     *  см. KDoc [resolve]. Лейбл — в том виде, в котором качество показывает UI («720p»): ключи
-     *  `links` у Kodik обычно уже в форме `720p`, но суффикс гарантируем (голое `720` тоже
-     *  нормализуется в `720p`) — вдруг хост сменит формат ключей. */
-    private fun decryptAndRank(links: JsonObject): List<Pair<String, String>> {
-        val byQuality = mutableMapOf<String, String>()
+    /** Кандидаты потока (лейбл качества → URL), отсортированные ОТ ЛУЧШЕГО К ХУДШЕМУ по высоте кадра
+     *  (1080p → 720p → 480p → 360p …) — вызывающая сторона зондирует их по очереди и первый
+     *  достижимый берёт дефолтом (режим «Авто»), см. KDoc [resolve]; тот же порядок получает
+     *  чип качества в UI. Лейблы без распознаваемой высоты ([qualityHeightOf] == `null`, нештатные
+     *  ключи хоста вроде `auto`) идут в конце в порядке ответа.
+     *
+     *  Лейбл — в том виде, в котором качество показывает UI («720p»): ключи `links` у Kodik обычно
+     *  уже в форме `720p`, но суффикс гарантируем (голое `720` тоже нормализуется в `720p`) — вдруг
+     *  хост сменит формат ключей. Сортируем ИМЕННО нормализованные лейблы: раньше порядок задавал
+     *  список голых `1080`/`720`/…, ни один элемент которого не совпадал с ключом `720p`, поэтому
+     *  ранжирование молча пустело и дефолтом становился первый ключ ответа (у Kodik — по
+     *  возрастанию, то есть худшее качество).
+     *
+     *  `internal` (а не `private`) — чтобы ранжирование проверялось юнит-тестом без сети. */
+    internal fun decryptAndRank(links: JsonObject): List<Pair<String, String>> {
+        val byQuality = LinkedHashMap<String, String>()
         for ((quality, sourcesElement) in links) {
             val rawSrc =
                 (sourcesElement as? JsonArray)
@@ -171,15 +181,20 @@ internal object KodikDirectLinkResolver {
             val absolute = toAbsolute(decryptIfNeeded(rawSrc))
             byQuality[qualityLabel(quality)] = preferPlayableUrl(absolute)
         }
-        val ranked = QUALITY_PRIORITY.mapNotNull { quality -> byQuality[quality]?.let { quality to it } }
-        return if (ranked.isNotEmpty()) ranked else byQuality.entries.map { (quality, url) -> quality to url }
+        // `sortedByDescending` устойчива: лейблы с равной (в т.ч. неизвестной) высотой сохраняют
+        // порядок ответа хоста.
+        return byQuality.entries
+            .map { (quality, url) -> quality to url }
+            .sortedByDescending { (quality, _) -> qualityHeightOf(quality) ?: UNKNOWN_QUALITY_HEIGHT }
     }
 
+    /** Голое число (`720`) → `720p`; всё остальное (`720p`, нештатное `auto`) — как есть, чтобы не
+     *  плодить бессмысленные лейблы вроде `autop`. */
     private fun qualityLabel(quality: String): String =
-        if (quality.endsWith("p", ignoreCase = true)) {
-            quality
-        } else {
+        if (quality.isNotEmpty() && quality.all(Char::isDigit)) {
             quality + "p"
+        } else {
+            quality
         }
 
     /**
@@ -273,7 +288,10 @@ internal object KodikDirectLinkResolver {
     private const val CAESAR_SHIFT = 18
     private const val ALPHABET_SIZE = 26
     private const val HLS_SUFFIX = ":hls:manifest.m3u8"
-    private val QUALITY_PRIORITY = listOf("1080", "720", "480", "360")
+
+    /** Высота для лейбла, которого не распознал [qualityHeightOf]: ниже любого настоящего качества,
+     *  поэтому такие лейблы при сортировке по убыванию оказываются в конце. */
+    private const val UNKNOWN_QUALITY_HEIGHT = -1
 
     private val LINK_INFO_REGEX = Regex("""/(seria|video|movie|anime)/(\d+)/([0-9a-f]+)/""", RegexOption.IGNORE_CASE)
     private val HASH_REGEX = Regex("""\w+\.hash\s*=\s*'([^']+)';""")

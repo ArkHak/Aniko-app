@@ -59,6 +59,12 @@ import kotlinx.coroutines.launch
  * мост найдёт `<video>` (`EmbedVideoState.isVideoFound`); выставляется
  * [PlayerViewModel.onResumeContinue], потребляется и сбрасывается [PlayerScreen] через
  * [PlayerViewModel.onResumeSeekConsumed] после фактического `seekTo`.
+ * @param positionKey ключ локального хранилища позиции РЕАЛЬНО загруженного источника — он совпадает
+ * с ключом маршрута экрана, пока озвучку не переключали, и отличается после [PlayerViewModel.selectVoiceType]
+ * (тот перезагружает плеер другим `sourceId`/`position`, а маршрут остаётся прежним). Выставляется
+ * вместе с [source]; `null` — пока источник не загружен. Именно по нему [PlayerScreen] сохраняет позицию
+ * при разборе плеера: маршрутные `sourceId`/`position` после смены озвучки записали бы позицию новой
+ * озвучки под ключ исходной.
  */
 data class PlayerUiState(
     val isLoading: Boolean = true,
@@ -73,6 +79,7 @@ data class PlayerUiState(
     val isFullscreen: Boolean = playerOpensFullscreen(),
     val resumePositionMs: Long? = null,
     val pendingSeekToMs: Long? = null,
+    val positionKey: PositionKey? = null,
 )
 
 /**
@@ -137,11 +144,31 @@ class PlayerViewModel(
         fun toPositionKey() = PositionKey(releaseId = releaseId, sourceId = sourceId, episodeOrdinal = position)
     }
 
+    /**
+     * Источник, который РЕАЛЬНО загружен (или грузится) сейчас. После [selectVoiceType] отличается от
+     * [acceptedRouteKey]: маршрут экрана остаётся прежним, а играет уже другая озвучка.
+     */
     private var loadedKey: LoadKey? = null
+
+    /**
+     * Ключ маршрута, который экран передал в [load] и который был принят: только маршрут, без
+     * внутренних перезагрузок ([selectVoiceType], [retry]). Нужен, чтобы повторный вызов [load] с
+     * тем же ключом (экран покинул композицию и вошёл в неё снова — поворот/ресайз, см. KDoc
+     * [PlayerUiState.isFullscreen]) не откатывал уже выбранную пользователем озвучку к исходной.
+     */
+    private var acceptedRouteKey: LoadKey? = null
 
     /** Подписка на локальную отметку просмотра — своя на каждую серию, старую гасим при смене. */
     private var watchedJob: Job? = null
 
+    /**
+     * Точка входа экрана: грузит серию по параметрам МАРШРУТА.
+     *
+     * Повторный вызов с ключом маршрута, уже принятым раньше, — no-op, пока источник грузится или
+     * загружен (см. [shouldStartLoad]), даже если пользователь с тех пор сменил озвучку
+     * ([loadedKey] уже другой). Смена серии (другой ключ маршрута) и повтор после ошибки работают
+     * как раньше.
+     */
     fun load(
         releaseId: Int,
         sourceId: Int,
@@ -149,17 +176,29 @@ class PlayerViewModel(
         host: VideoHost,
     ) {
         val key = LoadKey(releaseId, sourceId, position, host)
-        // Не повторяем загрузку, если тот же эпизод уже грузится или уже успешно загружен.
-        // Ошибочное состояние (error != null) НЕ блокирует повтор — иначе повторный тап
-        // по той же серии после сбоя молча ничего не делал бы, и единственным способом
-        // повторить попытку оставалась бы кнопка "Повторить" на AnixErrorBox.
-        if (loadedKey == key && (_uiState.value.isLoading || _uiState.value.source != null)) return
+        val state = _uiState.value
+        if (!shouldStartLoad(acceptedRouteKey, key, state.isLoading, state.source != null)) return
+        acceptedRouteKey = key
+        startLoad(key)
+    }
+
+    /**
+     * Внутренняя перезагрузка ([selectVoiceType], [retry]): сверяется с [loadedKey] (что реально
+     * играет), а не с ключом маршрута, и сам маршрут не трогает.
+     */
+    private fun reload(key: LoadKey) {
+        val state = _uiState.value
+        if (!shouldStartLoad(loadedKey, key, state.isLoading, state.source != null)) return
+        startLoad(key)
+    }
+
+    private fun startLoad(key: LoadKey) {
         loadedKey = key
 
         // Озвучка нового источника ещё не известна (её выясняет `resolveCurrentVoiceType` заново
         // по новому `sourceId`) — список типов из прошлого источника переиспользуем как есть,
         // чтобы пикер не мигал пустым списком при переключении на серию того же релиза. Так же
-        // переносим `isFullscreen` — `selectVoiceType` вызывает этот же `load()` посреди
+        // переносим `isFullscreen` — `selectVoiceType` вызывает эту же загрузку ([reload]) посреди
         // воспроизведения в fullscreen, терять режим отображения при смене озвучки не должны.
         _uiState.value =
             PlayerUiState(
@@ -170,7 +209,8 @@ class PlayerViewModel(
         observeWatched(key)
         viewModelScope.launch {
             try {
-                val resolved = episodeRepository.resolveEpisodeTarget(releaseId, sourceId, position, host)
+                val resolved =
+                    episodeRepository.resolveEpisodeTarget(key.releaseId, key.sourceId, key.position, key.host)
                 // loadedKey могла уже смениться (пользователь быстро переключил серию/озвучку,
                 // пока этот запрос летел) — тот же guard, что и у остальных асинхронных записей в
                 // uiState в этом классе (см. hasNextEpisode/resolveCurrentVoiceType/selectVoiceType
@@ -182,12 +222,13 @@ class PlayerViewModel(
                             source = resolved.source,
                             error = null,
                             episodeName = resolved.episodeName,
+                            positionKey = key.toPositionKey(),
                         )
                     }
                 }
                 // Та же логика для истории просмотра ("Фаза 6"): плееру не нужно знать об успехе
                 // синхронизации истории, ошибку тоже проглатываем, а не мешаем воспроизведению.
-                runCatching { libraryRepository.addHistory(releaseId, sourceId, position) }
+                runCatching { libraryRepository.addHistory(key.releaseId, key.sourceId, key.position) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -199,7 +240,7 @@ class PlayerViewModel(
         viewModelScope.launch {
             // Отдельной корутиной: наличие следующей серии не должно ни задерживать показ кадра,
             // ни ронять экран — `hasEpisode` сам глотает сетевую ошибку в `false`.
-            val hasNext = episodeRepository.hasEpisode(releaseId, sourceId, position + 1)
+            val hasNext = episodeRepository.hasEpisode(key.releaseId, key.sourceId, key.position + 1)
             if (loadedKey == key) _uiState.update { it.copy(hasNextEpisode = hasNext) }
         }
         // P16.T7 — resume-диалог: сохранённая позиция читается параллельно с кадром видео и не
@@ -286,11 +327,11 @@ class PlayerViewModel(
             // Dubbing memory: переключение озвучки в пикере — явный выбор пары typeId+sourceId
             // для этого тайтла, фиксируем его до перезагрузки плеера.
             titleVoicePreferenceStore.save(key.releaseId, typeId, newSource.id)
-            // `currentVoiceType = type` здесь не пишем: `load()` ниже тут же сбросит стейт в новый
+            // `currentVoiceType = type` здесь не пишем: перезагрузка ниже тут же сбросит стейт в новый
             // `PlayerUiState` и сам заново подберёт тип через `resolveCurrentVoiceType` (теперь уже
             // по-настоящему — источник `newSource.id` принадлежит `typeId`, подбор найдёт его сразу).
             _uiState.update { it.copy(isAudioSwitching = false) }
-            load(key.releaseId, newSource.id, matchedPosition, newSource.host)
+            reload(LoadKey(key.releaseId, newSource.id, matchedPosition, newSource.host))
         }
     }
 
@@ -402,8 +443,13 @@ class PlayerViewModel(
         }
     }
 
+    /**
+     * Повтор после ошибки: перезагружает ТЕКУЩИЙ ([loadedKey]) источник — тот, на котором упало, —
+     * а не исходный маршрут: если пользователь успел сменить озвучку и сбой случился на ней, повторять
+     * нужно её. Вне ошибки (грузится/загружено) — no-op, как и раньше.
+     */
     fun retry() {
-        loadedKey?.let { (releaseId, sourceId, position, host) -> load(releaseId, sourceId, position, host) }
+        loadedKey?.let(::reload)
     }
 
     /**
@@ -449,6 +495,27 @@ class PlayerViewModel(
             }
     }
 }
+
+/**
+ * Нужно ли (пере)запускать загрузку по запросу с ключом [requestedKey], если предыдущий принятый
+ * этой точкой входа ключ — [acceptedKey] (`null` — ещё ничего не принималось), а состояние —
+ * [isLoading]/[hasSource].
+ *
+ * Пропускаем (`false`) только повтор ТОГО ЖЕ ключа, пока источник грузится или уже загружен:
+ * - другой ключ (следующая серия) — грузим;
+ * - тот же ключ после ошибки (не грузится и источника нет) — грузим, иначе повторный вход на ту же
+ *   серию после сбоя молча ничего не делал бы (единственным способом повторить оставалась бы
+ *   кнопка «Повторить»).
+ *
+ * Чистая функция вынесена из [PlayerViewModel] ради теста таблицей случаев: сам ViewModel завязан
+ * на конкретный `EpisodeRepository`. Дженерик по ключу — чтобы не светить приватный `LoadKey`.
+ */
+internal fun <K> shouldStartLoad(
+    acceptedKey: K?,
+    requestedKey: K,
+    isLoading: Boolean,
+    hasSource: Boolean,
+): Boolean = acceptedKey != requestedKey || !(isLoading || hasSource)
 
 private fun Exception.toPlayerError(): PlayerError {
     val error = this as? AnixError ?: return PlayerError.Generic

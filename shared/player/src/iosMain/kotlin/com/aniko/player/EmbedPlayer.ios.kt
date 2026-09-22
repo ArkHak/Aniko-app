@@ -24,10 +24,24 @@ import platform.WebKit.WKWebViewConfiguration
  * `defaultWebpagePreferences.allowsContentJavaScript` — не полагаемся молча на дефолт, раз
  * большинству embed-плееров (Kodik/Sibnet/...) JS обязателен.
  *
+ * `allowsInlineMediaPlayback = true` — без него `<video>.play()` внутри embed-страницы форсит
+ * нативный полноэкранный AVKit-плеер поверх нашего Compose-оверлея (кнопка «Назад», чипы
+ * «Аудио»/«Качество»/«1x»), т.к. дефолт `WKWebViewConfiguration` на iOS — `false`. Это не
+ * конфликтует с тем, что явный тап пользователя по кругу play в нашем UI уже требуется:
+ * ничего не выставляет `mediaTypesRequiringUserActionForPlayback` (дефолт `.all` — жест
+ * пользователя нужен что для инлайн-, что для полноэкранного воспроизведения), так что это
+ * только меняет, ЧТО происходит после разрешённого play — инлайн вместо форс-фуллскрина.
+ *
  * [controller] (см. [rememberEmbedVideoController]) — опциональный JS-мост к `<video>` внутри
  * страницы. Его `WKUserScript`/`WKScriptMessageHandler` прописываются в `WKWebViewConfiguration`
  * ДО конструктора `WKWebView`: после создания web view конфигурация уже скопирована и правки
  * в неё ни на что не влияют.
+ *
+ * Уход из композиции (смена озвучки/серии, выход с экрана) — окончательный: `onRelease` останавливает
+ * загрузку и подменяет страницу пустой ([releaseEmbed]), чтобы у убранного вида не продолжали
+ * играть медиа и реклама, пока Kotlin/Native GC не освободит сам `WKWebView`. Снятие обработчика
+ * сообщений моста (и разрыв цикла `WKWebView` → конфигурация → обработчик → контроллер) делает
+ * `EmbedVideoController.release()` из `rememberEmbedVideoController`, здесь оно не дублируется.
  */
 @Composable
 actual fun EmbedPlayerView(
@@ -41,6 +55,7 @@ actual fun EmbedPlayerView(
             val configuration =
                 WKWebViewConfiguration().apply {
                     defaultWebpagePreferences.allowsContentJavaScript = true
+                    allowsInlineMediaPlayback = true
                 }
             controller?.install(configuration)
             AnixEmbedWebView(frame = CGRectMake(0.0, 0.0, 0.0, 0.0), configuration = configuration).apply {
@@ -49,8 +64,25 @@ actual fun EmbedPlayerView(
             }
         },
         update = { webView -> webView.loadEmbed(url, referer) },
+        onRelease = { webView -> webView.releaseEmbed() },
         modifier = modifier.fillMaxSize(),
     )
+}
+
+/**
+ * Останавливает загрузку и подменяет документ пустым: страница вместе с её скриптами, рекламными
+ * фреймами и `<video>` выгружается сразу. Без этого убранный из композиции `WKWebView` мог жить,
+ * пока его не освободит Kotlin/Native, и всё это время играть звук и грузить рекламу.
+ *
+ * Порядок относительно `EmbedVideoController.release()` (тот снимает `WKScriptMessageHandler`)
+ * не важен: если обработчик уже снят, скрипт моста на пустой странице до него не достучится
+ * (`post` в `embedBridgeScript` проверяет наличие обработчика), а если ещё нет — origin пустой
+ * страницы (`about:blank`) отбросит `EmbedOriginFilter`. `loadedEmbedUrl` намеренно не трогаем:
+ * пока он совпадает с запрошенным `url`, `update` не перезагрузит embed в убранный вид.
+ */
+private fun AnixEmbedWebView.releaseEmbed() {
+    stopLoading()
+    loadHTMLString("", baseURL = null)
 }
 
 /**

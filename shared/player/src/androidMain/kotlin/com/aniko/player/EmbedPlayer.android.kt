@@ -33,6 +33,10 @@ import androidx.compose.ui.viewinterop.AndroidView
  * [controller] (см. [rememberEmbedVideoController]) — опциональный JS-мост к `<video>` внутри
  * страницы. Ставится в `factory` до первой загрузки: `addDocumentStartJavaScript` действует
  * только на навигации, начатые после его регистрации.
+ *
+ * Уход `WebView` из композиции (смена озвучки/серии, выход с экрана) — окончательный: `AndroidView`
+ * без `onReset` никогда не переиспользует view, повторный вход создаёт новый `WebView` через
+ * `factory`. Поэтому `onRelease` не только снимает мост, но и уничтожает `WebView` ([destroyEmbed]).
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -79,10 +83,40 @@ actual fun EmbedPlayerView(
                 webView.loadEmbed(url, referer, headers)
             }
         },
-        onRelease = { controller?.detach() },
+        onRelease = { webView ->
+            // Порядок важен: мост (WebMessageListener + document-start скрипт) снимаем ДО уничтожения —
+            // после `destroy()` любые вызовы на этом WebView недопустимы. `detach()` идемпотентен.
+            controller?.detach()
+            webView.destroyEmbed()
+        },
         modifier = modifier.fillMaxSize(),
     )
 }
+
+/**
+ * Останавливает и уничтожает [WebView], который навсегда покидает композицию.
+ *
+ * Без этого он не освобождался: `AndroidView` лишь отцеплял view от иерархии, а сам `WebView` оставался
+ * жить. Замер по CDP на эмуляторе: после каждой смены озвучки (она пересобирает всё поддерево плеера)
+ * число page-целей росло 1 → 2 → 3 → 4, старые страницы висели в `visibilityState=hidden`, а в каждой
+ * продолжали работать ~23 JS-контекста рекламных фреймов (`sapfir.tv`, `weborama-tech.ru`) — то есть
+ * утечка памяти плюс фоновая реклама и трафик у уже невидимого плеера.
+ *
+ * Порядок шагов: остановить загрузку → сменить документ на пустой (страница, её скрипты, реклама и
+ * медиа выгружаются сразу, не дожидаясь асинхронного разбора рендерера) → приостановить → снять с
+ * родителя (`destroy()` требует, чтобы view уже был вне иерархии) → убрать детей → `destroy()`.
+ * `pauseTimers()` намеренно НЕ вызывается: он глобальный для всех `WebView` процесса.
+ */
+private fun WebView.destroyEmbed() {
+    stopLoading()
+    loadUrl(BLANK_PAGE_URL)
+    onPause()
+    (parent as? ViewGroup)?.removeView(this)
+    removeAllViews()
+    destroy()
+}
+
+private const val BLANK_PAGE_URL = "about:blank"
 
 private fun WebView.loadEmbed(
     url: String,
