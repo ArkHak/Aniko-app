@@ -19,7 +19,8 @@ Google `Material Symbols Rounded` (`MaterialSymbolsRounded[FILL,GRAD,opsz,wght]`
 `grid_view`/`view_list` в переключателе вида «Мои списки», и другие).
 
 Источник: `google/material-design-icons`, шрифт `Material Symbols Rounded`
-(`MaterialSymbolsRounded[FILL,GRAD,opsz,wght].ttf`).
+(`MaterialSymbolsRounded[FILL,GRAD,opsz,wght].ttf`). Лицензия шрифта — Apache License 2.0
+(см. `LICENSE` в репозитории `google/material-design-icons`), сабсеттинг и модификация разрешены.
 
 ## Список глифов и словарь codepoint'ов
 

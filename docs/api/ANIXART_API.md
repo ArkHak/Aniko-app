@@ -4,7 +4,13 @@
 построен клиент Aniko. Сам API и его база (`anixart_9-0-beta-19.apk`, пакет `com.swiftsoft.anixartd`) — чужие,
 названия оригинального сервиса (Anixart) намеренно не переименовываются; переименован только наш проект-клиент (Aniko).
 
-Источники: декомпиляция `anixart_9-0-beta-19.apk` (`docs/api/jadx-out(-21)/sources/.../network/api|request|response/**`,
+> **Правовая пометка.** Этот документ — результат изучения сетевого взаимодействия официального
+> приложения с сервисом, выполненного в исследовательских целях и для обеспечения совместимости
+> (ср. ст. 1280 ГК РФ). Он описывает наблюдаемое поведение API как технический факт и не является
+> инструкцией по несанкционированному доступу, обходу технических ограничений или блокировок
+> (ст. 15.1–15.8 ФЗ-149). Права на сервис Anixart, его API и контент принадлежат их правообладателям.
+
+Источники: декомпиляция `anixart_9-0-beta-19.apk` (`docs/api/jadx-out(-21)/sources/.../network/api|request|response/**`;
 цитаты оттуда помечены `[APK]`), живые сэмплы реального трафика (`docs/api/samples/*.json`) и уже реализованный
 Kotlin-клиент (`shared/network`, `shared/data/.../api/*.kt`). Значения, не найденные статически и требующие живой
 проверки, помечены `[TODO: verify live]`. Этот файл объединяет и заменяет собой черновик первого прохода
@@ -19,7 +25,7 @@ Kotlin-клиент (`shared/network`, `shared/data/.../api/*.kt`). Значен
 | Заголовок `API-Version` | объявлен у `SearchApi.releaseSearch`, `RelatedApi.related`, `ProfilePreferenceApi.changeEmail`; точное значение не найдено статически. **Живой тест показал, что сервер его не требует** — `POST search/releases/0` без заголовка вернул `200 OK` (`docs/api/samples/search_releases_page0_no_api_version_header.json`) | `ApiConfig.apiVersionHeader = null` |
 | Формат ошибок | HTTP-статус почти всегда `200`; реальный результат — в поле `code` тела ответа (`Response.java`) | `ApiCall.kt` |
 | Коды `code` | `0` = SUCCESSFUL, `1` = FAILED, `402` = BANNED, `403` = PERM_BANNED | `Response.java`, `ApiCall.CODE_OK` |
-| Resiliency base-URL | **В текущей реализации отсутствует.** Задокументированная (в декомпиле оригинального APK) цепочка: `ConstantNetFetcher` → `ConfigNetFetcher` (`config/urls`) → `FirebaseNetFetcher` → `GithubPagesNetFetcher` (fallback `anixhelper.github.io`). В проекте Aniko базовый URL — константа (`DEFAULT_BASE_URL = "https://api-s.anixsekai.com/"`); `baseUrl` вынесен параметром конфигурации (`ApiConfig.kt`, строка 12) для будущей реализации fallback-цепочки, но сама логика переключения не кодирована — это план развития, а не текущая фишка. Реализация может быть добавлена в `AnixHttpClient.kt` как plugin, см. P0.T7 в `docs/REELWAVE_PLAN.md`. | `ApiConfig.kt`, `AnixHttpClient.kt`, `ChainedNetFetcher.java` (APK) |
+| Resiliency base-URL | **В текущей реализации отсутствует и реализовываться не планируется** (см. правовую пометку в шапке: переключение на резервные адреса может расцениваться как средство обхода ограничений доступа, ст. 15.8 ФЗ-149). Задокументированная (в декомпиле оригинального APK) цепочка приведена здесь только как факт устройства чужого сервиса: `ConstantNetFetcher` → `ConfigNetFetcher` (`config/urls`) → `FirebaseNetFetcher` → `GithubPagesNetFetcher` (fallback `anixhelper.github.io`). В проекте Aniko базовый URL — константа (`DEFAULT_BASE_URL = "https://api-s.anixsekai.com/"`); `baseUrl` вынесен параметром конфигурации (`ApiConfig.kt`, строка 12) исключительно для тестируемости. | `ApiConfig.kt`, `AnixHttpClient.kt`, `ChainedNetFetcher.java` (APK) |
 | Статика/CDN | Реальные хосты постеров/аватаров/скриншотов — `https://s.anixmirai.com/posters/...`; отдельный хост `https://s3.anixmirai.com/voiceovers/...` — только для озвучек. Исправлено в `ApiConfig.kt`: `DEFAULT_STATIC_BASE_URL` теперь `https://s.anixmirai.com/` (был неверный `static.anixart.tv`) | сэмплы в `docs/api/samples/`, `ApiConfig.kt` |
 | JSON-парсинг | Android-клиент — Jackson (`@JsonProperty`); в проекте — kotlinx.serialization с `ignoreUnknownKeys=true, isLenient=true, coerceInputValues=true` (осознанная терпимость к недокументированному/меняющемуся API) | `shared/network` |
 | 401/403 | Инвалидируют локальную сессию везде, **кроме** `auth/*` (там это «неверный пароль», а не «токен протух») | `shared/network` HttpResponseValidator |
