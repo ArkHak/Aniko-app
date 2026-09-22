@@ -174,7 +174,6 @@ val EnStrings: Strings =
         override val playerResumeContinueFrom: (String) -> String = { time -> "Continue from $time" }
         override val settingsTitle = "Settings"
         override val settingsSignOut = "Sign out"
-        override val settingsDesignGallery = "Design tokens"
         override val settingsLanguage = "Language"
         override val settingsTheme = "Theme"
         override val themeLight = "Light"

@@ -176,7 +176,6 @@ val RuStrings: Strings =
         override val playerResumeContinueFrom: (String) -> String = { time -> "Продолжить с $time" }
         override val settingsTitle = "Настройки"
         override val settingsSignOut = "Выйти"
-        override val settingsDesignGallery = "Дизайн-токены"
         override val settingsLanguage = "Язык"
         override val settingsTheme = "Тема"
         override val themeLight = "Светлая"

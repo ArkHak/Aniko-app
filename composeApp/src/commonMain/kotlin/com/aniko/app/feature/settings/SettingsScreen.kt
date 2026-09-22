@@ -45,10 +45,14 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Экран настроек: галерея дизайн-токенов, уведомления, переключатель языка (P5.T9 — канонический
+ * Экран настроек: уведомления, переключатель языка (P5.T9 — канонический
  * дом переключателя языка; с 2026-09-08 единственный — desktop-дубль в `sidebarFooter`
  * `AdaptiveScaffold` удалён по запросу пользователя: обрезался на малой высоте сайдбара),
  * переключатель темы и выход из аккаунта.
+ *
+ * Пункт «Дизайн-токены» (вход в `TokenGalleryScreen`) убран отсюда по запросу пользователя
+ * (2026-09-21). Сам экран-галерея и его маршрут остаются в коде и навграфе, но из UI больше
+ * недостижимы.
  *
  * P13.T2 (сверка с мокапом Claude Design) убрала отсюда два пункта:
  * - «Мой профиль» — раньше этот экран был вкладкой таб-бара и открывал профиль сам, теперь
@@ -75,7 +79,7 @@ import org.koin.compose.viewmodel.koinViewModel
  * `SettingsViewModel` — экран остаётся тонким прокси без собственного стейта (см. критерий
  * миграции на MVI-контракт в журнале Фазы 5: `SettingsViewModel` НЕ мигрирует).
  */
-@Suppress("LongParameterList", "LongMethod") // 9 опциональных колбэков/параметров одного плоского
+@Suppress("LongParameterList", "LongMethod") // 8 опциональных колбэков/параметров одного плоского
 // экрана без собственного стейта (см. KDoc выше про критерий немиграции на MVI) — группировка
 // в data class ради обхода линта добавила бы косвенность без пользы для читаемости; тело —
 // линейный плоский список пунктов (ListItem), разбиение на приватную функцию-прокси добавило бы
@@ -84,7 +88,6 @@ import org.koin.compose.viewmodel.koinViewModel
 fun SettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    onDesignGalleryClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     languageTag: String? = null,
     onLanguageTagChange: (String?) -> Unit = {},
@@ -124,16 +127,6 @@ fun SettingsScreen(
                             .widthIn(max = dimens.contentMaxWidth)
                             .verticalScroll(rememberScrollState()),
                 ) {
-                    ListItem(
-                        headlineContent = { Text(text = strings.settingsDesignGallery) },
-                        modifier =
-                            Modifier
-                                .clickable(onClick = onDesignGalleryClick)
-                                .clearAndSetSemantics {
-                                    contentDescription = strings.settingsDesignGallery
-                                },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    )
                     ListItem(
                         headlineContent = { Text(text = strings.settingsNotificationsSection) },
                         modifier =

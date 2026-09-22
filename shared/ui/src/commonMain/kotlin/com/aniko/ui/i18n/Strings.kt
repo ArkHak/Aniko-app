@@ -297,7 +297,6 @@ interface Strings {
     // ключ снова заголовок секции темы на `SettingsScreen`, там же, где и был исходно.
     val settingsTitle: String
     val settingsSignOut: String
-    val settingsDesignGallery: String
     val settingsLanguage: String
     val settingsTheme: String
     val themeLight: String

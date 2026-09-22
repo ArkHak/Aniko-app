@@ -225,8 +225,9 @@ private fun NavGraphBuilder.titleDetailRoutes(
 }
 
 /**
- * Profile (таб) + Settings и остальные экраны, открываемые из него (TokenGallery,
- * NotificationSettings).
+ * Profile (таб) + Settings и остальные экраны, открываемые из него (NotificationSettings).
+ * Маршрут `TokenGallery` тоже объявлен здесь, но из UI недостижим: пункт «Дизайн-токены» убран
+ * из `SettingsScreen` по запросу пользователя (2026-09-21), сам экран оставлен в коде.
  *
  * P13.T2 развернула прежний поток: раньше `Settings` был вкладкой таб-бара, а `Profile` —
  * дочерним экраном («Настройки» → «Мой профиль»). Теперь `Profile` сам вкладка таб-бара
@@ -259,7 +260,6 @@ private fun NavGraphBuilder.chromeRoutes(
         val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
         SettingsScreen(
             onBack = { navController.popBackStack() },
-            onDesignGalleryClick = { navController.navigate(AnixDestination.TokenGallery) },
             onNotificationsClick = { navController.navigate(AnixDestination.NotificationSettings) },
             languageTag = languageTag,
             onLanguageTagChange = localeStore::setLanguageTag,
