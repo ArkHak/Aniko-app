@@ -37,7 +37,7 @@ fun AnixPoster(
 
     AnixAsyncImage(
         model = url,
-        contentDescription = contentDescription,
+        contentDescription = null,
         contentScale = ContentScale.Crop,
         modifier =
             modifier
