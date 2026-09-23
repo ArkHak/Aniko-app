@@ -4,6 +4,7 @@ import com.aniko.data.dto.InterestingDto
 import com.aniko.data.dto.PageableResponseDto
 import com.aniko.data.dto.ProfileDto
 import com.aniko.data.dto.ReleaseDto
+import com.aniko.data.dto.ReleaseStreamingPlatformDto
 import com.aniko.model.CommunityListCounts
 import com.aniko.model.InterestingBanner
 import com.aniko.model.ListStatus
@@ -12,6 +13,7 @@ import com.aniko.model.Profile
 import com.aniko.model.Release
 import com.aniko.model.ReleaseDetails
 import com.aniko.model.ReleaseStatus
+import com.aniko.model.ReleaseStreamingPlatform
 import com.aniko.network.ApiConfig
 
 fun ReleaseDto.toDomain(staticBaseUrl: String = ApiConfig.DEFAULT_STATIC_BASE_URL): Release =
@@ -78,6 +80,36 @@ fun ReleaseDto.toReleaseDetails(staticBaseUrl: String = ApiConfig.DEFAULT_STATIC
         recommendedReleases = recommendedReleases.map { it.toDomain(staticBaseUrl) },
         commentCount = commentCount,
         relatedCount = relatedCount,
+        note = note,
+        noteBackgroundColorLight = noteBackgroundColorLight,
+        noteBackgroundColorDark = noteBackgroundColorDark,
+        noteTextColorLight = noteTextColorLight,
+        noteTextColorDark = noteTextColorDark,
+        // Живая проверка 2026-09-23 (см. KDoc `ReleaseDto`): поле в JSON отсутствовало вовсе,
+        // не `false` — `?: false` намеренно схлопывает «не пришло» к обычному незапрещённому
+        // случаю, а не падает/не блокирует парсинг.
+        isThirdPartyPlatformsDisabled = isThirdPartyPlatformsDisabled ?: false,
+    )
+
+/**
+ * Легальная стриминг-площадка релиза (`GET release/streaming/platform/{releaseId}`, сверено
+ * вживую 2026-09-23 — см. KDoc [ReleaseStreamingPlatformDto]). [icon] в живых сэмплах уже
+ * абсолютный URL (`https://s3.anixmirai.com/streamings/...`), как и `image` у [ReleaseDto] —
+ * та же `toAbsoluteUrl()` (no-op на строках с `http`).
+ *
+ * Возвращаемый тип не аннотирован явно (в отличие от соседних `toDomain()` в этом файле) —
+ * `ReleaseStreamingPlatformDto.toDomain(...): ReleaseStreamingPlatform` с обоими длинными именами
+ * типов превышает detekt `MaxLineLength` (120) даже в один параметр, а ktlint
+ * `standard:function-signature` в этой версии сворачивает однопараметрные сигнатуры в одну
+ * строку независимо от длины (проверено `ktlintFormat`) — разворот на несколько строк не проходит
+ * `ktlintCheck`. Тип тривиально выводится из единственного выражения ниже.
+ */
+fun ReleaseStreamingPlatformDto.toDomain(staticBaseUrl: String = ApiConfig.DEFAULT_STATIC_BASE_URL) =
+    ReleaseStreamingPlatform(
+        id = id,
+        name = name,
+        iconUrl = icon?.toAbsoluteUrl(staticBaseUrl),
+        url = url,
     )
 
 /**

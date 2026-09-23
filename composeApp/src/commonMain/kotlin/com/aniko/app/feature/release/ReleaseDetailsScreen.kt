@@ -66,7 +66,8 @@ import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * Title Detail (P7.T7-T13, Трек C плана): постер, метаданные/жанры/скриншоты, кнопка "Смотреть",
- * статус в списке/избранное, синопсис ([ReleaseHeaderSection]), сетка серий watched/unwatched
+ * статус в списке/избранное, синопсис ([ReleaseHeaderSection]), легальные стриминг-площадки
+ * ([ReleaseStreamingPlatformsSection], сверено вживую 2026-09-23), сетка серий watched/unwatched
  * ([ReleaseEpisodesSection]), похожие/рекомендуемые тайтлы ([ReleaseRelatedSection]), ссылка на
  * комментарии.
  *
@@ -324,13 +325,13 @@ private fun ReleaseDetailsContent(
 
         ReleaseRatingSection(releaseId = release.id, averageGrade = release.grade, modifier = sectionModifier)
 
-        ReleaseEpisodesSection(
+        EpisodesOrStreamingPlatformsSection(
             state = state,
             onSelectVoiceType = onSelectVoiceType,
             onSelectSource = onSelectSource,
             onEpisodeClick = onEpisodeClick,
             onEpisodeLongClick = onEpisodeLongClick,
-            modifier = sectionModifier,
+            sectionModifier = sectionModifier,
         )
 
         ReleaseRelatedSection(

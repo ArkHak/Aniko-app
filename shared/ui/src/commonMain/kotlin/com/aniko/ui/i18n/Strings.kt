@@ -439,6 +439,16 @@ interface Strings {
     val titleDetailSource: String
     val titleDetailTranslators: String
 
+    // Легальные стриминг-площадки (сверено вживую 2026-09-23, `release/streaming/platform/{id}`,
+    // не завязано на гео) — см. KDoc `ReleaseStreamingPlatformsSection` в composeApp.
+    val releaseStreamingPlatformsTitle: String
+    val releaseStreamingPlatformOpenContentDescription: (name: String) -> String
+
+    // Собственная формулировка (НЕ калька с уведомления Google "In response to a complaint…",
+    // см. задание) для случая `ReleaseDetails.isThirdPartyPlatformsDisabled == true`: сервер
+    // просит скрыть обычный флоу выбора неофициального источника.
+    val releaseThirdPartyPlatformsDisabledHint: String
+
     // Rating
     val ratingVoteCount: (count: Int) -> String
     val ratingRemoveVote: String

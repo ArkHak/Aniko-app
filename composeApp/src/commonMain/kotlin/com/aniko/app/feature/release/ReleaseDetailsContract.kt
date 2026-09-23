@@ -5,6 +5,7 @@ import com.aniko.model.EpisodeSource
 import com.aniko.model.Release
 import com.aniko.model.ReleaseComment
 import com.aniko.model.ReleaseDetails
+import com.aniko.model.ReleaseStreamingPlatform
 import com.aniko.model.VideoHost
 import com.aniko.model.VoiceType
 
@@ -27,6 +28,16 @@ import com.aniko.model.VoiceType
  * ошибки и не блокирует остальной экран — see `ReleaseDetailsViewModel.loadCommentsPreview`,
  * превью — необязательное украшение ссылки на комментарии, а не отдельная точка входа с UI ошибок
  * (та уже есть — `ReleaseCommentsScreen`).
+ *
+ * [streamingPlatforms] — легальные стриминг-площадки релиза (`ReleaseRepository.
+ * streamingPlatforms`, сверено вживую 2026-09-23, см. KDoc `ReleaseStreamingPlatformDto` в
+ * `shared/data`), не завязано на гео. Тот же принцип, что и у [commentsPreview]: отдельный
+ * независимый запрос, падает молча (`ReleaseDetailsViewModel.loadStreamingPlatforms`) — пустой
+ * список ЛИБО означает «у релиза нет легальных площадок» (обычный случай, `content: []` в живых
+ * сэмплах), ЛИБО «запрос ещё не завершился/упал» — экран в обоих случаях просто не рисует секцию
+ * (`ReleaseStreamingPlatformsSection`), без отдельного состояния ошибки/загрузки: см. задание про
+ * "падает молча, не блокирует экран" — список из необязательных площадок не самостоятельная точка
+ * входа с UI ошибок, как и превью комментариев.
  */
 data class ReleaseDetailsUiState(
     val isLoading: Boolean = false,
@@ -36,6 +47,7 @@ data class ReleaseDetailsUiState(
     val isDetailsLoading: Boolean = false,
     val detailsError: LoadError? = null,
     val commentsPreview: List<ReleaseComment> = emptyList(),
+    val streamingPlatforms: List<ReleaseStreamingPlatform> = emptyList(),
     // Флоу выбора серии: типы озвучки → источники → серии (см. `docs/api/ENDPOINTS.md`).
     val voiceTypes: List<VoiceType> = emptyList(),
     val selectedTypeId: Int? = null,

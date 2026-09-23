@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -84,6 +85,13 @@ import com.aniko.ui.theme.AnixThemeTokens
  * [details] может быть `null` (ещё грузится или упала независимо от базового [release], см. D1 в
  * KDoc [ReleaseDetailsUiState]) — секции, целиком зависящие от неё (расширенные метаданные,
  * скриншоты), в этом случае просто не рисуются, а не блокируют всю шапку.
+ *
+ * Легальные стриминг-площадки (сверено вживую 2026-09-23, см. KDoc `ReleaseDto`/`ReleaseDetails`):
+ * [details]`.note`, если не пусто, рисуется как короткий информационный баннер ([ReleaseNoteBanner])
+ * во всех трёх раскладках. Кнопка "Смотреть" ([HeroPlayButton]) скрывается, когда
+ * [details]`.isThirdPartyPlatformsDisabled == true` — сервер в этом случае просит опираться на
+ * `ReleaseStreamingPlatformsSection` вместо обычного флоу выбора источника (см.
+ * `ReleaseDetailsScreen.ReleaseDetailsContent`, где скрывается и сама `ReleaseEpisodesSection`).
  */
 @Suppress("LongParameterList") // Публичная сигнатура шапки: 9 обязательных колбэков/данных —
 // 8 исходных (см. историю коммитов) + [onBackClick] (Track A, компактная hero-обложка сама
@@ -183,6 +191,7 @@ private fun WideHeaderLayout(
             onChangeListStatus = onChangeListStatus,
             onToggleFavorite = onToggleFavorite,
             onShareClick = onShareClick,
+            hideWatchAction = details?.isThirdPartyPlatformsDisabled == true,
         )
 
         if (release.genres.isNotEmpty()) {
@@ -198,6 +207,8 @@ private fun WideHeaderLayout(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+
+        ReleaseNoteBanner(details = details)
 
         val screenshots = details?.screenshotUrls.orEmpty()
         if (screenshots.isNotEmpty()) {
@@ -263,8 +274,9 @@ private fun PosterAndInfoRow(
  * но каждый элемент ретокенизирован под те же конвенции, что и [CompactHeroHeader]
  * ([HeroPlayButton], [HeroAddToListButton], избранное/поделиться с теми же tint/filled).
  */
-@Suppress("LongParameterList") // 6 параметров ровно по числу независимых интерактивных зон
-// (плей/статус/избранное/поделиться), та же причина, что у `WideHeaderLayout` выше.
+@Suppress("LongParameterList") // 7 параметров: 6 независимых интерактивных зон (плей/статус/
+// избранное/поделиться) + [hideWatchAction] (легальные стриминг-площадки, см. KDoc
+// [ReleaseHeaderSection]) — та же причина, что у `WideHeaderLayout` выше.
 @Composable
 private fun WatchAndFavoriteRow(
     release: Release,
@@ -273,16 +285,19 @@ private fun WatchAndFavoriteRow(
     onChangeListStatus: (ListStatus?) -> Unit,
     onToggleFavorite: () -> Unit,
     onShareClick: () -> Unit,
+    hideWatchAction: Boolean = false,
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
 
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
-        HeroPlayButton(
-            isResolvingPlay = isResolvingPlay,
-            onClick = onWatchClick,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (!hideWatchAction) {
+            HeroPlayButton(
+                isResolvingPlay = isResolvingPlay,
+                onClick = onWatchClick,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -385,6 +400,67 @@ private fun MetadataSection(details: ReleaseDetails?) {
         InfoRow(emoji = "📖", label = strings.titleDetailSource, value = details.source)
         InfoRow(emoji = "🎙️", label = strings.titleDetailTranslators, value = details.translators)
     }
+}
+
+/**
+ * Информационный баннер `ReleaseDetails.note` (сверено вживую 2026-09-23, см. KDoc `ReleaseDto`
+ * в `shared/data`) — простой текст, HTML не парсится (в живом сэмпле — одно предложение:
+ * «Данный материал лицензирован на территории вашей страны.»). Ничего не рисует, если [details]
+ * `null` или `note` пуст.
+ *
+ * Цвета баннера — опциональные hex-строки с сервера ([ReleaseDetails.noteBackgroundColorLight]/
+ * `*Dark`, [ReleaseDetails.noteTextColorLight]/`*Dark`); во всех живых сэмплах на 2026-09-23 они
+ * были `null` — в этом случае баннер использует обычный токен-стиль приложения (`overlay045`/
+ * `textSecondary75`, тот же, что у `ReleaseCommentPreviewRow`), а не какой-то один жёстко
+ * захардкоженный цвет. `parseHexColorOrNull` — best-effort: невалидная строка тихо игнорируется,
+ * а не роняет экран. Светлая/тёмная пара выбирается тем же приёмом luminance-порога, что уже
+ * используется в проекте для аналогичного theme-aware цвета вне `ThemeStore` (см.
+ * `com.aniko.ui.adaptive.SidebarSlot.sidebarBackgroundColor`) — не `isSystemInDarkTheme()`, тема
+ * приложения выбирается явно, системную не следует.
+ */
+@Composable
+private fun ReleaseNoteBanner(details: ReleaseDetails?) {
+    val note = details?.note
+    if (note.isNullOrBlank()) return
+    val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < NOTE_BANNER_DARK_LUMINANCE_THRESHOLD
+    val backgroundColor =
+        (if (isDark) details.noteBackgroundColorDark else details.noteBackgroundColorLight)
+            ?.let(::parseHexColorOrNull)
+            ?: colors.overlay045
+    val textColor =
+        (if (isDark) details.noteTextColorDark else details.noteTextColorLight)
+            ?.let(::parseHexColorOrNull)
+            ?: colors.textSecondary75
+    val shape = RoundedCornerShape(dimens.cornerM)
+
+    Text(
+        text = note,
+        style = MaterialTheme.typography.bodySmall,
+        color = textColor,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(backgroundColor, shape)
+                .padding(dimens.space12),
+    )
+}
+
+/**
+ * Best-effort парсинг `#RRGGBB`/`#AARRGGBB` в [Color] — `null` на любой некорректный ввод
+ * (длина/не-hex символы), парсинг никогда не бросает исключение. См. KDoc [ReleaseNoteBanner].
+ */
+private fun parseHexColorOrNull(hex: String): Color? {
+    val cleaned = hex.removePrefix("#")
+    val argbHex =
+        when (cleaned.length) {
+            HEX_COLOR_LENGTH_RGB -> "FF$cleaned"
+            HEX_COLOR_LENGTH_ARGB -> cleaned
+            else -> null
+        } ?: return null
+    return argbHex.toLongOrNull(radix = HEX_RADIX)?.let { Color(it.toInt()) }
 }
 
 @Composable
@@ -553,6 +629,7 @@ private fun CompactHeroHeader(
                 onChangeListStatus = onChangeListStatus,
                 onToggleFavorite = onToggleFavorite,
                 onShareClick = onShareClick,
+                hideWatchAction = details?.isThirdPartyPlatformsDisabled == true,
             )
 
             if (detailsError != null && details == null) {
@@ -562,6 +639,8 @@ private fun CompactHeroHeader(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+
+            ReleaseNoteBanner(details = details)
 
             val description = release.description
             if (!description.isNullOrBlank()) {
@@ -681,6 +760,7 @@ private fun ExpandedDrawerHeader(
                 onShareClick = onShareClick,
                 buttonHeight = DRAWER_BUTTON_HEIGHT,
                 buttonRadius = DRAWER_BUTTON_RADIUS,
+                hideWatchAction = details?.isThirdPartyPlatformsDisabled == true,
             )
 
             if (detailsError != null && details == null) {
@@ -690,6 +770,8 @@ private fun ExpandedDrawerHeader(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+
+            ReleaseNoteBanner(details = details)
 
             val description = release.description
             if (!description.isNullOrBlank()) {
@@ -825,7 +907,8 @@ private fun HeroRatingGenresRow(release: Release) {
  * "визуальной сверки".
  */
 @Suppress("LongParameterList") // Координирующий блок: [release] + 5 колбэков, ровно по числу
-// независимых интерактивных зон (плей/статус/избранное/поделиться) — тот же паттерн и то же
+// независимых интерактивных зон (плей/статус/избранное/поделиться), + [hideWatchAction]
+// (легальные стриминг-площадки, см. KDoc [ReleaseHeaderSection]) — тот же паттерн и то же
 // обоснование, что и у `WatchAndFavoriteRow` выше в этом файле.
 @Composable
 private fun HeroActionsRow(
@@ -837,24 +920,33 @@ private fun HeroActionsRow(
     onShareClick: () -> Unit,
     buttonHeight: Dp = HERO_BUTTON_HEIGHT,
     buttonRadius: Dp = Dp.Unspecified,
+    hideWatchAction: Boolean = false,
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
 
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
         Row(horizontalArrangement = Arrangement.spacedBy(dimens.spaceS)) {
-            HeroPlayButton(
-                isResolvingPlay = isResolvingPlay,
-                onClick = onWatchClick,
-                modifier = Modifier.weight(1f),
-                height = buttonHeight,
-                cornerRadius = buttonRadius,
-            )
+            if (!hideWatchAction) {
+                HeroPlayButton(
+                    isResolvingPlay = isResolvingPlay,
+                    onClick = onWatchClick,
+                    modifier = Modifier.weight(1f),
+                    height = buttonHeight,
+                    cornerRadius = buttonRadius,
+                )
+            }
             HeroAddToListButton(
                 release = release,
                 onChangeListStatus = onChangeListStatus,
                 height = buttonHeight,
                 cornerRadius = buttonRadius,
+                // Play — единственный weight(1f) в ряду обычно, поэтому один растягивает ряд;
+                // когда его нет (hideWatchAction), эта кнопка остаётся единственной и должна сама
+                // забрать вес (modifier — на её внешний Box, прямой ребёнок этого Row) и
+                // растянуть свой видимый/кликабельный Row на всю ширину (fillWidth — см. её KDoc).
+                modifier = if (hideWatchAction) Modifier.weight(1f) else Modifier,
+                fillWidth = hideWatchAction,
             )
         }
 
@@ -974,6 +1066,16 @@ private fun HeroAddToListButton(
     onChangeListStatus: (ListStatus?) -> Unit,
     height: Dp = HERO_BUTTON_HEIGHT,
     cornerRadius: Dp = Dp.Unspecified,
+    modifier: Modifier = Modifier,
+    // [modifier] (обычно `weight(1f)`) достаётся внешнему `Box` — это прямой ребёнок родительского
+    // `Row`, только к нему `RowScope.weight` вообще применим. Но сама кнопка (фон/рамка/клик/
+    // семантика) — вложенный `Row`, и он этот вес сам по себе не наследует: `Box` с точными
+    // constraints от `weight` не растягивает контент по умолчанию (`contentAlignment = TopStart`),
+    // поэтому без отдельного флага внутренний `Row` остаётся intrinsic-ширины, а расширяется
+    // только невидимый `Box` вокруг него. [fillWidth] явно прокидывает `fillMaxWidth()` внутрь,
+    // когда эта кнопка — единственный элемент ряда (`hideWatchAction` в `HeroActionsRow`); в обычном
+    // случае (`false`, дефолт) поведение не меняется вообще.
+    fillWidth: Boolean = false,
 ) {
     val dimens = AnixThemeTokens.dimens
     val colors = AnixThemeTokens.colors
@@ -982,10 +1084,10 @@ private fun HeroAddToListButton(
     val shape = RoundedCornerShape(if (cornerRadius == Dp.Unspecified) dimens.cornerM else cornerRadius)
     val label = release.myListStatus?.displayName(strings) ?: strings.titleDetailAddToList
 
-    Box {
+    Box(modifier = modifier) {
         Row(
             modifier =
-                Modifier
+                (if (fillWidth) Modifier.fillMaxWidth() else Modifier)
                     .height(height)
                     .clip(shape)
                     .background(colors.overlay07, shape)
@@ -995,6 +1097,7 @@ private fun HeroAddToListButton(
                         contentDescription = label
                         role = Role.Button
                     }.padding(horizontal = dimens.spaceM),
+            horizontalArrangement = if (fillWidth) Arrangement.Center else Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -1108,6 +1211,12 @@ private val PLAY_SPINNER_STROKE = 2.dp
 
 /** [InfoRow] — размер квадратной подложки под эмодзи-«иконку» пункта метаданных. */
 private val INFO_ROW_EMOJI_BOX_SIZE = 36.dp
+
+// ---- [ReleaseNoteBanner]/[parseHexColorOrNull] — см. их KDoc ----
+private const val NOTE_BANNER_DARK_LUMINANCE_THRESHOLD = 0.5f
+private const val HEX_COLOR_LENGTH_RGB = 6
+private const val HEX_COLOR_LENGTH_ARGB = 8
+private const val HEX_RADIX = 16
 
 // ---- Wide header genre chips: тот же визуальный язык, что у выбранного чипа
 // `AnixFilterChipRow` (primary-акцент, cornerPill, 12sp/600) — read-only, неинтерактивная копия.

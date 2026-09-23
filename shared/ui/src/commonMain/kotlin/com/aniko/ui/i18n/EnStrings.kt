@@ -264,6 +264,12 @@ val EnStrings: Strings =
         override val titleDetailCategory = "Category"
         override val titleDetailSource = "Source"
         override val titleDetailTranslators = "Translators"
+        override val releaseStreamingPlatformsTitle = "Watch legally"
+        override val releaseStreamingPlatformOpenContentDescription: (String) -> String =
+            { name -> "Open $name" }
+        override val releaseThirdPartyPlatformsDisabledHint =
+            "The rights holder has restricted third-party sources for this title — " +
+                "watch it with the official partners above"
         override val ratingVoteCount: (Int) -> String = { count -> "$count ratings" }
         override val ratingRemoveVote = "Remove rating"
         override val commentsSpoilerLabel = "Spoiler — tap to reveal"

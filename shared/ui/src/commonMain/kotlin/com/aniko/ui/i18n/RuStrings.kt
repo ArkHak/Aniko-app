@@ -266,6 +266,12 @@ val RuStrings: Strings =
         override val titleDetailCategory = "Категория"
         override val titleDetailSource = "Источник"
         override val titleDetailTranslators = "Переводчики"
+        override val releaseStreamingPlatformsTitle = "Смотреть легально"
+        override val releaseStreamingPlatformOpenContentDescription: (String) -> String =
+            { name -> "Открыть $name" }
+        override val releaseThirdPartyPlatformsDisabledHint =
+            "Правообладатель ограничил показ сторонних источников для этого релиза — " +
+                "смотрите у официальных партнёров выше"
         override val ratingVoteCount: (Int) -> String = { count -> "$count оценок" }
         override val ratingRemoveVote = "Убрать оценку"
         override val commentsSpoilerLabel = "Спойлер — нажмите, чтобы показать"

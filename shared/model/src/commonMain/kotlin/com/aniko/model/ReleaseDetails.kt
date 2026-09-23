@@ -41,6 +41,24 @@ data class ReleaseDetails(
     val recommendedReleases: List<Release> = emptyList(),
     val commentCount: Int = 0,
     val relatedCount: Int = 0,
+    /**
+     * Легальные стриминг-площадки (сверено вживую 2026-09-23, см. KDoc `ReleaseDto` в
+     * `shared/data`) — не завязано на гео, честно отражает то, что вернул API.
+     *
+     * Короткое информационное сообщение о лицензировании релиза, если сервер его прислал.
+     */
+    val note: String? = null,
+    /** Цвета баннера под [note] — hex-строки как пришли с сервера (`null` во всех живых сэмплах
+     *  на 2026-09-23), без парсинга здесь: готового цветового типа под произвольный hex в
+     *  `shared/model` нет, парсинг — на UI-слое, если строка когда-нибудь придёт непустой. */
+    val noteBackgroundColorLight: String? = null,
+    val noteBackgroundColorDark: String? = null,
+    val noteTextColorLight: String? = null,
+    val noteTextColorDark: String? = null,
+    /** `true` — сервер просит скрыть обычный флоу выбора неофициального источника (см.
+     *  `ReleaseStreamingPlatformsSection`/`ReleaseEpisodesSection` в `composeApp`), показывая
+     *  вместо него только [ReleaseStreamingPlatform]-список. Дефолт `false` — обычный случай. */
+    val isThirdPartyPlatformsDisabled: Boolean = false,
 ) {
     companion object {
         const val VOTE_BUCKET_COUNT: Int = 5

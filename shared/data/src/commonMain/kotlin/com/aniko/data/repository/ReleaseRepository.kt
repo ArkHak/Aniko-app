@@ -2,6 +2,7 @@ package com.aniko.data.repository
 
 import com.aniko.data.api.FilterApi
 import com.aniko.data.api.ReleaseApi
+import com.aniko.data.api.ReleaseStreamingPlatformApi
 import com.aniko.data.api.SearchApi
 import com.aniko.data.cache.Cached
 import com.aniko.data.cache.ReleaseCacheStores
@@ -24,6 +25,7 @@ import com.aniko.model.Paged
 import com.aniko.model.Release
 import com.aniko.model.ReleaseDetails
 import com.aniko.model.ReleaseId
+import com.aniko.model.ReleaseStreamingPlatform
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Clock
 
@@ -36,6 +38,7 @@ class ReleaseRepository(
     private val releaseApi: ReleaseApi,
     private val searchApi: SearchApi,
     private val filterApi: FilterApi,
+    private val releaseStreamingPlatformApi: ReleaseStreamingPlatformApi,
     private val releaseCacheStore: ReleaseCacheStore,
     private val releaseListStore: ReleaseListStore,
     private val listMembershipStore: ListMembershipStore,
@@ -56,6 +59,15 @@ class ReleaseRepository(
     suspend fun random(): Release =
         releaseApi.random().release?.toDomain()
             ?: throw AnixError.Parsing()
+
+    /**
+     * Легальные стриминг-площадки релиза (Title Detail) — `GET release/streaming/platform/{id}`,
+     * сверено вживую 2026-09-23 (см. KDoc `ReleaseStreamingPlatformDto`). Как и [releaseDetails],
+     * не кэшируется — отдельный независимый запрос, падающий/загружающийся молча со стороны
+     * вызывающего кода (см. `ReleaseDetailsViewModel.loadStreamingPlatforms`).
+     */
+    suspend fun streamingPlatforms(releaseId: Int): List<ReleaseStreamingPlatform> =
+        releaseStreamingPlatformApi.streamingPlatforms(releaseId).content.map { it.toDomain() }
 
     suspend fun watching(page: Int): Paged<Release> = releaseApi.discoverWatching(page).toDomain { it.toDomain() }
 

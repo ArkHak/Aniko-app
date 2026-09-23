@@ -14,6 +14,7 @@ import com.aniko.data.api.ProfileListApi
 import com.aniko.data.api.ProfilePreferenceApi
 import com.aniko.data.api.ReleaseApi
 import com.aniko.data.api.ReleaseCommentApi
+import com.aniko.data.api.ReleaseStreamingPlatformApi
 import com.aniko.data.api.ScheduleApi
 import com.aniko.data.api.SearchApi
 import com.aniko.data.librarypreferences.LibraryPreferencesStore
@@ -114,6 +115,7 @@ val dataModule =
 
         single { AuthApi(client = get()) }
         single { ReleaseApi(client = get()) }
+        single { ReleaseStreamingPlatformApi(client = get()) }
         single { EpisodeApi(client = get()) }
         single { ProfileListApi(client = get()) }
         single { FavoriteApi(client = get()) }
@@ -185,6 +187,7 @@ val dataModule =
                 releaseApi = get(),
                 searchApi = get(),
                 filterApi = get(),
+                releaseStreamingPlatformApi = get(),
                 releaseCacheStore = get(),
                 releaseListStore = get(),
                 listMembershipStore = get(),

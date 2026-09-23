@@ -29,11 +29,13 @@ import kotlinx.coroutines.launch
  * вызывает [load] из `LaunchedEffect(releaseId)`. [load] идемпотентен для одного и того же id,
  * пока не было ошибки — повторная композиция/пересоздание того же route не долбит сеть.
  *
- * Три независимых шага загрузки после успешного [load]:
+ * Независимые шаги загрузки после успешного [load]:
  * 1. [loadVoiceTypes] — типы озвучки, первый шаг цепочки резолвинга плеера.
  * 2. [loadDetails] — расширенная карточка `ReleaseDetails` (метаданные/скриншоты/похожее),
  *    сетевая one-shot модель, падает независимо от базового релиза (D1: см. KDoc
  *    [ReleaseDetailsUiState] и [com.aniko.model.ReleaseDetails]).
+ * 3. [loadStreamingPlatforms] — легальные стриминг-площадки, тот же принцип "падает молча", что
+ *    и у [loadCommentsPreview] (сверено вживую 2026-09-23, см. KDoc [ReleaseDetailsUiState]).
  *
  * Флоу выбора серии (типы → источники → серии) — простой линейный стейт-машина без пагинации:
  * выбор типа сбрасывает источники и серии, выбор источника сбрасывает серии и переподписывается
@@ -73,8 +75,8 @@ class ReleaseDetailsViewModel(
      * (max два: кэш + сеть) эмит на вызов, после чего сам поток завершается — поэтому именно
      * здесь, после успешного `collect`, как и раньше, запускаются [loadVoiceTypes]/[loadDetails]:
      * точка «релиз успешно получен» не изменилась, изменился только источник (кэш вместо прямого
-     * сетевого вызова). Оба шага независимы и запускаются параллельно (каждый — свой
-     * `viewModelScope.launch`), ошибка одного не блокирует другой.
+     * сетевого вызова). Все шаги независимы и запускаются параллельно (каждый — свой
+     * `viewModelScope.launch`), ошибка одного не блокирует остальные.
      */
     fun load(releaseId: Int) {
         val state = _uiState.value
@@ -96,6 +98,7 @@ class ReleaseDetailsViewModel(
             }
             loadVoiceTypes(releaseId)
             loadDetails(releaseId)
+            loadStreamingPlatforms(releaseId)
         }
     }
 
@@ -170,6 +173,29 @@ class ReleaseDetailsViewModel(
             ) {
                 // Намеренно проглочено, см. KDoc функции: превью — необязательное украшение,
                 // не отдельная точка входа с UI ошибок.
+            }
+        }
+    }
+
+    /**
+     * Легальные стриминг-площадки (сверено вживую 2026-09-23, см. KDoc [ReleaseDetailsUiState].
+     * [ReleaseDetailsUiState.streamingPlatforms]) — отдельный лёгкий запрос, независимый от
+     * [loadDetails]/[loadVoiceTypes]. Ошибка молча проглатывается той же причине, что и у
+     * [loadCommentsPreview]: список необязательный, остальной экран уже отрисован и рабочий вне
+     * зависимости от её результата.
+     */
+    private fun loadStreamingPlatforms(releaseId: Int) {
+        viewModelScope.launch {
+            try {
+                val platforms = releaseRepository.streamingPlatforms(releaseId)
+                _uiState.update { it.copy(streamingPlatforms = platforms) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("SwallowedException", "TooGenericExceptionCaught") e: Exception,
+            ) {
+                // Намеренно проглочено, см. KDoc функции: необязательный список, не отдельная
+                // точка входа с UI ошибок.
             }
         }
     }

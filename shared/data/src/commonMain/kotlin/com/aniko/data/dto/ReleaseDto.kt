@@ -99,6 +99,29 @@ data class ReleaseDto(
     @SerialName("episode_last_update")
     val episodeLastUpdate: Long? = null,
     @SerialName("is_viewed") val isViewed: Boolean = false,
+    /**
+     * Легальные стриминг-площадки (сверено вживую 2026-09-23, curl `GET release/{id}` без
+     * `extended_mode`, НЕ из РФ — см. KDoc [ReleaseStreamingPlatformDto] про то, что показ не
+     * завязан на гео запроса):
+     * - [note] — короткое информационное сообщение о лицензировании (живьём: «Данный материал
+     *   лицензирован на территории вашей страны.»), пришло БЕЗ `extended_mode=true`, поэтому не
+     *   отнесено к блоку «Расширенные поля» выше.
+     * - `note_background_color_*`/`note_text_color_*` — цвета баннера под [note] отдельно для
+     *   светлой/тёмной темы; во всех живых сэмплах на 2026-09-23 были `null` (сервер их пока не
+     *   заполняет) — оставлены как есть, без готового цветового типа под hex-строку в проекте,
+     *   парсинг (если строка когда-нибудь придёт) — на UI-слое.
+     * - [isThirdPartyPlatformsDisabled] (decompiled `Release.java`,
+     *   `@JsonProperty("is_third_party_platforms_disabled")`) — в сегодняшних живых ответах
+     *   ПОЛНОСТЬЮ ОТСУТСТВОВАЛО в JSON (не `false`), поэтому `Boolean?` с дефолтом `null`, а не
+     *   `Boolean = false`: так парсинг не падает и не путает «поле не пришло» с «сервер явно
+     *   прислал false» — маппер (`ReleaseMapper.toReleaseDetails`) сам схлопывает `null` к `false`.
+     */
+    val note: String? = null,
+    @SerialName("note_background_color_light") val noteBackgroundColorLight: String? = null,
+    @SerialName("note_background_color_dark") val noteBackgroundColorDark: String? = null,
+    @SerialName("note_text_color_light") val noteTextColorLight: String? = null,
+    @SerialName("note_text_color_dark") val noteTextColorDark: String? = null,
+    @SerialName("is_third_party_platforms_disabled") val isThirdPartyPlatformsDisabled: Boolean? = null,
 )
 
 /**
