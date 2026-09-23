@@ -153,9 +153,35 @@ needed for the initial install and background signature refresh over Wi-Fi.
 ### macOS (Desktop)
 
 Download `aniko-v0.0.2-macos.dmg` from the [Releases](https://github.com/ArkHak/Aniko/releases) page,
-open it and drag `Aniko.app` to `Applications`. The app is not signed or notarized by Apple — on first
-launch allow it via Settings → Privacy & Security → "Open Anyway" (or build the `.dmg` from source,
-see below).
+open it and drag `Aniko.app` to `Applications`.
+
+The app is built without a paid Apple Developer Program membership: it is ad-hoc signed (no
+Developer ID certificate) and not notarized by Apple. So on the first launch of an app downloaded
+from the internet, Gatekeeper will block it with an "app is damaged" or "cannot be opened" message.
+This is expected — bypass it using any of the options below:
+
+**Option 1. Right-click → Open**
+
+1. In Finder, locate `Aniko.app` in the `Applications` folder.
+2. Right-click (or Ctrl+click) the icon → **Open**.
+3. Click **Open** again in the dialog. The warning appears only once; afterwards the app launches
+   with a regular double-click.
+
+**Option 2. Via System Settings**
+
+1. Try launching the app normally — it will be refused.
+2. Open Settings → Privacy & Security, scroll down to the entry about "Aniko" and click
+   **Open Anyway**.
+
+**Option 3. Via Terminal (remove quarantine)**
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Aniko.app
+```
+
+If you don't trust the build from Releases — build the `.dmg` from source yourself, see
+«[Building from source](#-building-from-source)»: a locally built app has no quarantine attribute
+and launches without any of these steps.
 
 ## 🔧 Building from source
 
