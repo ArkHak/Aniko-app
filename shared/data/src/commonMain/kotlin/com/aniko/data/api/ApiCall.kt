@@ -7,8 +7,8 @@ import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.ServerResponseException
 import io.ktor.http.HttpStatusCode
-import io.ktor.utils.io.errors.IOException
 import kotlinx.coroutines.CancellationException
+import kotlinx.io.IOException
 import kotlinx.serialization.SerializationException
 
 /**

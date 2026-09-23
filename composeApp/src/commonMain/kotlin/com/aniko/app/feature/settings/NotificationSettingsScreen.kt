@@ -34,9 +34,9 @@ import com.aniko.app.notification.NotificationPermissionState
 import com.aniko.app.notification.rememberNotificationPermissionState
 import com.aniko.model.NotificationPreferenceToggle
 import com.aniko.model.NotificationPreferences
-import com.aniko.ui.component.AnixErrorBox
+import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixIcon
-import com.aniko.ui.component.AnixLoadingBox
+import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.testing.AnixTestTags
@@ -137,10 +137,10 @@ private fun NotificationSettingsContent(
 
             when {
                 uiState.isLoading && uiState.preferences == null ->
-                    AnixLoadingBox(modifier = Modifier.fillMaxSize())
+                    AnixLoadingState(modifier = Modifier.fillMaxSize())
 
                 uiState.error != null && uiState.preferences == null ->
-                    AnixErrorBox(
+                    AnixErrorState(
                         message = strings.settingsNotificationsLoadError,
                         onRetry = viewModel::load,
                         modifier = Modifier.fillMaxSize(),

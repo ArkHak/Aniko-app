@@ -34,10 +34,10 @@ import com.aniko.model.ProfileDetails
 import com.aniko.model.Release
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
-import com.aniko.ui.component.AnixEmptyBox
-import com.aniko.ui.component.AnixErrorBox
+import com.aniko.ui.component.AnixEmptyState
+import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixIcon
-import com.aniko.ui.component.AnixLoadingBox
+import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.component.ChipRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
@@ -221,7 +221,7 @@ private fun LibraryCompactContent(
 
     when {
         pagingState.error != null && pagingState.items.isEmpty() ->
-            AnixErrorBox(
+            AnixErrorState(
                 // P2.T10: не показываем `error.message` напрямую — это текст исключения
                 // AnixError (технический, на английском, только для логов/debug), не
                 // локализованный UI-текст. Всегда локализованный fallback.
@@ -231,10 +231,10 @@ private fun LibraryCompactContent(
             )
 
         pagingState.items.isEmpty() && (pagingState.isLoading || pagingState.isRefreshing) ->
-            AnixLoadingBox(modifier = Modifier.fillMaxSize())
+            AnixLoadingState(modifier = Modifier.fillMaxSize())
 
         pagingState.isEmpty ->
-            AnixEmptyBox(message = tab.emptyMessage(strings), modifier = Modifier.fillMaxSize())
+            AnixEmptyState(message = tab.emptyMessage(strings), modifier = Modifier.fillMaxSize())
 
         viewMode == LibraryViewMode.List -> LibraryRows(pagingState = pagingState, actions = actions)
 

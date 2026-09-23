@@ -92,7 +92,7 @@ import org.koin.compose.viewmodel.koinViewModel
  * - адаптив (P9.T13): контент ограничен `contentMaxWidth` и центрирован, а два графика на
  *   Expanded встают в две колонки вместо одной длинной ленты.
  *
- * Загрузка/ошибка — тот же паттерн `AnixLoadingBox`/`AnixErrorBox`, что `LibraryScreen`, только
+ * Загрузка/ошибка — тот же паттерн `AnixLoadingState`/`AnixErrorState`, что `LibraryScreen`, только
  * на весь экран (а не поверх уже отрисованного списка), так как профиль — не пагинируемая лента,
  * а одна карточка данных.
  *

@@ -33,8 +33,8 @@ import com.aniko.player.HideSystemBarsEffect
 import com.aniko.player.LockLandscapeOrientationEffect
 import com.aniko.player.PlaybackSource
 import com.aniko.player.rememberEmbedVideoController
-import com.aniko.ui.component.AnixErrorBox
-import com.aniko.ui.component.AnixLoadingBox
+import com.aniko.ui.component.AnixErrorState
+import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.testing.AnixTestTags
@@ -172,15 +172,15 @@ fun PlayerScreen(
         color = Color.Black,
         // contentColorFor(Color.Black) не резолвится ни в один слот темы (это не М3-роль) и
         // молча оставляет прежний ambient LocalContentColor — на светлой теме это тёмный
-        // текст, что дало бы то же самое невидимое сочетание для AnixLoadingBox/AnixErrorBox
+        // текст, что дало бы то же самое невидимое сочетание для AnixLoadingState/AnixErrorState
         // (state.isLoading/state.error), только тёмный-на-чёрном вместо белого-на-белом.
         contentColor = Color.White,
     ) {
         when {
-            state.isLoading -> AnixLoadingBox(modifier = Modifier.fillMaxSize())
+            state.isLoading -> AnixLoadingState(modifier = Modifier.fillMaxSize())
 
             state.error != null ->
-                AnixErrorBox(
+                AnixErrorState(
                     message = state.error.toMessage(strings),
                     onRetry = viewModel::retry,
                     modifier = Modifier.fillMaxSize(),
@@ -561,7 +561,7 @@ fun PlayerScreen(
                 } else {
                     // Недостижимо на практике: `resolvePlaybackSource` всегда возвращает `Embed`
                     // (см. `EpisodeRepository`), но исчерпывающая обработка честнее, чем `!!`.
-                    AnixErrorBox(message = strings.playerLoadError, modifier = Modifier.fillMaxSize())
+                    AnixErrorState(message = strings.playerLoadError, modifier = Modifier.fillMaxSize())
                 }
             }
         }

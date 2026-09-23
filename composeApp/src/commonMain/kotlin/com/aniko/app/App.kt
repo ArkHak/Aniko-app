@@ -66,7 +66,7 @@ import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.adaptive.rememberAnixWindowSize
 import com.aniko.ui.component.AnixIcon
-import com.aniko.ui.component.AnixLoadingBox
+import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.component.AnixOfflineBanner
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.ProvideAppStrings
@@ -74,7 +74,6 @@ import com.aniko.ui.i18n.Strings
 import com.aniko.ui.image.createAnixImageLoader
 import com.aniko.ui.theme.AppTheme
 import io.ktor.client.HttpClient
-import org.koin.compose.KoinContext
 import org.koin.compose.koinInject
 import org.koin.core.qualifier.named
 
@@ -92,91 +91,89 @@ import org.koin.core.qualifier.named
  */
 @Composable
 fun App(onBackHandlerReady: (() -> Boolean) -> Unit = {}) {
-    KoinContext {
-        val imageHttpClient = koinInject<HttpClient>(qualifier = named(IMAGE_HTTP_CLIENT_QUALIFIER))
-        val authRepository = koinInject<AuthRepository>()
-        val localeStore = koinInject<LocaleStore>()
-        val themeStore = koinInject<ThemeStore>()
-        val syncCoordinator = koinInject<SyncCoordinator>()
-        val platformContext = LocalPlatformContext.current
+    val imageHttpClient = koinInject<HttpClient>(qualifier = named(IMAGE_HTTP_CLIENT_QUALIFIER))
+    val authRepository = koinInject<AuthRepository>()
+    val localeStore = koinInject<LocaleStore>()
+    val themeStore = koinInject<ThemeStore>()
+    val syncCoordinator = koinInject<SyncCoordinator>()
+    val platformContext = LocalPlatformContext.current
 
-        // Coil ходит за картинками отдельным «голым» клиентом: без ?token=, без валидатора
-        // сессии (картинка 403 ≠ разлогин), без логгера и с короткими таймаутами.
-        remember(imageHttpClient, platformContext) {
-            SingletonImageLoader.setSafe { context ->
-                createAnixImageLoader(context, imageHttpClient)
-            }
+    // Coil ходит за картинками отдельным «голым» клиентом: без ?token=, без валидатора
+    // сессии (картинка 403 ≠ разлогин), без логгера и с короткими таймаутами.
+    remember(imageHttpClient, platformContext) {
+        SingletonImageLoader.setSafe { context ->
+            createAnixImageLoader(context, imageHttpClient)
         }
+    }
 
-        // Владелец bootstrap() — корневой уровень: гейтинг навигации ниже зависит от
-        // sessionState, поэтому чтение токена должно стартовать здесь, а не в фичах.
-        // bootstrap() идемпотентен, повторный вызов из HomeViewModel (если он там остался) — no-op.
-        LaunchedEffect(authRepository) {
-            authRepository.bootstrap()
-        }
+    // Владелец bootstrap() — корневой уровень: гейтинг навигации ниже зависит от
+    // sessionState, поэтому чтение токена должно стартовать здесь, а не в фичах.
+    // bootstrap() идемпотентен, повторный вызов из HomeViewModel (если он там остался) — no-op.
+    LaunchedEffect(authRepository) {
+        authRepository.bootstrap()
+    }
 
-        // Фаза 10 (P10.T1/T2). Заменяет разовый `syncQueueWorker.drain()` времён P4.T7: тот
-        // единичный дренаж теперь входит в [SyncCoordinator] как переход Unknown → Online, и
-        // отдельным вызовом стал бы дублем. `start()` идемпотентен, рекомпозиция его не повторит.
-        LaunchedEffect(syncCoordinator) {
-            syncCoordinator.start()
-        }
+    // Фаза 10 (P10.T1/T2). Заменяет разовый `syncQueueWorker.drain()` времён P4.T7: тот
+    // единичный дренаж теперь входит в [SyncCoordinator] как переход Unknown → Online, и
+    // отдельным вызовом стал бы дублем. `start()` идемпотентен, рекомпозиция его не повторит.
+    LaunchedEffect(syncCoordinator) {
+        syncCoordinator.start()
+    }
 
-        // P10.T3 — единственный источник сетевого статуса для UI.
-        val connectivity by syncCoordinator.connectivity.collectAsStateWithLifecycle()
+    // P10.T3 — единственный источник сетевого статуса для UI.
+    val connectivity by syncCoordinator.connectivity.collectAsStateWithLifecycle()
 
-        // Язык — читается из LocaleStore (P2.T11) и прокидывается в ProvideAppStrings (P2.T7/T8),
-        // а не наоборот: shared/ui ничего не знает про DI/Settings, только про Compose-механику
-        // Lyricist (см. KDoc ProvideAppStrings). null — «следовать системной локали».
-        val languageTag by localeStore.languageTag.collectAsStateWithLifecycle()
+    // Язык — читается из LocaleStore (P2.T11) и прокидывается в ProvideAppStrings (P2.T7/T8),
+    // а не наоборот: shared/ui ничего не знает про DI/Settings, только про Compose-механику
+    // Lyricist (см. KDoc ProvideAppStrings). null — «следовать системной локали».
+    val languageTag by localeStore.languageTag.collectAsStateWithLifecycle()
 
-        // Тема — читается из ThemeStore тем же способом, что и язык выше. null — «не выбран
-        // явно»: первый запуск/сброс → светлая тема (макет Home в Claude Design светлый,
-        // сверка 2026-09-08 по скриншоту пользователя; системная тема macOS не учитывается).
-        // Явный выбор — "light"/"dark" (2026-09-10: AMOLED слит в единственную тёмную тему,
-        // см. KDoc `ThemeStore`/`AnixPalette`; legacy "amoled" мигрирует на "dark" прозрачно).
-        val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
+    // Тема — читается из ThemeStore тем же способом, что и язык выше. null — «не выбран
+    // явно»: первый запуск/сброс → светлая тема (макет Home в Claude Design светлый,
+    // сверка 2026-09-08 по скриншоту пользователя; системная тема macOS не учитывается).
+    // Явный выбор — "light"/"dark" (2026-09-10: AMOLED слит в единственную тёмную тему,
+    // см. KDoc `ThemeStore`/`AnixPalette`; legacy "amoled" мигрирует на "dark" прозрачно).
+    val themeMode by themeStore.themeMode.collectAsStateWithLifecycle()
 
-        // Единственный авторитет размера окна (P5.T4) — вычисляется один раз на корневом уровне и
-        // прокидывается через CompositionLocal, чтобы AdaptiveScaffold/ListDetailHost/TitleNavigator
-        // (все ниже по дереву) видели одно и то же значение без повторного вычисления.
-        val windowSize = rememberAnixWindowSize()
+    // Единственный авторитет размера окна (P5.T4) — вычисляется один раз на корневом уровне и
+    // прокидывается через CompositionLocal, чтобы AdaptiveScaffold/ListDetailHost/TitleNavigator
+    // (все ниже по дереву) видели одно и то же значение без повторного вычисления.
+    val windowSize = rememberAnixWindowSize()
 
-        AppTheme(darkTheme = themeMode == "dark") {
-            ProvideAppStrings(languageTag = languageTag) {
-                CompositionLocalProvider(LocalAnixWindowSize provides windowSize) {
-                    // Баннер офлайна (P10.T3) — над гейтом сессии, а не внутри него: он должен быть
-                    // виден и на экране входа (без сети войти нельзя, и это надо объяснить), и во
-                    // всём основном каркасе. Column, а не Box: баннер раздвигает контент, а не
-                    // накрывает его — см. KDoc AnixOfflineBanner.
-                    val isOffline = connectivity.isOffline
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        AnixOfflineBanner(visible = isOffline)
-                        AnixSessionGate(
-                            authRepository = authRepository,
-                            localeStore = localeStore,
-                            themeStore = themeStore,
-                            onBackHandlerReady = onBackHandlerReady,
-                            // Пока баннер виден, зону статус-бара занимает он — об этом надо
-                            // сообщить поддереву ниже, иначе `Scaffold` внутри `AdaptiveScaffold`
-                            // отступит на неё второй раз и между баннером и контентом появится
-                            // пустая полоса. Scaffold вычитает уже поглощённые предками insets
-                            // (`onConsumedWindowInsetsChanged` в его реализации), поэтому одного
-                            // [consumeWindowInsets] достаточно — трогать сам AdaptiveScaffold не
-                            // нужно. Ветка `Modifier` (no-op) обязательна: без баннера отступ
-                            // статус-бара должен остаться за Scaffold, как и был.
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .then(
-                                        if (isOffline) {
-                                            Modifier.consumeWindowInsets(WindowInsets.statusBars)
-                                        } else {
-                                            Modifier
-                                        },
-                                    ),
-                        )
-                    }
+    AppTheme(darkTheme = themeMode == "dark") {
+        ProvideAppStrings(languageTag = languageTag) {
+            CompositionLocalProvider(LocalAnixWindowSize provides windowSize) {
+                // Баннер офлайна (P10.T3) — над гейтом сессии, а не внутри него: он должен быть
+                // виден и на экране входа (без сети войти нельзя, и это надо объяснить), и во
+                // всём основном каркасе. Column, а не Box: баннер раздвигает контент, а не
+                // накрывает его — см. KDoc AnixOfflineBanner.
+                val isOffline = connectivity.isOffline
+                Column(modifier = Modifier.fillMaxSize()) {
+                    AnixOfflineBanner(visible = isOffline)
+                    AnixSessionGate(
+                        authRepository = authRepository,
+                        localeStore = localeStore,
+                        themeStore = themeStore,
+                        onBackHandlerReady = onBackHandlerReady,
+                        // Пока баннер виден, зону статус-бара занимает он — об этом надо
+                        // сообщить поддереву ниже, иначе `Scaffold` внутри `AdaptiveScaffold`
+                        // отступит на неё второй раз и между баннером и контентом появится
+                        // пустая полоса. Scaffold вычитает уже поглощённые предками insets
+                        // (`onConsumedWindowInsetsChanged` в его реализации), поэтому одного
+                        // [consumeWindowInsets] достаточно — трогать сам AdaptiveScaffold не
+                        // нужно. Ветка `Modifier` (no-op) обязательна: без баннера отступ
+                        // статус-бара должен остаться за Scaffold, как и был.
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .then(
+                                    if (isOffline) {
+                                        Modifier.consumeWindowInsets(WindowInsets.statusBars)
+                                    } else {
+                                        Modifier
+                                    },
+                                ),
+                    )
                 }
             }
         }
@@ -215,7 +212,7 @@ private fun AnixSessionGate(
 
     Box(modifier = modifier.fillMaxSize()) {
         when (sessionState) {
-            SessionState.Loading -> AnixLoadingBox()
+            SessionState.Loading -> AnixLoadingState(modifier = Modifier.fillMaxSize())
             SessionState.Unauthorized -> AuthFlow()
             is SessionState.Authorized -> AnixAppScaffold(localeStore, themeStore, onBackHandlerReady)
         }
