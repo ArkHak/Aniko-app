@@ -7,6 +7,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -34,9 +35,11 @@ internal object EpisodeLastUpdateSerializer : KSerializer<Long?> {
         encoder: Encoder,
         value: Long?,
     ) {
-        if (value == null) {
-            encoder.encodeNull()
-        } else {
+        // `Encoder.encodeNull()` помечен ExperimentalSerializationApi — для null кладём JsonNull
+        // через JsonEncoder (эти DTO всё равно проходят только через Json, см. deserialize).
+        if (encoder is JsonEncoder) {
+            encoder.encodeJsonElement(JsonPrimitive(value))
+        } else if (value != null) {
             encoder.encodeLong(value)
         }
     }

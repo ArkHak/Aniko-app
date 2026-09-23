@@ -7,6 +7,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
@@ -33,9 +34,10 @@ internal object LastViewEpisodeSerializer : KSerializer<Int?> {
         encoder: Encoder,
         value: Int?,
     ) {
-        if (value == null) {
-            encoder.encodeNull()
-        } else {
+        // См. EpisodeLastUpdateSerializer — encodeNull() experimental, null уходит как JsonNull.
+        if (encoder is JsonEncoder) {
+            encoder.encodeJsonElement(JsonPrimitive(value))
+        } else if (value != null) {
             encoder.encodeInt(value)
         }
     }

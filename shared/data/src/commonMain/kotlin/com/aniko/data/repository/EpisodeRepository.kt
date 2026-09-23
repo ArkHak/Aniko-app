@@ -117,7 +117,7 @@ class EpisodeRepository(
             } else {
                 PlaybackSource.Embed(url = url, host = resolvedHost, referer = url)
             }
-        return ResolvedEpisode(source = source, episodeName = target?.name)
+        return ResolvedEpisode(source = source, episodeName = target.name)
     }
 
     /**
