@@ -22,7 +22,7 @@ fun ReleaseDto.toDomain(staticBaseUrl: String = ApiConfig.DEFAULT_STATIC_BASE_UR
         title = titleRu?.takeIf { it.isNotBlank() } ?: titleOriginal.orEmpty(),
         originalTitle = titleOriginal,
         posterUrl = image?.toAbsoluteUrl(staticBaseUrl),
-        description = description,
+        description = description?.stripHtmlMarkup(),
         year = year?.toIntOrNull(),
         episodesTotal = episodesTotal,
         episodesReleased = episodesReleased,
@@ -80,7 +80,10 @@ fun ReleaseDto.toReleaseDetails(staticBaseUrl: String = ApiConfig.DEFAULT_STATIC
         recommendedReleases = recommendedReleases.map { it.toDomain(staticBaseUrl) },
         commentCount = commentCount,
         relatedCount = relatedCount,
-        note = note,
+        // note у части релизов — не одно предложение, а многоабзацное объявление с `<br>`
+        // (живая находка 2026-09-24, «Блич: Тысячелетняя кровавая война — Бедствие») —
+        // чистим, как и description (см. KDoc `stripHtmlMarkup`).
+        note = note?.stripHtmlMarkup(),
         noteBackgroundColorLight = noteBackgroundColorLight,
         noteBackgroundColorDark = noteBackgroundColorDark,
         noteTextColorLight = noteTextColorLight,
@@ -121,7 +124,7 @@ fun InterestingDto.toDomain(staticBaseUrl: String = ApiConfig.DEFAULT_STATIC_BAS
     InterestingBanner(
         id = id,
         title = title.orEmpty(),
-        description = description,
+        description = description?.stripHtmlMarkup(),
         imageUrl = image?.toAbsoluteUrl(staticBaseUrl).orEmpty(),
         releaseId = action?.toIntOrNull(),
         type = type,

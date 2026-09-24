@@ -190,6 +190,7 @@ val EnStrings: Strings =
             "If the source doesn't have it, the closest available quality is used. " +
                 "Changing quality in the player only affects the current episode."
         override val settingsVideoQualityAuto = "Auto"
+        override val settingsAppVersion = "App version"
         override val galleryTitle = "Design tokens"
         override val galleryColorsSection = "Colors"
         override val galleryTypographySection = "Typography"
@@ -270,6 +271,8 @@ val EnStrings: Strings =
         override val releaseThirdPartyPlatformsDisabledHint =
             "The rights holder has restricted third-party sources for this title — " +
                 "watch it with the official partners above"
+        override val releaseLicensedNoteFallback =
+            "This title is unavailable in your country at the request of the rights holder."
         override val ratingVoteCount: (Int) -> String = { count -> "$count ratings" }
         override val ratingRemoveVote = "Remove rating"
         override val commentsSpoilerLabel = "Spoiler — tap to reveal"

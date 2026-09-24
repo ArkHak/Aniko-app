@@ -318,6 +318,10 @@ interface Strings {
     val settingsDefaultVideoQualityHint: String
     val settingsVideoQualityAuto: String
 
+    // Некликабельный пункт внизу списка настроек — текущая версия приложения
+    // (`BuildInfo.APP_VERSION`, кодогенерация из composeApp/build.gradle.kts).
+    val settingsAppVersion: String
+
     // --- Экран-галерея токенов (P2.T12) ---
     val galleryTitle: String
     val galleryColorsSection: String
@@ -448,6 +452,12 @@ interface Strings {
     // см. задание) для случая `ReleaseDetails.isThirdPartyPlatformsDisabled == true`: сервер
     // просит скрыть обычный флоу выбора неофициального источника.
     val releaseThirdPartyPlatformsDisabledHint: String
+
+    // Фолбэк-текст баннера лицензирования, когда релиз легализован, но сервер не прислал `note`
+    // (живьём 2026-09-24, «Магическая битва» id=16648: note=null, зато непустой список легальных
+    // площадок — без фолбэка плашки в шапке не было вовсе). Формулировка — по запросу
+    // пользователя 2026-09-24 (стиль официального приложения для «некинопоисковских» площадок).
+    val releaseLicensedNoteFallback: String
 
     // Rating
     val ratingVoteCount: (count: Int) -> String

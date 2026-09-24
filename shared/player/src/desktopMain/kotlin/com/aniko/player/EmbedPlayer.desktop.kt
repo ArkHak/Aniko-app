@@ -86,6 +86,23 @@ actual fun EmbedPlayerView(
 private fun isPlayerTestMode(): Boolean = System.getProperty("aniko.playerTestMode") == "true"
 
 /**
+ * Фоновый teardown libVLC: `stop()` по сетевому потоку и `release()` компонента могут блокироваться
+ * на секунды (закрытие сокета стрима), поэтому выполняются в daemon-потоке — навигация «назад»
+ * отрисовывается мгновенно, не дожидаясь VLC (иначе всё это время пользователь видит последний
+ * кадр главного окна — чёрный плеер). Daemon, чтобы не держать JVM при выходе из приложения.
+ */
+private fun CallbackMediaPlayerComponent.releaseInBackground() {
+    Thread {
+        runCatching { mediaPlayer().controls().stop() }
+        runCatching { release() }
+    }.apply {
+        isDaemon = true
+        name = "vlc-player-release"
+        start()
+    }
+}
+
+/**
  * Владеет [CallbackMediaPlayerComponent] на время жизни композиции этого узла — переживает смену
  * [url]/[referer] (переключение аудиодорожки не должно пересоздавать плеер/видео-окно), тот же
  * принцип, что раньше был у `DesktopEmbedSession` с `CefBrowser`.
@@ -109,8 +126,11 @@ private fun DesktopVlcjPlayer(
         controller?.attach(mediaPlayerComponent.mediaPlayer())
         onDispose {
             controller?.detach()
-            runCatching { mediaPlayerComponent.mediaPlayer().controls().stop() }
-            runCatching { mediaPlayerComponent.release() }
+            // Teardown libVLC по сетевому потоку блокируется на секунды — синхронный stop/release
+            // на UI-потоке давал продолжительный чёрный экран после «назад» (последний кадр
+            // главного окна — чёрный плеер). `detach` остаётся синхронным — он лёгкий (снимает
+            // listener и гасит scope контроллера, см. `EmbedVideoController.desktop.kt`).
+            mediaPlayerComponent.releaseInBackground()
         }
     }
 

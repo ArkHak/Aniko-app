@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aniko.app.buildinfo.BuildInfo
 import com.aniko.app.di.AppIconHelper
 import com.aniko.data.playerpreferences.PlayerPreferencesStore
 import com.aniko.data.theme.AppIconStore
@@ -43,6 +44,13 @@ import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+
+/**
+ * Прозрачность текста строки «Версия приложения» — служебная сноска внизу настроек, не должна
+ * конкурировать с обычными пунктами (поверх `onSurfaceVariant`, контраст осознанно ниже AA —
+ * декоративная информация, не интерактивный элемент).
+ */
+private const val APP_VERSION_TEXT_ALPHA = 0.6f
 
 /**
  * Экран настроек: уведомления, переключатель языка (P5.T9 — канонический
@@ -124,80 +132,114 @@ fun SettingsScreen(
                     modifier =
                         Modifier
                             .fillMaxSize()
-                            .widthIn(max = dimens.contentMaxWidth)
-                            .verticalScroll(rememberScrollState()),
+                            .widthIn(max = dimens.contentMaxWidth),
                 ) {
-                    ListItem(
-                        headlineContent = { Text(text = strings.settingsNotificationsSection) },
+                    Column(
                         modifier =
                             Modifier
-                                .clickable(onClick = onNotificationsClick)
-                                .clearAndSetSemantics {
-                                    contentDescription = strings.settingsNotificationsSection
-                                },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    )
-                    // Возвращено сюда по запросу пользователя (2026-09-11) — было перенесено на
-                    // ProfileScreen в P13.T2, теперь снова стоит рядом с языком, на прежнем месте
-                    // (см. KDoc SettingsScreen).
-                    SettingsPickerListItem(headline = strings.settingsTheme) {
-                        AnixThemePicker(
-                            currentMode = themeMode,
-                            onSelect = onThemeModeChange,
-                            modifier = Modifier.padding(top = dimens.spaceXs),
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState()),
+                    ) {
+                        ListItem(
+                            headlineContent = { Text(text = strings.settingsNotificationsSection) },
+                            modifier =
+                                Modifier
+                                    .clickable(onClick = onNotificationsClick)
+                                    .clearAndSetSemantics {
+                                        contentDescription = strings.settingsNotificationsSection
+                                    },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         )
-                    }
-                    SettingsPickerListItem(headline = strings.settingsLanguage) {
-                        AnixLanguagePicker(
-                            currentTag = languageTag,
-                            onSelect = onLanguageTagChange,
-                            modifier = Modifier.padding(top = dimens.spaceXs),
-                        )
-                    }
-                    SettingsSectionHeader(text = strings.settingsPlaybackSection)
-                    SettingsPickerListItem(headline = strings.settingsDefaultVideoQuality) {
-                        DefaultVideoQualityPicker(
-                            selectedHeight = preferredQualityHeight,
-                            onSelect = playerPreferences::setPreferredQualityHeight,
-                        )
-                    }
-                    // P16.T21: секция скрыта, когда платформа не поддерживает несколько иконок
-                    // лаунчера (Desktop/iOS — `NoOpAppIconHelper.supportedIcons` пуст).
-                    if (appIconHelper.supportedIcons.isNotEmpty()) {
-                        val appIconKey by appIconStore.iconKey.collectAsStateWithLifecycle()
-                        SettingsPickerListItem(headline = strings.settingsAppIcon) {
-                            ChipRow(
-                                items = appIconHelper.supportedIcons,
-                                isSelected = { it == appIconKey },
-                                label = { key ->
-                                    when (key) {
-                                        "classic" -> strings.appIconClassic
-                                        "dream" -> strings.appIconDream
-                                        "ice" -> strings.appIconIce
-                                        else -> strings.appIconMain
-                                    }
-                                },
-                                onClick = { key ->
-                                    appIconStore.setIconKey(key)
-                                    appIconHelper.apply(key)
-                                },
+                        // Возвращено сюда по запросу пользователя (2026-09-11) — было перенесено на
+                        // ProfileScreen в P13.T2, теперь снова стоит рядом с языком, на прежнем месте
+                        // (см. KDoc SettingsScreen).
+                        SettingsPickerListItem(headline = strings.settingsTheme) {
+                            AnixThemePicker(
+                                currentMode = themeMode,
+                                onSelect = onThemeModeChange,
                                 modifier = Modifier.padding(top = dimens.spaceXs),
                             )
                         }
+                        SettingsPickerListItem(headline = strings.settingsLanguage) {
+                            AnixLanguagePicker(
+                                currentTag = languageTag,
+                                onSelect = onLanguageTagChange,
+                                modifier = Modifier.padding(top = dimens.spaceXs),
+                            )
+                        }
+                        SettingsSectionHeader(text = strings.settingsPlaybackSection)
+                        SettingsPickerListItem(headline = strings.settingsDefaultVideoQuality) {
+                            DefaultVideoQualityPicker(
+                                selectedHeight = preferredQualityHeight,
+                                onSelect = playerPreferences::setPreferredQualityHeight,
+                            )
+                        }
+                        // P16.T21: секция скрыта, когда платформа не поддерживает несколько иконок
+                        // лаунчера (Desktop/iOS — `NoOpAppIconHelper.supportedIcons` пуст).
+                        if (appIconHelper.supportedIcons.isNotEmpty()) {
+                            val appIconKey by appIconStore.iconKey.collectAsStateWithLifecycle()
+                            SettingsPickerListItem(headline = strings.settingsAppIcon) {
+                                ChipRow(
+                                    items = appIconHelper.supportedIcons,
+                                    isSelected = { it == appIconKey },
+                                    label = { key ->
+                                        when (key) {
+                                            "classic" -> strings.appIconClassic
+                                            "dream" -> strings.appIconDream
+                                            "ice" -> strings.appIconIce
+                                            else -> strings.appIconMain
+                                        }
+                                    },
+                                    onClick = { key ->
+                                        appIconStore.setIconKey(key)
+                                        appIconHelper.apply(key)
+                                    },
+                                    modifier = Modifier.padding(top = dimens.spaceXs),
+                                )
+                            }
+                        }
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    text = strings.settingsSignOut,
+                                    color = AnixThemeTokens.colors.errorText,
+                                )
+                            },
+                            modifier =
+                                Modifier
+                                    .clickable { viewModel.signOut() }
+                                    .clearAndSetSemantics {
+                                        contentDescription = strings.settingsSignOut
+                                    },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        )
                     }
+                    // Текущая версия приложения — служебная сноска, прибитая к низу окна вне
+                    // прокручиваемого списка (запрос пользователя 2026-09-24: «по низу окна», а не
+                    // просто последним пунктом): намеренно некликабельная, самая мелкая и
+                    // полупрозрачная — визуально футер, а не пункт настроек. Значение зашито при
+                    // сборке (GenerateBuildInfoTask, единый источник — composeApp/build.gradle.kts).
                     ListItem(
                         headlineContent = {
                             Text(
-                                text = strings.settingsSignOut,
-                                color = AnixThemeTokens.colors.errorText,
+                                text = strings.settingsAppVersion,
+                                style = MaterialTheme.typography.labelSmall,
+                                color =
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                        alpha = APP_VERSION_TEXT_ALPHA,
+                                    ),
                             )
                         },
-                        modifier =
-                            Modifier
-                                .clickable { viewModel.signOut() }
-                                .clearAndSetSemantics {
-                                    contentDescription = strings.settingsSignOut
-                                },
+                        trailingContent = {
+                            Text(
+                                text = BuildInfo.APP_VERSION,
+                                style = MaterialTheme.typography.labelSmall,
+                                color =
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                        alpha = APP_VERSION_TEXT_ALPHA,
+                                    ),
+                            )
+                        },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }

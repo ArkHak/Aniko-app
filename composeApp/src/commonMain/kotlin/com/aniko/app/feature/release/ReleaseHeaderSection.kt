@@ -88,9 +88,12 @@ import com.aniko.ui.theme.AnixThemeTokens
  *
  * Легальные стриминг-площадки (сверено вживую 2026-09-23, см. KDoc `ReleaseDto`/`ReleaseDetails`):
  * [details]`.note`, если не пусто, рисуется как короткий информационный баннер ([ReleaseNoteBanner])
- * во всех трёх раскладках. Кнопка "Смотреть" ([HeroPlayButton]) скрывается, когда
- * [details]`.isThirdPartyPlatformsDisabled == true` — сервер в этом случае просит опираться на
- * `ReleaseStreamingPlatformsSection` вместо обычного флоу выбора источника (см.
+ * во всех трёх раскладках; при [playbackBlocked] без `note` баннер показывает фолбэк-текст
+ * (`Strings.releaseLicensedNoteFallback`), чтобы у легализованного тайтла всегда было объяснение.
+ * Кнопка "Смотреть" ([HeroPlayButton]) скрывается при
+ * [playbackBlocked] == true — легализованный тайтл не воспроизводится из приложения (как в
+ * официальном Anixart), вместо флоу выбора источника пользователь видит баннер и список легальных
+ * площадок (см. `ReleaseDetailsUiState.isLicensedPlaybackBlocked` и
  * `ReleaseDetailsScreen.ReleaseDetailsContent`, где скрывается и сама `ReleaseEpisodesSection`).
  */
 @Suppress("LongParameterList") // Публичная сигнатура шапки: 9 обязательных колбэков/данных —
@@ -103,6 +106,7 @@ fun ReleaseHeaderSection(
     details: ReleaseDetails?,
     detailsError: LoadError?,
     isResolvingPlay: Boolean,
+    playbackBlocked: Boolean,
     onWatchClick: () -> Unit,
     onChangeListStatus: (ListStatus?) -> Unit,
     onToggleFavorite: () -> Unit,
@@ -118,6 +122,7 @@ fun ReleaseHeaderSection(
                 details = details,
                 detailsError = detailsError,
                 isResolvingPlay = isResolvingPlay,
+                playbackBlocked = playbackBlocked,
                 onWatchClick = onWatchClick,
                 onChangeListStatus = onChangeListStatus,
                 onToggleFavorite = onToggleFavorite,
@@ -133,6 +138,7 @@ fun ReleaseHeaderSection(
                 details = details,
                 detailsError = detailsError,
                 isResolvingPlay = isResolvingPlay,
+                playbackBlocked = playbackBlocked,
                 onWatchClick = onWatchClick,
                 onChangeListStatus = onChangeListStatus,
                 onToggleFavorite = onToggleFavorite,
@@ -148,6 +154,7 @@ fun ReleaseHeaderSection(
                 details = details,
                 detailsError = detailsError,
                 isResolvingPlay = isResolvingPlay,
+                playbackBlocked = playbackBlocked,
                 onWatchClick = onWatchClick,
                 onChangeListStatus = onChangeListStatus,
                 onToggleFavorite = onToggleFavorite,
@@ -171,6 +178,7 @@ private fun WideHeaderLayout(
     details: ReleaseDetails?,
     detailsError: LoadError?,
     isResolvingPlay: Boolean,
+    playbackBlocked: Boolean,
     onWatchClick: () -> Unit,
     onChangeListStatus: (ListStatus?) -> Unit,
     onToggleFavorite: () -> Unit,
@@ -191,7 +199,7 @@ private fun WideHeaderLayout(
             onChangeListStatus = onChangeListStatus,
             onToggleFavorite = onToggleFavorite,
             onShareClick = onShareClick,
-            hideWatchAction = details?.isThirdPartyPlatformsDisabled == true,
+            hideWatchAction = playbackBlocked,
         )
 
         if (release.genres.isNotEmpty()) {
@@ -208,7 +216,7 @@ private fun WideHeaderLayout(
             )
         }
 
-        ReleaseNoteBanner(details = details)
+        ReleaseNoteBanner(details = details, playbackBlocked = playbackBlocked)
 
         val screenshots = details?.screenshotUrls.orEmpty()
         if (screenshots.isNotEmpty()) {
@@ -404,39 +412,53 @@ private fun MetadataSection(details: ReleaseDetails?) {
 
 /**
  * Информационный баннер `ReleaseDetails.note` (сверено вживую 2026-09-23, см. KDoc `ReleaseDto`
- * в `shared/data`) — простой текст, HTML не парсится (в живом сэмпле — одно предложение:
- * «Данный материал лицензирован на территории вашей страны.»). Ничего не рисует, если [details]
- * `null` или `note` пуст.
+ * в `shared/data`) — текст уже очищен от HTML-разметки в маппере (`stripHtmlMarkup`: у части
+ * релизов note — многоабзацное объявление с `<br>`, живая находка 2026-09-24 на «Блич:
+ * Тысячелетняя кровавая война — Бедствие»; в первом живом сэмпле — одно предложение «Данный
+ * материал лицензирован на территории вашей страны.»).
+ *
+ * Если `note` пуст, но воспроизведение заблокировано ([playbackBlocked] —
+ * `ReleaseDetailsUiState.isLicensedPlaybackBlocked`), рисуется та же плашка с фолбэк-текстом
+ * `Strings.releaseLicensedNoteFallback`: часть легализованных релизов приходит без `note`
+ * (живьём 2026-09-24, «Магическая битва» id=16648: `note=null`, но список легальных площадок
+ * непуст — без фолбэка у заблокированного тайтла не было никакого объяснения в шапке).
+ * Ничего не рисует, если текста нет и блокировки нет.
  *
  * Цвета баннера — опциональные hex-строки с сервера ([ReleaseDetails.noteBackgroundColorLight]/
- * `*Dark`, [ReleaseDetails.noteTextColorLight]/`*Dark`); во всех живых сэмплах на 2026-09-23 они
- * были `null` — в этом случае баннер использует обычный токен-стиль приложения (`overlay045`/
- * `textSecondary75`, тот же, что у `ReleaseCommentPreviewRow`), а не какой-то один жёстко
- * захардкоженный цвет. `parseHexColorOrNull` — best-effort: невалидная строка тихо игнорируется,
+ * `*Dark`, [ReleaseDetails.noteTextColorLight]/`*Dark`); во всех живых сэмплах из нашего региона
+ * они `null`. Дефолт в этом случае — оливковая пара [NOTE_BANNER_*_DARK]/[NOTE_BANNER_*_LIGHT]:
+ * запрос пользователя 2026-09-24 — плашка должна выглядеть так же, как серверная «кинопоисковая»
+ * у него на устройстве (RU-гео): тёмный вариант сэмплирован пипеткой со скриншота официального
+ * приложения (фон `#2D2F17`, текст `#818845`; текст доведён до `#9AA156` — серверный оригинал даёт
+ * контраст ~3.6:1, ниже порога WCAG AA 4.5:1 из AGENTS.md), светлый подобран симметрично
+ * (контраст ~6.3:1). `parseHexColorOrNull` — best-effort: невалидная строка тихо игнорируется,
  * а не роняет экран. Светлая/тёмная пара выбирается тем же приёмом luminance-порога, что уже
  * используется в проекте для аналогичного theme-aware цвета вне `ThemeStore` (см.
  * `com.aniko.ui.adaptive.SidebarSlot.sidebarBackgroundColor`) — не `isSystemInDarkTheme()`, тема
  * приложения выбирается явно, системную не следует.
  */
 @Composable
-private fun ReleaseNoteBanner(details: ReleaseDetails?) {
+private fun ReleaseNoteBanner(
+    details: ReleaseDetails?,
+    playbackBlocked: Boolean,
+) {
     val note = details?.note
-    if (note.isNullOrBlank()) return
+    if (note.isNullOrBlank() && !playbackBlocked) return
+    val text = note ?: LocalStrings.current.releaseLicensedNoteFallback
     val dimens = AnixThemeTokens.dimens
-    val colors = AnixThemeTokens.colors
     val isDark = MaterialTheme.colorScheme.surface.luminance() < NOTE_BANNER_DARK_LUMINANCE_THRESHOLD
     val backgroundColor =
-        (if (isDark) details.noteBackgroundColorDark else details.noteBackgroundColorLight)
+        (if (isDark) details?.noteBackgroundColorDark else details?.noteBackgroundColorLight)
             ?.let(::parseHexColorOrNull)
-            ?: colors.overlay045
+            ?: if (isDark) NOTE_BANNER_BACKGROUND_DARK else NOTE_BANNER_BACKGROUND_LIGHT
     val textColor =
-        (if (isDark) details.noteTextColorDark else details.noteTextColorLight)
+        (if (isDark) details?.noteTextColorDark else details?.noteTextColorLight)
             ?.let(::parseHexColorOrNull)
-            ?: colors.textSecondary75
+            ?: if (isDark) NOTE_BANNER_TEXT_DARK else NOTE_BANNER_TEXT_LIGHT
     val shape = RoundedCornerShape(dimens.cornerM)
 
     Text(
-        text = note,
+        text = text,
         style = MaterialTheme.typography.bodySmall,
         color = textColor,
         modifier =
@@ -556,6 +578,7 @@ private fun CompactHeroHeader(
     details: ReleaseDetails?,
     detailsError: LoadError?,
     isResolvingPlay: Boolean,
+    playbackBlocked: Boolean,
     onWatchClick: () -> Unit,
     onChangeListStatus: (ListStatus?) -> Unit,
     onToggleFavorite: () -> Unit,
@@ -629,7 +652,7 @@ private fun CompactHeroHeader(
                 onChangeListStatus = onChangeListStatus,
                 onToggleFavorite = onToggleFavorite,
                 onShareClick = onShareClick,
-                hideWatchAction = details?.isThirdPartyPlatformsDisabled == true,
+                hideWatchAction = playbackBlocked,
             )
 
             if (detailsError != null && details == null) {
@@ -640,7 +663,7 @@ private fun CompactHeroHeader(
                 )
             }
 
-            ReleaseNoteBanner(details = details)
+            ReleaseNoteBanner(details = details, playbackBlocked = playbackBlocked)
 
             val description = release.description
             if (!description.isNullOrBlank()) {
@@ -686,6 +709,7 @@ private fun ExpandedDrawerHeader(
     details: ReleaseDetails?,
     detailsError: LoadError?,
     isResolvingPlay: Boolean,
+    playbackBlocked: Boolean,
     onWatchClick: () -> Unit,
     onChangeListStatus: (ListStatus?) -> Unit,
     onToggleFavorite: () -> Unit,
@@ -760,7 +784,7 @@ private fun ExpandedDrawerHeader(
                 onShareClick = onShareClick,
                 buttonHeight = DRAWER_BUTTON_HEIGHT,
                 buttonRadius = DRAWER_BUTTON_RADIUS,
-                hideWatchAction = details?.isThirdPartyPlatformsDisabled == true,
+                hideWatchAction = playbackBlocked,
             )
 
             if (detailsError != null && details == null) {
@@ -771,7 +795,7 @@ private fun ExpandedDrawerHeader(
                 )
             }
 
-            ReleaseNoteBanner(details = details)
+            ReleaseNoteBanner(details = details, playbackBlocked = playbackBlocked)
 
             val description = release.description
             if (!description.isNullOrBlank()) {
@@ -1060,6 +1084,9 @@ private fun HeroPlayButton(
  * всеми [ListStatus] (тот же toggle-колбэк, что был у `ChipRow` в `WatchAndFavoriteRow` — повторный
  * выбор уже активного статуса снимает его).
  */
+@Suppress("LongParameterList") // release + колбэк + три параметра геометрии (height/radius/modifier)
+// + fillWidth (см. KDoc параметра) — плоская сигнатура кнопки, группировка в data class добавила бы
+// косвенность без пользы (тот же случай, что и у [ReleaseHeaderSection]).
 @Composable
 private fun HeroAddToListButton(
     release: Release,
@@ -1214,6 +1241,21 @@ private val INFO_ROW_EMOJI_BOX_SIZE = 36.dp
 
 // ---- [ReleaseNoteBanner]/[parseHexColorOrNull] — см. их KDoc ----
 private const val NOTE_BANNER_DARK_LUMINANCE_THRESHOLD = 0.5f
+
+// Оливковые дефолты плашки note при отсутствии серверных hex-цветов (см. KDoc
+// [ReleaseNoteBanner]: тёмная пара сэмплирована со скриншота официального приложения,
+// текст тёмной темы доведён до контраста WCAG AA; светлая пара подобрана симметрично).
+@Suppress("MagicNumber") // hex-литерал цвета — то же самое исключение, что и `AnixPalette`.
+private val NOTE_BANNER_BACKGROUND_DARK = Color(0xFF2D2F17)
+
+@Suppress("MagicNumber") // hex-литерал цвета — то же самое исключение, что и `AnixPalette`.
+private val NOTE_BANNER_TEXT_DARK = Color(0xFF9AA156)
+
+@Suppress("MagicNumber") // hex-литерал цвета — то же самое исключение, что и `AnixPalette`.
+private val NOTE_BANNER_BACKGROUND_LIGHT = Color(0xFFEEF1D3)
+
+@Suppress("MagicNumber") // hex-литерал цвета — то же самое исключение, что и `AnixPalette`.
+private val NOTE_BANNER_TEXT_LIGHT = Color(0xFF565B22)
 private const val HEX_COLOR_LENGTH_RGB = 6
 private const val HEX_COLOR_LENGTH_ARGB = 8
 private const val HEX_RADIX = 16

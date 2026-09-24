@@ -72,8 +72,8 @@ class ReleaseStreamingPlatformsSectionSmokeTest {
     }
 
     /**
-     * `ReleaseDetails.isThirdPartyPlatformsDisabled == true` скрывает кнопку "Смотреть" в шапке
-     * (`ReleaseHeaderSection`/`WatchAndFavoriteRow.hideWatchAction`, см. её KDoc) — та часть
+     * Блокировка воспроизведения легализованного тайтла скрывает кнопку "Смотреть" в шапке
+     * (`ReleaseHeaderSection.playbackBlocked` → `hideWatchAction`, см. её KDoc) — та часть
      * "обычного флоу выбора источника", которую можно проверить рендером одной секции без
      * `ReleaseDetailsScreen`/ViewModel целиком (сама подмена `ReleaseEpisodesSection` на
      * `ReleaseStreamingPlatformsSection` живёт в приватной `ReleaseDetailsContent` и напрямую не
@@ -86,25 +86,80 @@ class ReleaseStreamingPlatformsSectionSmokeTest {
      * `BrowseDetailPlaySmokeTest.onNodeWithContentDescription("Watch")`.
      */
     @Test
-    fun thirdPartyPlatformsDisabled_hidesWatchButtonInHeader() {
+    fun playbackBlocked_hidesWatchButtonInHeader() {
         val release = Release(id = 1, title = "Test title")
         val details = ReleaseDetails(release = release, isThirdPartyPlatformsDisabled = true)
 
         runSkikoComposeUiTest(size = Size(390f, 900f), density = Density(1f)) {
-            setContent { HeaderUnderTest(release = release, details = details) }
+            setContent { HeaderUnderTest(release = release, details = details, playbackBlocked = true) }
             onNodeWithContentDescription(EnStrings.titleDetailWatch).assertDoesNotExist()
         }
     }
 
-    /** Контроль к [thirdPartyPlatformsDisabled_hidesWatchButtonInHeader]: обычный случай
-     *  (`isThirdPartyPlatformsDisabled == false`) кнопку не трогает. */
+    /**
+     * Тот же сценарий блокировки, что и в [playbackBlocked_hidesWatchButtonInHeader], но сигнал —
+     * `ReleaseDetails.note` («Данный материал лицензирован…») БЕЗ флага
+     * `isThirdPartyPlatformsDisabled` — именно так выглядят живые ответы на 2026-09-23 (флаг в
+     * них не приходит вовсе, см. KDoc `isLicensedPlaybackBlocked`). На уровне шапки проверяется
+     * сам контракт `playbackBlocked`; связку «note → `playbackBlocked = true`» покрывает юнит-тест
+     * предиката `isLicensedPlaybackBlocked` (`feature/release`).
+     */
     @Test
-    fun thirdPartyPlatformsEnabled_showsWatchButtonInHeader() {
+    fun licensedNoteWithoutFlag_hidesWatchButtonInHeader() {
+        val release = Release(id = 1, title = "Test title")
+        val details =
+            ReleaseDetails(
+                release = release,
+                isThirdPartyPlatformsDisabled = false,
+                note = "Данный материал лицензирован на территории вашей страны.",
+            )
+
+        runSkikoComposeUiTest(size = Size(390f, 900f), density = Density(1f)) {
+            setContent { HeaderUnderTest(release = release, details = details, playbackBlocked = true) }
+            onNodeWithContentDescription(EnStrings.titleDetailWatch).assertDoesNotExist()
+        }
+    }
+
+    /**
+     * Фолбэк баннера лицензирования: воспроизведение заблокировано, но сервер не прислал `note`
+     * (живьём 2026-09-24, «Магическая битва» id=16648: `note=null` при непустом списке легальных
+     * площадок — сигнал блокировки №3 в KDoc `isLicensedPlaybackBlocked`) — `ReleaseNoteBanner`
+     * рисует `Strings.releaseLicensedNoteFallback`, чтобы у заблокированного тайтла всегда было
+     * объяснение в шапке, а не только скрытая кнопка «Смотреть».
+     */
+    @Test
+    fun playbackBlockedWithoutNote_showsFallbackLicenseBanner() {
         val release = Release(id = 1, title = "Test title")
         val details = ReleaseDetails(release = release, isThirdPartyPlatformsDisabled = false)
 
         runSkikoComposeUiTest(size = Size(390f, 900f), density = Density(1f)) {
-            setContent { HeaderUnderTest(release = release, details = details) }
+            setContent { HeaderUnderTest(release = release, details = details, playbackBlocked = true) }
+            onNodeWithText(EnStrings.releaseLicensedNoteFallback).assertExists()
+        }
+    }
+
+    /** Контроль к [playbackBlockedWithoutNote_showsFallbackLicenseBanner]: без блокировки и без
+     *  `note` баннер не рисуется вовсе — у обычных релизов лишней плашки быть не должно. */
+    @Test
+    fun playbackAllowedWithoutNote_showsNoLicenseBanner() {
+        val release = Release(id = 1, title = "Test title")
+        val details = ReleaseDetails(release = release, isThirdPartyPlatformsDisabled = false)
+
+        runSkikoComposeUiTest(size = Size(390f, 900f), density = Density(1f)) {
+            setContent { HeaderUnderTest(release = release, details = details, playbackBlocked = false) }
+            onNodeWithText(EnStrings.releaseLicensedNoteFallback).assertDoesNotExist()
+        }
+    }
+
+    /** Контроль к [playbackBlocked_hidesWatchButtonInHeader]: обычный случай
+     *  (`playbackBlocked == false`) кнопку не трогает. */
+    @Test
+    fun playbackAllowed_showsWatchButtonInHeader() {
+        val release = Release(id = 1, title = "Test title")
+        val details = ReleaseDetails(release = release, isThirdPartyPlatformsDisabled = false)
+
+        runSkikoComposeUiTest(size = Size(390f, 900f), density = Density(1f)) {
+            setContent { HeaderUnderTest(release = release, details = details, playbackBlocked = false) }
             onNodeWithContentDescription(EnStrings.titleDetailWatch).assertExists()
         }
     }
@@ -117,12 +172,12 @@ class ReleaseStreamingPlatformsSectionSmokeTest {
      * с пустым местом справа вместо того, чтобы растянуться на весь ряд. Фикс — условный
      * `weight(1f)` у `HeroAddToListButton`, когда он остаётся единственным элементом ряда (см. её
      * KDoc). `AnixWindowSize.Compact` — раскладка, где баг реально проявлялся (Medium его не ловит,
-     * см. [thirdPartyPlatformsDisabled_hidesWatchButtonInHeader]). Порог 300dp при ширине сцены
+     * см. [playbackBlocked_hidesWatchButtonInHeader]). Порог 300dp при ширине сцены
      * 390dp — кнопка без веса (обычная ширина по тексту "Add to list" + паддинги) заведомо уже,
      * регрессия сломает именно эту проверку, а не будущую точную раскладку.
      */
     @Test
-    fun thirdPartyPlatformsDisabled_stretchesAddToListButtonAtCompact() {
+    fun playbackBlocked_stretchesAddToListButtonAtCompact() {
         val release = Release(id = 1, title = "Test title")
         val details = ReleaseDetails(release = release, isThirdPartyPlatformsDisabled = true)
 
@@ -135,6 +190,7 @@ class ReleaseStreamingPlatformsSectionSmokeTest {
                             details = details,
                             detailsError = null,
                             isResolvingPlay = false,
+                            playbackBlocked = true,
                             onWatchClick = {},
                             onChangeListStatus = {},
                             onToggleFavorite = {},
@@ -156,6 +212,7 @@ class ReleaseStreamingPlatformsSectionSmokeTest {
 private fun HeaderUnderTest(
     release: Release,
     details: ReleaseDetails,
+    playbackBlocked: Boolean,
 ) {
     AppTheme(darkTheme = false) {
         CompositionLocalProvider(LocalAnixWindowSize provides AnixWindowSize.Medium) {
@@ -164,6 +221,7 @@ private fun HeaderUnderTest(
                 details = details,
                 detailsError = null,
                 isResolvingPlay = false,
+                playbackBlocked = playbackBlocked,
                 onWatchClick = {},
                 onChangeListStatus = {},
                 onToggleFavorite = {},

@@ -125,8 +125,9 @@ private fun StreamingPlatformRow(
 
 /**
  * Короткая текст-подсказка вместо обычного флоу выбора неофициального источника, когда
- * `ReleaseDetails.isThirdPartyPlatformsDisabled == true` (см. `ReleaseDetailsScreen.
- * ReleaseDetailsContent`) — своя формулировка, НЕ калька с уведомления Google (см. задание).
+ * воспроизведение заблокировано ([ReleaseDetailsUiState.isLicensedPlaybackBlocked], см.
+ * `ReleaseDetailsScreen.ReleaseDetailsContent`) — своя формулировка, НЕ калька с уведомления
+ * Google (см. задание).
  */
 @Composable
 fun ThirdPartyPlatformsDisabledHint(modifier: Modifier = Modifier) {
@@ -148,11 +149,12 @@ fun ThirdPartyPlatformsDisabledHint(modifier: Modifier = Modifier) {
  * `Arrangement.spacedBy`, что и остальные секции (тот же приём, что и `RegisterForm`/`LoginForm`
  * в `feature/auth`), без лишнего вложенного отступа.
  *
- * Площадки показываются ВСЕГДА независимо от `isThirdPartyPlatformsDisabled` (секция сама не
- * рендерится при пустом списке, см. её KDoc выше); когда сервер просит скрыть неофициальные
- * источники, они заменяют собой саму [ReleaseEpisodesSection] (+ [ThirdPartyPlatformsDisabledHint]
- * вместо кнопки "Смотреть", уже скрытой в `ReleaseHeaderSection` — см. её же KDoc про
- * `hideWatchAction`).
+ * Площадки показываются ВСЕГДА независимо от блокировки воспроизведения (секция сама не
+ * рендерится при пустом списке, см. её KDoc выше); когда воспроизведение заблокировано
+ * ([ReleaseDetailsUiState.isLicensedPlaybackBlocked] — флаг `isThirdPartyPlatformsDisabled`,
+ * `note` о лицензировании или непустой список площадок), они заменяют собой саму
+ * [ReleaseEpisodesSection] (+ [ThirdPartyPlatformsDisabledHint] вместо кнопки "Смотреть",
+ * уже скрытой в `ReleaseHeaderSection` — см. её же KDoc про `hideWatchAction`).
  */
 @Suppress("LongParameterList") // Координирующий блок: состояние + 4 колбэка эпизодов — тот же
 // набор параметров, что и у самой [ReleaseEpisodesSection], плюс модификатор секции.
@@ -167,7 +169,7 @@ fun ColumnScope.EpisodesOrStreamingPlatformsSection(
 ) {
     ReleaseStreamingPlatformsSection(platforms = state.streamingPlatforms, modifier = sectionModifier)
 
-    if (state.details?.isThirdPartyPlatformsDisabled == true) {
+    if (state.isLicensedPlaybackBlocked) {
         ThirdPartyPlatformsDisabledHint(modifier = sectionModifier)
     } else {
         ReleaseEpisodesSection(

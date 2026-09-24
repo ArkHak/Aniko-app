@@ -6,12 +6,14 @@ import com.aniko.data.repository.CommentRepository
 import com.aniko.data.repository.EpisodeRepository
 import com.aniko.data.repository.LibraryRepository
 import com.aniko.data.repository.ReleaseRepository
+import com.aniko.data.voicepin.LocalVoicePinStore
 import com.aniko.data.voicepreference.TitleVoicePreferenceStore
 import com.aniko.model.AnixError
 import com.aniko.model.Episode
 import com.aniko.model.ListStatus
 import com.aniko.model.Release
 import com.aniko.model.ReleaseDetails
+import com.aniko.model.VoiceType
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -56,6 +58,7 @@ class ReleaseDetailsViewModel(
     private val libraryRepository: LibraryRepository,
     private val commentRepository: CommentRepository,
     private val titleVoicePreferenceStore: TitleVoicePreferenceStore,
+    private val localVoicePinStore: LocalVoicePinStore,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ReleaseDetailsUiState())
     val uiState: StateFlow<ReleaseDetailsUiState> = _uiState.asStateFlow()
@@ -323,24 +326,29 @@ class ReleaseDetailsViewModel(
      * флоу чипов (voiceTypes/sources/episodes), чтобы после возврата из плеера пользователь видел
      * уже сделанный выбор, а не пустые чипы.
      *
-     * Dubbing memory: выбор типа/источника идёт по приоритетам — 1) явный выбор в UI (чипы этого
-     * экрана, если оба уже выбраны), 2) пара, запомненная [TitleVoicePreferenceStore] при
-     * прошлых выборах/просмотрах этого тайтла (с валидацией против свежих списков: сохранённый
-     * sourceId учитывается только в паре с его typeId — источники в Anixart отдельные записи на
-     * каждую пару тип/хост, не общий пул id), 3) первый доступный тип/источник (у `VoiceType`/
-     * `EpisodeSource` в этом проекте нет поля `pinned`, см. `docs/REELWAVE_PLAN.md`, "Сейчас" по
-     * Player+озвучке — выбор первого варианта, не рискованное упрощение, а буквально то, что
-     * доступно). Разрешённая до играбельной пары пара дополнительно записывается в стор — сам
-     * факт "Смотреть" тоже фиксирует выбор.
+     * Выбор типа озвучки идёт по приоритетам (см. [chooseDefaultVoiceType]): 1) явный выбор в UI
+     * (чипы этого экрана), 2) серверный `VoiceType.pinned` (любимая озвучка в профиле Anixart),
+     * 3) локальный пин [LocalVoicePinStore] (P16.T6), 4) пара, запомненная
+     * [TitleVoicePreferenceStore] при прошлых выборах/просмотрах этого тайтла (dubbing memory;
+     * сохранённый sourceId учитывается только в паре с его typeId — источники в Anixart отдельные
+     * записи на каждую пару тип/хост, не общий пул id), 5) первый доступный тип/источник.
+     * Любимая озвучка намеренно ВЫШЕ dubbing memory: явный пин в тайтле должен выигрывать у
+     * просто недавно использованной (решение пользователя 2026-09-24). Разрешённая до играбельной
+     * пары пара дополнительно записывается в стор — сам факт "Смотреть" тоже фиксирует выбор.
      *
-     * Возвращает `null`, если резолвить нечего (нет типов/источников/серий) или шаг упал —
-     * `ReleaseDetailsScreen` в этом случае просто не переходит в плеер, ошибка попадает в то же
-     * поле [ReleaseDetailsUiState.episodesStepError], что и у ручного флоу.
+     * Возвращает `null`, если резолвить нечего (нет типов/источников/серий), воспроизведение
+     * заблокировано ([ReleaseDetailsUiState.isLicensedPlaybackBlocked] — легализованный тайтл,
+     * guard нужен и при скрытой кнопке "Смотреть": обход через deep link/внешний вызов не должен
+     * запускать плеер) или шаг упал — `ReleaseDetailsScreen` в этом случае просто не переходит в
+     * плеер, ошибка попадает в то же поле [ReleaseDetailsUiState.episodesStepError], что и у
+     * ручного флоу.
      */
     suspend fun resolvePlayTarget(): PlayTarget? {
         val releaseId = loadedReleaseId
         val release = _uiState.value.release
-        if (releaseId == null || release == null) return null
+        // Единый guard (detekt ReturnCount): нет релиза ИЛИ воспроизведение заблокировано
+        // (легализованный тайтл, см. KDoc функции) — в обоих случаях плеер не запускаем.
+        if (releaseId == null || release == null || _uiState.value.isLicensedPlaybackBlocked) return null
 
         _uiState.update { it.copy(isResolvingPlay = true) }
         return try {
@@ -371,10 +379,12 @@ class ReleaseDetailsViewModel(
         val saved = titleVoicePreferenceStore.load(releaseId)
 
         val type =
-            types.firstOrNull { it.id == state.selectedTypeId }
-                ?: types.firstOrNull { it.id == saved?.typeId }
-                ?: types.firstOrNull()
-                ?: return null
+            chooseDefaultVoiceType(
+                types = types,
+                selectedTypeId = state.selectedTypeId,
+                localPinnedIds = localVoicePinStore.pinnedIds().first(),
+                savedTypeId = saved?.typeId,
+            ) ?: return null
 
         val sources = episodeRepository.sources(releaseId, type.id)
         // Сохранённый sourceId валиден только в паре со своим typeId: id источников не общий
@@ -422,7 +432,9 @@ class ReleaseDetailsViewModel(
      * просто "первое попавшееся" — более одного успешного попадания по построению не ожидается.
      *
      * Возвращает `null`, если сеть недоступна, серия/источник не существуют (протухшая или битая
-     * ссылка) — экран в этом случае просто остаётся на карточке тайтла, ошибка НЕ выставляется в
+     * ссылка) или воспроизведение заблокировано ([ReleaseDetailsUiState.isLicensedPlaybackBlocked]
+     * — легализованный тайтл нельзя обойти deep link'ом, defense in depth поверх скрытых кнопок
+     * в UI) — экран в этом случае просто остаётся на карточке тайтла, ошибка НЕ выставляется в
      * [ReleaseDetailsUiState.episodesStepError]: неудачный deep link не должен выглядеть как
      * поломка обычного флоу выбора серии.
      */
@@ -430,7 +442,10 @@ class ReleaseDetailsViewModel(
         sourceId: Int,
         position: Int,
     ): PlayTarget? {
-        val releaseId = loadedReleaseId ?: return null
+        val releaseId = loadedReleaseId
+        // Единый guard (detekt ReturnCount): нет загруженного релиза ИЛИ воспроизведение
+        // заблокировано (легализованный тайтл нельзя обойти deep link'ом, см. KDoc функции).
+        if (releaseId == null || _uiState.value.isLicensedPlaybackBlocked) return null
         _uiState.update { it.copy(isResolvingPlay = true) }
         return try {
             resolveDeepLinkEpisodeChain(releaseId, sourceId, position)
@@ -542,6 +557,38 @@ class ReleaseDetailsViewModel(
 private inline fun MutableStateFlow<ReleaseDetailsUiState>.update(block: (ReleaseDetailsUiState) -> ReleaseDetailsUiState) {
     value = block(value)
 }
+
+/**
+ * Выбор типа озвучки по умолчанию для кнопки "Смотреть" (P7.T7) — чистая функция, вынесена из
+ * [ReleaseDetailsViewModel.resolvePlayTargetChain] для табличного юнит-теста (образец —
+ * `shouldStartLoad` в `PlayerViewModel`).
+ *
+ * Приоритеты (первое попадание выигрывает):
+ * 1. [selectedTypeId] — явный выбор чипами этого экрана;
+ * 2. серверный [VoiceType.pinned] — любимая озвучка в профиле Anixart (используется также для
+ *    сортировки чипов в `ReleaseEpisodesSection` и пикера в `PlayerOverlay`);
+ * 3. локальный пин [LocalVoicePinStore] ([localPinnedIds], P16.T6 — id озвучек глобальные между
+ *    релизами);
+ * 4. dubbing memory — [savedTypeId] из `TitleVoicePreferenceStore`;
+ * 5. первый в списке.
+ *
+ * Пины намеренно ВЫШЕ dubbing memory (решение пользователя 2026-09-24): явный выбор любимой
+ * озвучки в тайтле должен выигрывать у просто недавно использованной. При равенстве сигналов
+ * (несколько pinned) выигрывает порядок серверного списка — тот же, что видит пользователь в чипах.
+ *
+ * Возвращает `null`, только если [types] пуст.
+ */
+internal fun chooseDefaultVoiceType(
+    types: List<VoiceType>,
+    selectedTypeId: Int?,
+    localPinnedIds: Set<Int>,
+    savedTypeId: Int?,
+): VoiceType? =
+    types.firstOrNull { it.id == selectedTypeId }
+        ?: types.firstOrNull { it.pinned }
+        ?: types.firstOrNull { it.id in localPinnedIds }
+        ?: types.firstOrNull { it.id == savedTypeId }
+        ?: types.firstOrNull()
 
 private fun Exception.toLoadError(): LoadError {
     val error = this as? AnixError ?: return LoadError.GENERIC

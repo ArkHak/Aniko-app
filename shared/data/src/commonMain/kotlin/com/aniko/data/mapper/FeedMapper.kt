@@ -47,8 +47,9 @@ internal fun List<ArticleBlockDto>.toPreviewText(): String =
         .joinToString(" ")
         .take(PREVIEW_MAX_LENGTH)
 
-/** Декодирует числовые (`&#39;`/`&#x1f348;`) и базовые именованные (`&amp;`/`&lt;`/`&gt;`/
- *  `&quot;`/`&apos;`) HTML-сущности — без `java.lang.Character` (не компилируется под iOS-таргет
+/** Декодирует числовые (`&#39;`/`&#x1f348;`) и именованные (базовые `&amp;`/`&lt;`/`&gt;`/
+ *  `&quot;`/`&apos;`/`&nbsp;` + типографские `&laquo;`/`&raquo;`/`&mdash;`/`&ndash;`/`&hellip;`)
+ *  HTML-сущности — без `java.lang.Character` (не компилируется под iOS-таргет
  *  `shared/data`): суррогатная пара считается вручную для кодпоинтов вне BMP (эмодзи). */
 internal fun decodeHtmlEntities(text: String): String =
     htmlEntityRegex.replace(text) { match ->
@@ -78,6 +79,13 @@ private val NAMED_HTML_ENTITIES =
         "quot" to "\"",
         "apos" to "'",
         "nbsp" to " ",
+        // Типографские знаки (« » — – …) — вне кириллического Unicode-блока,
+        // ForbiddenCyrillicStringLiteral на них не срабатывает.
+        "laquo" to "«",
+        "raquo" to "»",
+        "mdash" to "—",
+        "ndash" to "–",
+        "hellip" to "…",
     )
 
 private val htmlEntityRegex = Regex("&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);")

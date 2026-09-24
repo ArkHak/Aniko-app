@@ -122,3 +122,27 @@ fun List<Episode>.mergeWatchedOverrides(
 /** Готовый мердж-список для отрисовки — см. [mergeWatchedOverrides]. */
 val ReleaseDetailsUiState.displayEpisodes: List<Episode>
     get() = episodes.mergeWatchedOverrides(watchedOverrides, localToggleOverrides)
+
+/**
+ * Тайтл легализован на территории пользователя — воспроизведение неофициальных источников
+ * (озвучки/серии через встроенный плеер) блокируется, как в официальном приложении Anixart:
+ * вместо флоу выбора источника остаются только баннер [ReleaseDetails.note] и список легальных
+ * площадок [streamingPlatforms].
+ *
+ * Три независимых серверных сигнала легализации (достаточно любого):
+ * 1. [ReleaseDetails.isThirdPartyPlatformsDisabled] — явный флаг сервера (в живых ответах на
+ *    2026-09-23 пока не приходил вовсе, см. KDoc `ReleaseDto`, но это контрактный способ).
+ * 2. [ReleaseDetails.note] — сообщение вида «Данный материал лицензирован на территории вашей
+ *    страны.» приходит именно у легализованных релизов (сверено вживую 2026-09-23).
+ * 3. непустой [streamingPlatforms] — сервер отдал легальные площадки для этого релиза.
+ *
+ * Оба запроса (`releaseDetails`/`streamingPlatforms`) падают молча и независимо (см. KDoc полей
+ * выше) — предикат намеренно fail-open: пока ни один сигнал не подтверждён, обычный флоу выбора
+ * источника продолжает работать (fail-closed прятал бы кнопку «Смотреть» у всех релизов при
+ * простом сбое сети).
+ */
+val ReleaseDetailsUiState.isLicensedPlaybackBlocked: Boolean
+    get() =
+        details?.isThirdPartyPlatformsDisabled == true ||
+            !details?.note.isNullOrBlank() ||
+            streamingPlatforms.isNotEmpty()

@@ -192,6 +192,7 @@ val RuStrings: Strings =
             "Если такого нет у источника — берётся ближайшее доступное. " +
                 "Выбор качества в плеере действует только на текущую серию."
         override val settingsVideoQualityAuto = "Авто"
+        override val settingsAppVersion = "Версия приложения"
         override val galleryTitle = "Дизайн-токены"
         override val galleryColorsSection = "Цвета"
         override val galleryTypographySection = "Типографика"
@@ -272,6 +273,8 @@ val RuStrings: Strings =
         override val releaseThirdPartyPlatformsDisabledHint =
             "Правообладатель ограничил показ сторонних источников для этого релиза — " +
                 "смотрите у официальных партнёров выше"
+        override val releaseLicensedNoteFallback =
+            "Проект недоступен по запросу правообладателя в вашей стране."
         override val ratingVoteCount: (Int) -> String = { count -> "$count оценок" }
         override val ratingRemoveVote = "Убрать оценку"
         override val commentsSpoilerLabel = "Спойлер — нажмите, чтобы показать"

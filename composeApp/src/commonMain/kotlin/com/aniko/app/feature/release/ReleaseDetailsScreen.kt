@@ -309,6 +309,7 @@ private fun ReleaseDetailsContent(
             details = state.details,
             detailsError = state.detailsError,
             isResolvingPlay = state.isResolvingPlay,
+            playbackBlocked = state.isLicensedPlaybackBlocked,
             onWatchClick = {
                 scope.launch {
                     val target = resolvePlayTarget()

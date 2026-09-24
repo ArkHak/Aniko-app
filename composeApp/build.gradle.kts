@@ -3,6 +3,7 @@
 @file:OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
 
 import com.aniko.buildlogic.GenerateApiFixturesTask
+import com.aniko.buildlogic.GenerateBuildInfoTask
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import java.io.FileInputStream
 import java.util.Properties
@@ -16,6 +17,19 @@ plugins {
 }
 
 val desktopMainClass = "com.aniko.app.MainKt"
+
+// Единый источник версии приложения для всех платформ: Android `versionName` ниже и
+// кодогенерация `BuildInfo.APP_VERSION` (commonMain, см. GenerateBuildInfoTask) — версия видна
+// в настройках приложения на Android/iOS/Desktop. Desktop `packageVersion` в конце файла —
+// ОТДЕЛЬНАЯ версия macOS-инсталлятора, сюда её не сводить (см. комментарий там).
+val anikoAppVersion = "0.0.2"
+
+val generateBuildInfo =
+    tasks.register<GenerateBuildInfoTask>("generateBuildInfo") {
+        appVersion.set(anikoAppVersion)
+        outputDir.set(layout.buildDirectory.dir("generated/buildInfo/commonMain/kotlin"))
+        packageName.set("com.aniko.app.buildinfo")
+    }
 
 // F1 (Фаза 11, docs/REELWAVE_PLAN.md): та же кодогенерация, что и :shared:data:generateApiFixtures
 // (см. её KDoc в GenerateApiFixturesTask) — отдельный вызов задачи со своим пакетом, потому что
@@ -49,6 +63,9 @@ kotlin {
     }
 
     sourceSets {
+        // Версия приложения в commonMain (`BuildInfo.APP_VERSION`) — см. GenerateBuildInfoTask.
+        getByName("commonMain").kotlin.srcDir(generateBuildInfo.flatMap { it.outputDir })
+
         commonMain.dependencies {
             implementation(project(":shared:model"))
             implementation(project(":shared:network"))
@@ -129,7 +146,7 @@ android {
     defaultConfig {
         applicationId = "com.aniko.app"
         versionCode = 2
-        versionName = "0.0.2"
+        versionName = anikoAppVersion
     }
 
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
