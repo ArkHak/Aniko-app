@@ -26,3 +26,6 @@ keystore.properties
 
 # Скретч-артефакты Playwright MCP (снапшоты страниц из живых инвестигаций)
 .playwright-mcp/
+
+# Python-байткод скриптов tools/
+__pycache__/

@@ -18,6 +18,10 @@ on:
 # демона окажется современный JAVA_HOME по умолчанию — `gradle-daemon-jvm.properties` в этом
 # репозитории нет (в .gitignore, машинно-специфичный файл), поэтому демон в CI берёт JDK из
 # стандартного окружения раннера/`actions/setup-java`, а не из явного пина.
+# Минимальные права GITHUB_TOKEN: CI только читает код.
+permissions:
+  contents: read
+
 env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false
 

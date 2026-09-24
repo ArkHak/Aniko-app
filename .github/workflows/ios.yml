@@ -10,6 +10,9 @@ name: iOS (manual)
 # не триггерится автоматически на push/PR, и не пытается собрать .ipa — только линкует
 # Kotlin/Native-фреймворк под симулятор, чтобы поймать поломки iOS-стороны Kotlin-кода
 # (expect/actual, cinterop) без Xcode/подписи.
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
 

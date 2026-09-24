@@ -64,7 +64,7 @@
       "can_torlook_search": true,
       "is_deleted": false,
       "age_rating": 2,
-      "your_vote": 0,
+      "your_vote": null,
       "related_count": 0,
       "comment_count": 0,
       "comments_count": 0,

@@ -1,263 +1,442 @@
-<p align="center">
-  <img src="docs/icon.png" width="128" alt="Aniko" />
-</p>
+<div align="center">
 
-<h1 align="center">Aniko</h1>
+<img src="docs/icon.png" width="132" alt="Aniko" />
 
-<p align="center">
-  Unofficial multiplatform client for <a href="https://anixart.tv">Anixart</a><br/>
-  Kotlin Multiplatform + Compose Multiplatform · single codebase
-</p>
+# Aniko
 
-<p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.0.2--alpha-8B6FF0" />
-  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Android%20·%20iOS%20·%20macOS-0A0C12" />
-  <img alt="Stack" src="https://img.shields.io/badge/stack-Kotlin%20Multiplatform%20·%20CMP-7F52FF" />
-</p>
+**An unofficial multiplatform client for [Anixart](https://anixart.tv)**<br/>
+for iPhone, Android and Mac — one Kotlin Multiplatform codebase
 
-<p align="center">
-  <a href="README.md">🇷🇺 Русский</a> · <b>🇬🇧 English</b>
-</p>
+<br/>
+
+[![Release](https://img.shields.io/badge/release-v0.1.0-8B6FF0?style=for-the-badge)](https://github.com/ArkHak/Aniko-app/releases/tag/v0.1.0)
+[![License](https://img.shields.io/badge/license-GPL--3.0-0A0C12?style=for-the-badge)](LICENSE)
+[![Platforms](https://img.shields.io/badge/iOS%20·%20Android%20·%20macOS-0A0C12?style=for-the-badge)](#-download)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![CI](https://img.shields.io/github/actions/workflow/status/ArkHak/Aniko-app/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/ArkHak/Aniko-app/actions/workflows/ci.yml)
+
+[🇷🇺 Русский](README.md) · **🇬🇧 English**
+
+[**Download**](#-download) · [Features](#-features) · [Install](#-installation) · [FAQ](#-faq) · [Build](#-build-from-source)
+
+</div>
+
+<div align="center">
+  <img src="docs/media/aniko-launch.gif" width="300" alt="Aniko launch: icon, home screen, catalog and title page" />
+</div>
 
 ---
 
-> **This project was originally built for the iOS version.** There is no official Anixart client for
-> iPhone — Aniko fills exactly that gap, and the author uses it daily on his own iPhone. A convenient
-> way to distribute the iOS build to everyone is still being figured out (for now it's side-loading
-> with your own Apple ID, see «[Installation](#-installation)»), but the iOS version itself is fully
-> functional. Android and Desktop came along "for free" thanks to the shared codebase — and they are
-> full-fledged clients, not stubs.
+> **The project started as an iOS app.** There is no official Anixart client for iPhone, and Aniko
+> fills exactly that gap. Android and Desktop came almost for free thanks to the shared codebase —
+> and they are full clients, not stubs.
 
 > [!NOTE]
-> **Status: alpha (`v0.0.2`).** The project is under active development: some Anixart features are
-> not implemented yet (see "what's already implemented" in [`docs/api/ANIXART_API.md`](docs/api/ANIXART_API.md)),
-> bugs, breaking changes and loss of local data between versions are possible.
+> **Status: early public release (v0.1.0).** It is usable day to day, but the project is under active
+> development: bugs are possible, some Anixart features are not implemented yet, and the local data
+> format may change between versions.
+
+## 📥 Download
+
+Ready-made builds are on the [**Releases**](https://github.com/ArkHak/Aniko-app/releases) page.
+
+| Platform | File | Size | Requirements | How to install |
+|---|---|---|---|---|
+| 🤖 **Android** | `aniko-v0.1.0-android.apk` | 4.6 MB | Android 8.0+ (API 26) | [guide](#-android) |
+| 🍎 **iPhone / iPad** | `aniko-v0.1.0-ios-unsigned.ipa` | 16 MB | iOS 15+ | [guide](#-iphone-without-a-paid-apple-developer-account) |
+| 💻 **macOS** | `aniko-v0.1.0-macos.dmg` | 172 MB | Apple Silicon Mac (M1 or newer) + [VLC](https://www.videolan.org/vlc/) | [guide](#-macos) |
+
+> The app is free and ad-free. Signing in requires an Anixart account (you can create one inside the app).
 
 ## 📸 Screenshots
 
-**iOS (iPhone)**
+<div align="center">
 
-| Home | Catalog | Release details |
-|---|---|---|
-| ![Home, iOS](docs/screenshots/ios-home.png) | ![Catalog, iOS](docs/screenshots/ios-catalog.png) | ![Release details, iOS](docs/screenshots/ios-release.png) |
+**iPhone**
 
-**Desktop (macOS)**
+| Home | Catalog | Title page |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/ios-home.png" width="260" alt="Home, iOS" /> | <img src="docs/screenshots/ios-catalog.png" width="260" alt="Catalog, iOS" /> | <img src="docs/screenshots/ios-release.png" width="260" alt="Title page, iOS" /> |
 
-| Home | Catalog | Release details |
-|---|---|---|
-| ![Home](docs/screenshots/desktop-home.png) | ![Catalog](docs/screenshots/desktop-catalog.png) | ![Release details](docs/screenshots/desktop-release.png) |
+**macOS**
+
+| Home | Catalog | Title page |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/desktop-home.png" alt="Home, macOS" /> | <img src="docs/screenshots/desktop-catalog.png" alt="Catalog, macOS" /> | <img src="docs/screenshots/desktop-release.png" alt="Title page, macOS" /> |
 
 | Schedule | My lists |
-|---|---|
-| ![Schedule](docs/screenshots/desktop-schedule.png) | ![My lists](docs/screenshots/desktop-library.png) |
+|:---:|:---:|
+| <img src="docs/screenshots/desktop-schedule.png" alt="Schedule, macOS" /> | <img src="docs/screenshots/desktop-library.png" alt="My lists, macOS" /> |
+
+</div>
 
 ## ✨ Features
 
-- **Catalog & search** — filters by genre, year, status, type; "All / New" tabs
-- **Release page** — description, genres, rating histogram, related titles, comments, voting
-- **Player** — voice-over and source selection, resume dialog, seek gestures, quality switching
-  (Desktop), PiP (Android)
-- **My lists** — watching / planned / completed / on-hold / dropped, favorites, watch history
-- **Profile** — watch statistics, activity charts, achievements, privacy settings
-- **Sync** — with your official Anixart account (same token as the original app), offline action
-  queue, background notifications about new episodes
-- **Adaptive UI** — phone / tablet / desktop layouts, themes, RU/EN localization
+<table>
+<tr>
+<td width="50%" valign="top">
 
-## 🛠 Tech stack
+### 🔎 Catalog & search
+- "Anime" / "Donghua" tabs, "All" / "New" sorting
+- Search and filters: genre, year, status, type
+- Release schedule by day of the week
+- Feeds, collections, "Trending discussions", "New episodes"
 
-| | |
-|---|---|
-| **Language / UI** | Kotlin Multiplatform, Compose Multiplatform (Android · iOS · Desktop) |
-| **Networking** | Ktor, kotlinx.serialization |
-| **DI / storage** | Koin, SQLDelight, Multiplatform Settings |
-| **Images** | Coil |
+### 🎬 Playback
+- Voice-over and source picker, pinned ("favorite") voice-overs
+- Per-title voice-over memory
+- "Resume from where you left" dialog, ±10 / −30 s seek, gestures
+- Default quality and seamless quality switching (Desktop)
+- Picture-in-Picture (Android)
+- For titles licensed in your country — links to legal streaming platforms
 
-| Module | Purpose |
-|---|---|
-| `shared:model` | Shared domain models |
-| `shared:network` | HTTP client, API configuration, error handling |
-| `shared:data` | Repositories, DTOs, API interfaces (`shared/data/.../api`) |
-| `shared:player` | Video player (embed/iframe sources) |
-| `shared:ui` | Shared components, theme, i18n, image handling |
-| `composeApp` | Platform entry points (Android / iOS framework / Desktop), screens and navigation |
+</td>
+<td width="50%" valign="top">
 
-Full description of the Anixart API (endpoints, models, authentication) —
-in [`docs/api/ANIXART_API.md`](docs/api/ANIXART_API.md) (in Russian).
+### 📚 Library
+- Lists: watching · planned · completed · on hold · dropped
+- Favorites and watch history, list / grid view
+- Optimistic writes + offline queue: changes made offline sync automatically
+
+### 👤 Profile & community
+- Watch statistics, activity chart, favorite genres, earned badges
+- Comments: write, vote, reply
+- Notifications with an unread badge
+
+### 🎨 Interface
+- iOS HIG-inspired design with a Liquid Glass material
+- Adaptive layouts: phone · tablet · desktop
+- Light, dark and AMOLED themes, RU / EN
+- `aniko://release/…` links to open a title or an episode
+
+</td>
+</tr>
+</table>
+
+**Account and data.** Sign-in and sync go through your official Anixart account: your lists, history
+and progress match what you see in the original app. Your session token stays on the
+device (Keychain on iOS/macOS, encrypted storage on Android).
+
+**Not there yet.** Instant push notifications (new episodes arrive through periodic polling),
+an achievements catalog (only badges you have already earned are shown), and quality / subtitle / audio-track selection where the video opens inside a
+third-party embedded player page (Android and iOS).
 
 ## 📦 Installation
 
-### Android
+### 🤖 Android
 
-1. Download the `.apk` from the [Releases](https://github.com/ArkHak/Aniko/releases) page.
-2. Allow installation from unknown sources (Settings → Apps → Special access → Install unknown
-   apps — for the browser/file manager you open the APK with).
-3. Open the downloaded `.apk` and install.
+1. Download `aniko-v0.1.0-android.apk` from [Releases](https://github.com/ArkHak/Aniko-app/releases).
+2. Allow installing from unknown sources for the app you open the file with (browser or file
+   manager): *Settings → Apps → Special access → Install unknown apps*.
+3. Open the APK and confirm the installation. If Google Play Protect warns about an unknown
+   developer, choose "Install anyway": the build is signed with the project's own key, not a Google
+   Play key.
 
-No developer account / Google Play required — Android allows installing APKs signed with any key.
+> [!IMPORTANT]
+> `v0.0.x` builds were signed with a debug key. The `0.1.0` release build is signed with a different
+> key, so **you must uninstall the old Aniko first** (Android cannot update an app over a build with a
+> different signature). Your account data is safe — it lives on Anixart's servers.
 
-### iOS (iPhone) — without a paid Apple Developer account
+### 🍎 iPhone without a paid Apple Developer account
 
-Apple **always** requires the app to be signed with some Apple ID, even for side-loading — this is an
-iOS limitation. "Without a developer account" means **without the paid Apple Developer Program
-($99/year)**: a regular free Apple ID (the same one used for iCloud/App Store) is enough. Its
-limitations: the signing certificate lasts **7 days** (then re-signing is needed), and there's a cap
-on simultaneously signed apps.
+Apple requires a signature for *any* app installed outside the App Store. "Without a developer
+account" here means **without the paid Apple Developer Program ($99/year)**: a regular free Apple ID
+is enough. The price of the free route is a **7-day certificate** — after that the app has to be
+re-signed (your data is kept). Pick one of the methods:
 
 <details>
-<summary><b>Option 1. Direct install via Xcode</b> — simplest, but the phone must be connected to a Mac periodically</summary>
+<summary><b>Method 1. Xcode</b> — no third-party tools (Mac required)</summary>
 
-Requirements: a Mac with Xcode, a free Apple ID, a cable (or Wi-Fi debugging).
+<br/>
 
-1. Install [Xcode](https://apps.apple.com/app/xcode/id497799835) from the App Store.
-2. Xcode → Settings → Accounts → add your Apple ID (no paid subscription needed).
-3. Clone the repository, open `iosApp/iosApp.xcodeproj`.
-4. In `iosApp/Configuration/Config.xcconfig` set `TEAM_ID` to your personal team ID
-   (Xcode → Settings → Accounts → your Apple ID → `<Your name> (Personal Team)`; the Team ID is
-   visible via "Manage Certificates" or in the Signing & Capabilities tab of the `iosApp` target
-   after selecting the team). `CODE_SIGN_STYLE` is already set to `Automatic`.
-5. Connect the iPhone via cable (or connect once via cable, then Xcode → Window → Devices and
-   Simulators → "Connect via network").
-6. On the iPhone: Settings → Privacy & Security → Developer Mode → enable → reboot (iOS 16+).
-7. In Xcode select your iPhone and press ▶ Run. The Gradle build of the shared framework starts
-   automatically (build phase `embedAndSignAppleFrameworkForXcode`) — the first build takes a few
-   minutes.
-8. On first launch you'll see "Untrusted Developer": Settings → General → VPN & Device Management →
-   select your Apple ID → "Trust".
-9. After 7 days the certificate expires ("Unable to verify app") — connect the phone and repeat
-   step 7; local data is preserved.
+1. Install [Xcode](https://apps.apple.com/app/xcode/id497799835) and add your Apple ID:
+   *Xcode → Settings → Accounts → "+"*.
+2. Clone the repository and open the project:
+   ```bash
+   git clone https://github.com/ArkHak/Aniko-app.git Aniko
+   open Aniko/iosApp/iosApp.xcodeproj
+   ```
+3. Put your Team ID into `iosApp/Configuration/Config.xcconfig` (`TEAM_ID=XXXXXXXXXX`). You can find it
+   under *Xcode → Settings → Accounts → your Apple ID → Personal Team*, or in the *Signing &
+   Capabilities* tab of the `iosApp` target. Do not commit this value.
+4. On the iPhone enable *Settings → Privacy & Security → Developer Mode* (a reboot is required,
+   iOS 16+) and connect the phone with a cable.
+5. Select the iPhone in Xcode and press ▶ **Run**. The first Kotlin/Native build takes a few minutes.
+6. On first launch: *Settings → General → VPN & Device Management →* your Apple ID → **Trust**.
+7. After 7 days, connect the phone and repeat step 5 — local data is preserved.
+
 </details>
 
 <details>
-<summary><b>Option 2. AltStore / SideStore</b> — side-load without a cable for each launch</summary>
+<summary><b>Method 2. AltStore / SideStore</b> — ready-made .ipa, re-signing over Wi-Fi</summary>
 
-Use this if you don't want to plug the phone into a Mac every week. A computer (Mac/Windows) is still
-needed for the initial install and background signature refresh over Wi-Fi.
+<br/>
 
-1. Take the ready unsigned `.ipa` from the [Releases](https://github.com/ArkHak/Aniko/releases) page
-   (`aniko-v0.0.2-ios-unsigned.ipa`), or build it yourself: in Xcode (after setting `TEAM_ID` as in
-   Option 1) Product → Archive for a real device → Distribute App → Development → export the `.ipa`.
-2. Install [AltServer](https://altstore.io/) (or [SideStore](https://sidestore.io/) — a more flexible
-   fork) on your computer and sign in with the same free Apple ID.
-3. Via AltServer install AltStore/SideStore on the iPhone (first time — via cable), then trust the
-   developer in iPhone Settings.
-4. In AltStore on the iPhone tap "+" and pick the `.ipa` — it will be signed with your Apple ID and
-   installed.
-5. As long as the computer running AltServer is reachable on the same Wi-Fi network, the signature
-   is renewed automatically.
+1. Download `aniko-v0.1.0-ios-unsigned.ipa` from [Releases](https://github.com/ArkHak/Aniko-app/releases)
+   on the iPhone (or transfer the file to it).
+2. Install [AltServer](https://altstore.io/) (Mac/Windows) or [SideStore](https://sidestore.io/) and
+   sign in with your free Apple ID.
+3. Install AltStore/SideStore on the iPhone (the first time via cable) and trust the developer in
+   the iPhone settings.
+4. In AltStore tap "+" and pick the `.ipa` — it gets signed with your Apple ID and installed.
+5. While the computer running AltServer is on the same Wi-Fi network, the signature is renewed
+   automatically.
+
 </details>
 
-> Both options are limited by Apple's policy for free Apple IDs (7-day signature, App ID cap) — a
-> system iOS restriction that cannot be bypassed without a paid Apple Developer Program (or a
-> jailbreak).
+<details>
+<summary><b>Method 3. Sideloadly</b> — graphical installer (Mac/Windows)</summary>
 
-### macOS (Desktop)
+<br/>
 
-Download `aniko-v0.0.2-macos.dmg` from the [Releases](https://github.com/ArkHak/Aniko/releases) page,
-open it and drag `Aniko.app` to `Applications`.
+1. Download [Sideloadly](https://sideloadly.io/) and connect the iPhone with a cable.
+2. Drag `aniko-v0.1.0-ios-unsigned.ipa` into the window, enter your free Apple ID and press **Start**.
+3. Trust the developer: *Settings → General → VPN & Device Management*.
+4. Repeat the installation every 7 days to renew the signature.
 
-The app is built without a paid Apple Developer Program membership: it is ad-hoc signed (no
-Developer ID certificate) and not notarized by Apple. So on the first launch of an app downloaded
-from the internet, Gatekeeper will block it with an "app is damaged" or "cannot be opened" message.
-This is expected — bypass it using any of the options below:
+</details>
 
-**Option 1. Right-click → Open**
+> The free Apple ID limits (7 days, a cap on simultaneously signed apps) are Apple policy. They cannot
+> be bypassed without the paid program or a jailbreak.
 
-1. In Finder, locate `Aniko.app` in the `Applications` folder.
-2. Right-click (or Ctrl+click) the icon → **Open**.
-3. Click **Open** again in the dialog. The warning appears only once; afterwards the app launches
-   with a regular double-click.
+### 💻 macOS
 
-**Option 2. Via System Settings**
+1. Download `aniko-v0.1.0-macos.dmg`, open it and drag **Aniko** to *Applications*.
+2. Install [VLC](https://www.videolan.org/vlc/) into `/Applications` — Aniko uses its libraries to
+   play video. The VLC build must match your Mac's architecture (Apple Silicon).
+3. Launch Aniko. The build is ad-hoc signed and not notarized by Apple, so on first launch Gatekeeper
+   refuses to open it ("app is damaged" or "developer cannot be verified"). Use any of these:
 
-1. Try launching the app normally — it will be refused.
-2. Open Settings → Privacy & Security, scroll down to the entry about "Aniko" and click
-   **Open Anyway**.
+   - **Right-click → "Open"** on `Aniko.app`, then "Open" again in the dialog (once).
+   - **System Settings → Privacy & Security** → "Open Anyway" next to Aniko.
+   - **Terminal** — remove the quarantine flag:
+     ```bash
+     xattr -dr com.apple.quarantine /Applications/Aniko.app
+     ```
 
-**Option 3. Via Terminal (remove quarantine)**
+Don't trust the prebuilt binary? Build it yourself — [it is straightforward](#-build-from-source), and
+a locally built app is not quarantined.
 
-```bash
-xattr -dr com.apple.quarantine /Applications/Aniko.app
-```
+**Windows and Linux** have no prebuilt binaries. You can run the Desktop version from source
+(`./gradlew :composeApp:run`), but those platforms are untested.
 
-If you don't trust the build from Releases — build the `.dmg` from source yourself, see
-«[Building from source](#-building-from-source)»: a locally built app has no quarantine attribute
-and launches without any of these steps.
+### 🚀 First launch
 
-## 🔧 Building from source
+Aniko opens a sign-in screen. Enter your Anixart login and password, or tap "Registration" —
+account creation (with an emailed confirmation code) is built into the app. The app does not work
+without signing in: the catalog and profile are tied to the account.
 
-Requirements: JDK 17+, Android SDK (for the Android target), Xcode (for the iOS target, macOS only).
+## ❓ FAQ
+
+<details>
+<summary><b>macOS says "Aniko is damaged" and offers to move it to the Bin</b></summary>
+
+That's Gatekeeper: the app is not notarized by Apple. Run
+`xattr -dr com.apple.quarantine /Applications/Aniko.app` or use right-click → "Open".
+</details>
+
+<details>
+<summary><b>The UI opens on Mac, but video doesn't play</b></summary>
+
+Make sure VLC is installed in `/Applications` and that its architecture matches your Mac's
+processor (Apple Silicon → arm64 or universal VLC build).
+</details>
+
+<details>
+<summary><b>On iPhone: "Unable to verify app" / the app won't launch</b></summary>
+
+The 7-day signature of a free Apple ID has expired. Re-sign the app (Xcode, AltStore or Sideloadly) —
+your data is kept. Also make sure Developer Mode is on.
+</details>
+
+<details>
+<summary><b>Android won't let me install the APK</b></summary>
+
+Allow installs from unknown sources for the app you open the file with. If Aniko is already
+installed and signed with a different key, uninstall it first (see the note in the Android section).
+</details>
+
+<details>
+<summary><b>"Watch" is missing and a list of platforms is shown instead of episodes</b></summary>
+
+The rights holder has licensed the title in your country, so in-app playback is disabled (just like
+in the official client). Aniko shows links to legal streaming platforms instead.
+</details>
+
+<details>
+<summary><b>The catalog doesn't load</b></summary>
+
+Check your internet connection and whether the Anixart service is reachable from your network. Aniko
+contains no VPN, proxy or other circumvention tools (see [Legal](#-legal)).
+</details>
+
+## 🔧 Build from source
+
+Requirements: **JDK 17+**, Android SDK (for Android), **Xcode** (for iOS, macOS only).
+Gradle is fetched automatically (`./gradlew`).
 
 ```bash
 # Android — debug APK
 ./gradlew :composeApp:assembleDebug
-# output: composeApp/build/outputs/apk/debug/composeApp-debug.apk
+#   → composeApp/build/outputs/apk/debug/composeApp-debug.apk
 
-# Desktop (macOS) — DMG
+# Desktop — run and build a DMG (macOS)
+./gradlew :composeApp:run
 ./gradlew :composeApp:packageDmg
+#   → composeApp/build/compose/binaries/main/dmg/
 
-# iOS — open in Xcode
+# iOS — open the project in Xcode (Gradle builds the framework automatically)
 open iosApp/iosApp.xcodeproj
 ```
 
 <details>
-<summary><b>Android release signing</b> (<code>assembleRelease</code> / <code>bundleRelease</code>)</summary>
+<summary><b>Android release signing</b> (<code>assembleRelease</code>)</summary>
 
-`assembleDebug` needs no signing (AGP generates a debug keystore). A release build requires your own
-key — the repository does not contain one (see `.gitignore`: `*.jks`, `keystore.properties`):
+<br/>
+
+The repository contains no keys (see `.gitignore`: `*.jks`, `keystore.properties`). Create your own:
 
 ```bash
 cp keystore.properties.example keystore.properties
 keytool -genkeypair -v -keystore composeApp/release/aniko-release.jks \
   -alias aniko-release -keyalg RSA -keysize 2048 -validity 10000
-# fill in storePassword/keyPassword in keystore.properties
-# (PKCS12 requires storePassword == keyPassword)
+# fill in storePassword / keyPassword in keystore.properties
+# (they must match for PKCS12)
 
 ./gradlew :composeApp:assembleRelease
-# output: composeApp/build/outputs/apk/release/composeApp-release.apk
+#   → composeApp/build/outputs/apk/release/composeApp-release.apk
 ```
 
-Without `keystore.properties` (or the `ANIKO_KEYSTORE_PATH` / `ANIKO_KEYSTORE_PASSWORD` /
-`ANIKO_KEY_ALIAS` / `ANIKO_KEY_PASSWORD` environment variables — used in CI) the release build fails
-at the signing step instead of producing an unsigned artifact.
+In CI you can pass the key through the environment variables `ANIKO_KEYSTORE_PATH`,
+`ANIKO_KEYSTORE_PASSWORD`, `ANIKO_KEY_ALIAS`, `ANIKO_KEY_PASSWORD`. Without a key the release build
+fails at the signing step — on purpose, rather than shipping an unsigned build.
+
 </details>
 
-## 📚 Documentation
+<details>
+<summary><b>Unsigned .ipa for AltStore / SideStore</b></summary>
 
-- [`docs/api/ANIXART_API.md`](docs/api/ANIXART_API.md) — full description of the Anixart API in use
-  (endpoints, models, authentication, live response samples; in Russian)
-- [`docs/REELWAVE_PLAN.md`](docs/REELWAVE_PLAN.md) — development tracker: phase statuses, key
-  decisions, tech debt, remaining tasks (in Russian)
-- [`AGENTS.md`](AGENTS.md) — repository rules for agents and contributors (git flow, code
-  conventions, validation; in Russian)
+<br/>
 
-## ⚖️ Legal information
+```bash
+xcodebuild archive -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Release \
+  -archivePath build/Aniko.xcarchive -destination 'generic/platform=iOS' \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=""
+mkdir -p Payload && cp -R build/Aniko.xcarchive/Products/Applications/Aniko.app Payload/
+zip -qr Aniko-unsigned.ipa Payload
+```
 
-- **Content rights.** Aniko is only a client interface to the Anixart service: the app does not
-  store, produce or distribute audiovisual works. All content (video, images, descriptions) is loaded
-  from Anixart servers and third-party video hostings and belongs to the respective rights holders.
-  The user is responsible for complying with copyright when watching.
-- **Service and trademark rights.** Anixart and related names and logos belong to their respective
-  owners. The Aniko project is not affiliated with them and does not claim to be an official client.
+</details>
+
+## 🏗 Architecture
+
+```mermaid
+graph LR
+    subgraph Platforms
+        A[composeApp<br/>Android · iOS · Desktop]
+        X[iosApp<br/>Xcode wrapper]
+    end
+    A --> D[shared:data]
+    A --> UI[shared:ui]
+    A --> P[shared:player]
+    A --> DB[shared:database]
+    A --> N[shared:network]
+    D --> N
+    D --> DB
+    D --> P
+    D --> M[shared:model]
+    P --> M
+    UI --> M
+    DB --> M
+    X -.->|Kotlin framework| A
+```
+
+| Layer | What's inside |
+|---|---|
+| `shared:model` | Domain models |
+| `shared:network` | HTTP client, API configuration, typed errors |
+| `shared:data` | Repositories, DTOs, API interfaces, offline queue and sync |
+| `shared:database` | SQLDelight: TTL cache, list membership, episode progress |
+| `shared:player` | Player: WebView bridge (Android/iOS) and VLC rendering (Desktop) |
+| `shared:ui` | Design system, components, themes, RU/EN i18n |
+| `composeApp` | Screens, navigation, MVI view models, platform entry points |
+| `detekt-rules` | Custom linter rules (e.g. no Cyrillic literals outside the i18n layer) |
+
+**Stack:** Kotlin 2.4 · Compose Multiplatform 1.11 · Ktor 3.5 · Koin 4.2 · SQLDelight 2.3 · Coil 3.5 ·
+vlcj 4.11 (Desktop). Screen architecture is MVI (`BaseViewModel<State, Intent, Effect>`).
+
+The full description of the Anixart API in use (endpoints, models, authentication) is in
+[`docs/api/ANIXART_API.md`](docs/api/ANIXART_API.md) (in Russian).
+
+## ✅ Tests & quality
+
+```bash
+./gradlew ktlintCheck detektMetadataCommonMain detektDesktopMain   # linters
+./gradlew :composeApp:desktopTest :shared:data:desktopTest         # tests
+```
+
+The repository has contract tests against real API response samples, Desktop UI smoke tests,
+accessibility audits (WCAG AA contrast, `contentDescription`, 200% font scale) and a TalkBack pass.
+A VoiceOver (iOS) pass is not finished yet — see the roadmap.
+
+## 🗺 Roadmap
+
+- [ ] VoiceOver pass on iOS (the last item of the accessibility audit)
+- [ ] "Stale data" indicator when working from the offline cache
+- [ ] Full Xcode iOS build in CI
+- [ ] A more convenient way to deliver iOS builds (currently side-loading only)
+
+Detailed tracker: [`docs/REELWAVE_PLAN.md`](docs/REELWAVE_PLAN.md) (in Russian).
+
+## 🤝 Contributing
+
+Issues and pull requests are welcome. Branching, commit and validation rules are in
+[`CONTRIBUTING.md`](CONTRIBUTING.md) and [`AGENTS.md`](AGENTS.md). If you plan a large feature, please
+open an issue first to discuss the approach.
+
+## 📜 Legal
+
+The project is developed and documented primarily for a Russian-speaking audience; the legal notes are
+therefore anchored in Russian law. Summary:
+
+- **Content rights.** Aniko is only a client interface to the Anixart service: the app does not store,
+  produce or distribute audiovisual works. All content (video, images, descriptions) is loaded from
+  Anixart's servers and third-party video hosts and belongs to the respective rights holders
+  (Art. 1255, 1270 of the Civil Code of the Russian Federation). The user is responsible for
+  respecting copyright when watching.
+- **Service rights and trademarks.** Anixart and related names and logos belong to their owners. Aniko
+  is not affiliated with them and does not present itself as an official client.
 - **API research.** The protocol description in [`docs/api/ANIXART_API.md`](docs/api/ANIXART_API.md)
   was obtained by studying the app's interaction with the service for research purposes, including
-  interoperability, and is published as technical documentation — not as instructions for
-  unauthorized access.
-- **No circumvention.** The app contains no VPN, proxy or other means of bypassing blocks and is not
-  intended to access restricted information. The fallback address chain mentioned in the API
+  interoperability (cf. Art. 1280 of the Civil Code of the Russian Federation), and is published as
+  technical documentation, not as instructions for unauthorized access.
+- **No circumvention.** The app contains no VPN, proxy or other means of bypassing blocks, and is not
+  intended for accessing information whose distribution is restricted in the Russian Federation
+  (Art. 15.1–15.8 of Federal Law No. 149-FZ). The fallback address chain mentioned in the API
   documentation is a property of the original Anixart service; it is not implemented in Aniko.
-- **Age ratings.** Age ratings are displayed exactly as provided by the Anixart service. Users must
-  comply with the age-restriction laws of their jurisdiction on their own.
-- **Personal data.** Credentials and the session token are stored locally on the user's device and
-  are transmitted only to Anixart servers. The Aniko developer does not collect or process users'
-  personal data.
+- **Age restrictions.** Age ratings are shown as provided by the Anixart service. Users must comply
+  with Federal Law No. 436-FZ on protecting children from harmful information themselves.
+- **Personal data.** Credentials and the session token are stored locally on the user's device and are
+  sent only to Anixart's servers. The Aniko developer does not collect or process users' personal data
+  and is not their operator (Federal Law No. 152-FZ on personal data).
 
 ## 📄 License
 
-No license specified. The code is published for personal/research use; for distribution questions
-contact the repository author.
+The code is licensed under the **[GNU GPL v3.0](LICENSE)**. The Desktop version uses
+[vlcj](https://github.com/caprica/vlcj) (GPL-3.0) and the [VLC](https://www.videolan.org/vlc/)
+libraries (LGPL-2.1+), so the project as a whole is released under GPL-3.0. Other dependencies are
+under Apache-2.0 and other compatible licenses. Copyright © 2026 ArkHak and Aniko contributors.
+
+## 🙏 Acknowledgements
+
+[Anixart](https://anixart.tv) for the service and content · [JetBrains](https://www.jetbrains.com) for
+Kotlin and Compose Multiplatform · [VLC](https://www.videolan.org/vlc/) and
+[vlcj](https://github.com/caprica/vlcj) for the Desktop player · [AltStore](https://altstore.io/) and
+[SideStore](https://sidestore.io/) for making it possible to install apps on iPhone without a paid
+subscription.
 
 ---
 
-<p align="center">
-  <sub>Aniko is an independent project, not affiliated with Anixart. Made for research and personal use.</sub>
-</p>
+<div align="center">
+  <sub>Aniko is an independent project, not affiliated with Anixart. Made for research and personal purposes.</sub>
+</div>
