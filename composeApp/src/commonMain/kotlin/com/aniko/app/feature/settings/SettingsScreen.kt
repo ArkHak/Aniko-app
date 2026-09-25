@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.buildinfo.BuildInfo
 import com.aniko.app.di.AppIconHelper
+import com.aniko.app.feature.update.UpdateSettingsItem
 import com.aniko.data.playerpreferences.PlayerPreferencesStore
 import com.aniko.data.theme.AppIconStore
 import com.aniko.player.PREFERRED_QUALITY_HEIGHTS
@@ -198,6 +199,7 @@ fun SettingsScreen(
                                 )
                             }
                         }
+                        UpdateSettingsItem()
                         ListItem(
                             headlineContent = {
                                 Text(

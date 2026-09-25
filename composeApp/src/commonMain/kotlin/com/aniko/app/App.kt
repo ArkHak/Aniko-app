@@ -40,6 +40,7 @@ import androidx.navigation.compose.rememberNavController
 import coil3.SingletonImageLoader
 import coil3.compose.LocalPlatformContext
 import com.aniko.app.feature.auth.AuthFlow
+import com.aniko.app.feature.update.UpdateHost
 import com.aniko.app.navigation.AnixDestination
 import com.aniko.app.navigation.AnixSection
 import com.aniko.app.navigation.DeepLinkDispatcher
@@ -214,7 +215,11 @@ private fun AnixSessionGate(
         when (sessionState) {
             SessionState.Loading -> AnixLoadingState(modifier = Modifier.fillMaxSize())
             SessionState.Unauthorized -> AuthFlow()
-            is SessionState.Authorized -> AnixAppScaffold(localeStore, themeStore, onBackHandlerReady)
+            is SessionState.Authorized -> {
+                AnixAppScaffold(localeStore, themeStore, onBackHandlerReady)
+                // Проверка обновлений и диалог — только внутри сессии (поверх экрана входа не нужны).
+                UpdateHost()
+            }
         }
 
         SnackbarHost(

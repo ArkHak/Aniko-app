@@ -105,6 +105,45 @@ vlcj 4.11 (Desktop). Screen architecture is MVI (`BaseViewModel<State, Intent, E
 The full description of the Anixart API in use (endpoints, models, authentication) is in
 [`docs/api/ANIXART_API.md`](api/ANIXART_API.md) (in Russian).
 
+## In-app updates
+
+The app finds new versions on its own from the **GitHub Releases** of the public repository and offers to
+update. It checks at launch (at most once a day, only inside a session) and from the "Check for updates" row in
+Settings; when a version is found, a dialog shows "What's new" with "Update" / "Later" / "Skip this version".
+
+| Platform | What "Update" does |
+|---|---|
+| Android | Downloads the APK, verifies SHA-256, starts the system installer (`PackageInstaller`); the update installs over the current app. On first use the system asks to allow Aniko to install apps. |
+| macOS | Downloads the DMG, verifies SHA-256, replaces `Aniko.app` with the new version and restarts the app. If the app is not run from an `.app` or the folder is not writable, it opens the release page. |
+| iOS | Cannot update itself (unsigned side-loaded build): shows the version and opens the release page with instructions. |
+
+How it works:
+
+- Code: `shared/data/.../update` (`UpdateChecker`, `GitHubReleaseSource`, `UpdateDownloader`,
+  `UpdateCoordinator`, `AppVersion`); UI: `composeApp/.../feature/update` (`UpdateHost`, `UpdateDialog`,
+  `UpdateSettingsItem`); platform part: `AppUpdateInstaller` implementations registered in `PlatformModule`.
+- The source is the **list** of releases (`GET /repos/ArkHak/Aniko-app/releases`), not `/releases/latest`: the latter
+  skips pre-releases and all `0.x` releases are pre-releases. The highest SemVer version wins; a version ≤ the
+  current one is never offered. Requests are unauthenticated (GitHub limit: 60/hour per IP); while the repository
+  is private the 404 answer is treated as "no updates".
+- The Anixart session token is **never** sent to GitHub: updates use a separate HTTP client
+  (`createUpdateHttpClient`) without `AnixTokenPlugin`.
+- Security: `https` and GitHub hosts only (`github.com`, `api.github.com`, `*.githubusercontent.com`, also checked
+  for the final URL after redirects); the file is downloaded to `*.part`, verified against the SHA-256 from the same
+  release's `SHA256SUMS.txt` and only then gets its real name; on mismatch it is deleted. On Android the APK signature
+  adds authenticity: the system will not install an update signed with a different key.
+
+### What every release must contain
+
+Otherwise auto-update skips the platform or refuses to install the file:
+
+- Assets with exact names: `aniko-vX.Y.Z-android.apk`, `aniko-vX.Y.Z-macos.dmg`, `aniko-vX.Y.Z-ios-unsigned.ipa`
+  and `SHA256SUMS.txt` (`sha256sum` format: `<hash>  <file name>` — produced by `shasum -a 256 aniko-*`).
+- A SemVer tag `vX.Y.Z` (`v0.2.0`, `v1.0.0-beta.1`); drafts are ignored.
+- In the release notes the **first level-2 section** (`## What's new …`) is what the update dialog shows (without
+  tables, links and markup); everything else stays on the release page.
+- The app version (`anikoAppVersion`) must equal the tag; the Android `versionCode` must strictly increase.
+
 ## Tests & quality
 
 ```bash

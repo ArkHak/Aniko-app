@@ -30,6 +30,8 @@ lifecycle = "2.10.0"
 
 # --- Images ---
 coil = "3.5.0"
+# Файлы и SHA-256 для загрузки обновлений (уже транзитивно приходит через Coil/Ktor).
+okio = "3.17.0"
 
 # --- Preferences / token storage ---
 multiplatformSettings = "1.3.0"
@@ -123,6 +125,8 @@ androidx-lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecy
 androidx-lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 
 # Coil 3
+okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
+okio-fakefilesystem = { module = "com.squareup.okio:okio-fakefilesystem", version.ref = "okio" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-ktor3 = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
 

@@ -36,12 +36,16 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.koin.core)
             implementation(libs.multiplatform.settings)
+            // okio.Path/FileSystem/HashingSink — загрузка обновлений с проверкой SHA-256; api(), потому что
+            // `AppUpdateInstaller` (реализуется в composeApp) принимает okio.Path.
+            api(libs.okio)
         }
 
         commonTest.dependencies {
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.multiplatform.settings.test)
             implementation(libs.ktor.client.mock)
+            implementation(libs.okio.fakefilesystem)
         }
 
         androidMain.dependencies {

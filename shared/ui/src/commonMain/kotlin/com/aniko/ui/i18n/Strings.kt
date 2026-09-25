@@ -328,6 +328,34 @@ interface Strings {
     // (`BuildInfo.APP_VERSION`, кодогенерация из composeApp/build.gradle.kts).
     val settingsAppVersion: String
 
+    // --- Обновление приложения (диалог и строка в настройках) ---
+    val settingsCheckForUpdates: String
+    val settingsUpdateChecking: String
+    val settingsUpdateUpToDate: String
+    val settingsUpdateAvailable: (version: String) -> String
+    val updateAvailableTitle: (version: String) -> String
+    val updateWhatsNew: String
+    val updateActionInstall: String
+    val updateActionOpenPage: String
+    val updateActionLater: String
+    val updateActionSkip: String
+    val updateActionCancel: String
+    val updateActionClose: String
+    val updateDownloading: String
+    val updateDownloadingPercent: (percent: Int) -> String
+    val updateInstalling: String
+    val updatePermissionRequired: String
+    val updateManualInstallHint: String
+    val updateErrorNetwork: String
+    val updateErrorRateLimited: String
+    val updateErrorServer: String
+    val updateErrorNoAsset: String
+    val updateErrorChecksum: String
+    val updateErrorDownload: String
+    val updateErrorStorage: String
+    val updateErrorInstall: String
+    val updateErrorUnknown: String
+
     // --- Экран-галерея токенов (P2.T12) ---
     val galleryTitle: String
     val galleryColorsSection: String

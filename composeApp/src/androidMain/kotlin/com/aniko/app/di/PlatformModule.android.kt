@@ -1,6 +1,7 @@
 package com.aniko.app.di
 
 import android.content.Context
+import com.aniko.app.update.AndroidAppUpdateInstaller
 import com.aniko.data.locale.LocaleStore
 import com.aniko.data.notification.AndroidLocalNotificationPresenter
 import com.aniko.data.notification.LocalNotificationPresenter
@@ -10,6 +11,7 @@ import com.aniko.data.sync.AndroidBackgroundSyncScheduler
 import com.aniko.data.sync.AndroidConnectivityMonitor
 import com.aniko.data.sync.BackgroundSyncScheduler
 import com.aniko.data.sync.ConnectivityMonitor
+import com.aniko.data.update.AppUpdateInstaller
 import com.aniko.database.driver.AndroidDatabaseDriverFactory
 import com.aniko.database.driver.DatabaseDriverFactory
 import com.aniko.ui.i18n.appStringsFor
@@ -17,6 +19,7 @@ import com.russhwolf.settings.Settings
 import com.russhwolf.settings.SharedPreferencesSettings
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 actual fun platformModule(): Module =
@@ -44,4 +47,8 @@ actual fun platformModule(): Module =
         }
         // P16.T21 — переключатель иконки лаунчера через activity-alias (AndroidManifest.xml).
         single<AppIconHelper> { AndroidAppIconHelper(androidContext()) }
+        // Автообновление: APK скачивается координатором и ставится через системный PackageInstaller.
+        single<AppUpdateInstaller> {
+            AndroidAppUpdateInstaller(context = androidContext(), ioDispatcher = get(named("io")))
+        }
     }

@@ -197,6 +197,35 @@ val RuStrings: Strings =
                 "Выбор качества в плеере действует только на текущую серию."
         override val settingsVideoQualityAuto = "Авто"
         override val settingsAppVersion = "Версия приложения"
+        override val settingsCheckForUpdates = "Проверить обновления"
+        override val settingsUpdateChecking = "Проверяем…"
+        override val settingsUpdateUpToDate = "У вас последняя версия"
+        override val settingsUpdateAvailable: (String) -> String = { version -> "Доступна версия $version" }
+        override val updateAvailableTitle: (String) -> String = { version -> "Доступна версия $version" }
+        override val updateWhatsNew = "Что нового"
+        override val updateActionInstall = "Обновить"
+        override val updateActionOpenPage = "Открыть страницу релиза"
+        override val updateActionLater = "Позже"
+        override val updateActionSkip = "Пропустить эту версию"
+        override val updateActionCancel = "Отмена"
+        override val updateActionClose = "Закрыть"
+        override val updateDownloading = "Скачиваем обновление…"
+        override val updateDownloadingPercent: (Int) -> String = { percent -> "Скачиваем обновление… $percent%" }
+        override val updateInstalling = "Устанавливаем…"
+        override val updatePermissionRequired =
+            "Разрешите Aniko устанавливать приложения в открывшемся окне, затем вернитесь и нажмите «Обновить» ещё раз."
+        override val updateManualInstallHint =
+            "На этом устройстве обновление ставится вручную: скачайте новую сборку со страницы релиза и " +
+                "установите так же, как в первый раз. Данные сохранятся."
+        override val updateErrorNetwork = "Нет соединения. Проверьте интернет и повторите."
+        override val updateErrorRateLimited = "Слишком много проверок обновлений. Повторите позже."
+        override val updateErrorServer = "Сервер обновлений не отвечает. Повторите позже."
+        override val updateErrorNoAsset = "В этом релизе нет сборки для вашего устройства."
+        override val updateErrorChecksum = "Скачанный файл повреждён или изменён. Обновление отменено."
+        override val updateErrorDownload = "Не удалось скачать обновление. Повторите попытку."
+        override val updateErrorStorage = "Не хватает свободного места для загрузки обновления."
+        override val updateErrorInstall = "Не удалось установить обновление."
+        override val updateErrorUnknown = "Что-то пошло не так при обновлении."
         override val galleryTitle = "Дизайн-токены"
         override val galleryColorsSection = "Цвета"
         override val galleryTypographySection = "Типографика"

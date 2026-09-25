@@ -1,5 +1,6 @@
 package com.aniko.app.di
 
+import com.aniko.app.update.createDesktopUpdateInstaller
 import com.aniko.data.di.APP_SCOPE
 import com.aniko.data.notification.DesktopLocalNotificationPresenter
 import com.aniko.data.notification.LocalNotificationPresenter
@@ -9,6 +10,7 @@ import com.aniko.data.sync.BackgroundSyncScheduler
 import com.aniko.data.sync.ConnectivityMonitor
 import com.aniko.data.sync.DesktopBackgroundSyncScheduler
 import com.aniko.data.sync.DesktopConnectivityMonitor
+import com.aniko.data.update.AppUpdateInstaller
 import com.aniko.database.driver.DatabaseDriverFactory
 import com.aniko.database.driver.DesktopDatabaseDriverFactory
 import com.russhwolf.settings.PreferencesSettings
@@ -36,4 +38,6 @@ actual fun platformModule(): Module =
         // P16.T21 — Desktop не поддерживает несколько иконок лаунчера; секция в SettingsScreen
         // скрывается по пустому `supportedIcons`.
         single<AppIconHelper> { NoOpAppIconHelper() }
+        // Автообновление: на macOS из упакованного .app — замена приложения, иначе только страница релиза.
+        single<AppUpdateInstaller> { createDesktopUpdateInstaller(ioDispatcher = get(named("io"))) }
     }

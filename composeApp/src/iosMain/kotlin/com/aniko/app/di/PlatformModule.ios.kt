@@ -9,13 +9,18 @@ import com.aniko.data.sync.BackgroundSyncScheduler
 import com.aniko.data.sync.ConnectivityMonitor
 import com.aniko.data.sync.IosBackgroundSyncScheduler
 import com.aniko.data.sync.IosConnectivityMonitor
+import com.aniko.data.update.AppUpdateInstaller
+import com.aniko.data.update.OpenPageOnlyInstaller
+import com.aniko.data.update.UpdatePlatform
 import com.aniko.database.driver.DatabaseDriverFactory
 import com.aniko.database.driver.IosDatabaseDriverFactory
 import com.russhwolf.settings.NSUserDefaultsSettings
 import com.russhwolf.settings.Settings
+import okio.Path.Companion.toPath
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSUserDefaults
 
 actual fun platformModule(): Module =
@@ -35,4 +40,6 @@ actual fun platformModule(): Module =
         // P16.T21 — iOS не поддерживает несколько иконок лаунчера в этой реализации; секция в
         // SettingsScreen скрывается по пустому `supportedIcons`.
         single<AppIconHelper> { NoOpAppIconHelper() }
+        // iOS не умеет обновлять неподписанную side-load сборку из приложения: только страница релиза.
+        single<AppUpdateInstaller> { OpenPageOnlyInstaller(UpdatePlatform.Ios, NSTemporaryDirectory().toPath()) }
     }

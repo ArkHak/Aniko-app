@@ -195,6 +195,36 @@ val EnStrings: Strings =
                 "Changing quality in the player only affects the current episode."
         override val settingsVideoQualityAuto = "Auto"
         override val settingsAppVersion = "App version"
+        override val settingsCheckForUpdates = "Check for updates"
+        override val settingsUpdateChecking = "Checking…"
+        override val settingsUpdateUpToDate = "You have the latest version"
+        override val settingsUpdateAvailable: (String) -> String = { version -> "Version $version is available" }
+        override val updateAvailableTitle: (String) -> String = { version -> "Version $version is available" }
+        override val updateWhatsNew = "What's new"
+        override val updateActionInstall = "Update"
+        override val updateActionOpenPage = "Open release page"
+        override val updateActionLater = "Later"
+        override val updateActionSkip = "Skip this version"
+        override val updateActionCancel = "Cancel"
+        override val updateActionClose = "Close"
+        override val updateDownloading = "Downloading the update…"
+        override val updateDownloadingPercent: (Int) -> String = { percent -> "Downloading the update… $percent%" }
+        override val updateInstalling = "Installing…"
+        override val updatePermissionRequired =
+            "Allow Aniko to install apps in the window that just opened, then come back and tap Update again."
+        override val updateManualInstallHint =
+            "On this device the update is installed manually: download the new build from the release page and " +
+                "install it the same way as before. Your data is kept."
+        override val updateErrorNetwork = "No connection. Check your internet and try again."
+        override val updateErrorRateLimited = "Too many update checks. Please try again later."
+        override val updateErrorServer = "The update server is not responding. Please try again later."
+        override val updateErrorNoAsset = "This release has no build for your device."
+        override val updateErrorChecksum =
+            "The downloaded file is damaged or was tampered with. The update was cancelled."
+        override val updateErrorDownload = "Couldn't download the update. Please try again."
+        override val updateErrorStorage = "Not enough free space to download the update."
+        override val updateErrorInstall = "The update could not be installed."
+        override val updateErrorUnknown = "Something went wrong while updating."
         override val galleryTitle = "Design tokens"
         override val galleryColorsSection = "Colors"
         override val galleryTypographySection = "Typography"

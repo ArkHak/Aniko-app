@@ -2,6 +2,7 @@ package com.aniko.app.smoke
 
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.aniko.app.di.UPDATE_HTTP_CLIENT
 import com.aniko.data.notification.LocalNotification
 import com.aniko.data.notification.LocalNotificationPresenter
 import com.aniko.data.notification.NotificationContentFactory
@@ -9,15 +10,23 @@ import com.aniko.data.session.SecureTokenStorage
 import com.aniko.data.sync.BackgroundSyncScheduler
 import com.aniko.data.sync.ConnectivityMonitor
 import com.aniko.data.sync.ConnectivityStatus
+import com.aniko.data.update.AppUpdateInstaller
+import com.aniko.data.update.OpenPageOnlyInstaller
+import com.aniko.data.update.UpdatePlatform
 import com.aniko.database.AnikoDatabase
 import com.aniko.database.driver.DatabaseDriverFactory
 import com.aniko.network.AnixJson
 import com.russhwolf.settings.MapSettings
 import com.russhwolf.settings.Settings
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.MutableStateFlow
+import okio.Path.Companion.toPath
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 /**
@@ -96,6 +105,10 @@ fun fakeInfraModule(
     single<LocalNotificationPresenter> { NoOpLocalNotificationPresenter }
     // `null` — ни одно локальное уведомление не будет реально показано (см. NotificationPoller).
     single<NotificationContentFactory> { NotificationContentFactory { null } }
+
+    // Автообновление: в смоук-тестах в сеть (GitHub) не ходим — «релизов нет» (404), установщик — только страница релиза.
+    single(named(UPDATE_HTTP_CLIENT)) { HttpClient(MockEngine { respond("[]", HttpStatusCode.NotFound) }) }
+    single<AppUpdateInstaller> { OpenPageOnlyInstaller(UpdatePlatform.MacOs, "/tmp/aniko-smoke-updates".toPath()) }
 
     single<HttpClient> {
         HttpClient(fakeApiEngine(apiRoutes)) {

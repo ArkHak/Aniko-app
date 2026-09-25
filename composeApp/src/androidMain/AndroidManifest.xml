@@ -7,6 +7,9 @@
          объявления здесь недостаточно, его запрашивает экран настроек
          (`NotificationPermission.android.kt`). На API 26..32 выдаётся при установке. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Обновление из приложения: без него `PackageManager.canRequestPackageInstalls()` всегда false и
+         экран «Установка неизвестных приложений» для Aniko недоступен (см. `AndroidAppUpdateInstaller`). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".AnixApplication"
@@ -21,6 +24,12 @@
              `screenSize|smallestScreenSize|screenLayout|orientation` — при входе в PiP и смене
              размера окна Activity не пересоздаётся, а значит `<video>` в WebView не перезагружается
              и воспроизведение не прерывается. -->
+        <!-- Статусы сессии установки обновления (`AndroidAppUpdateInstaller`): показывает системное окно
+             подтверждения. Не экспортируется — сессия шлёт явный интент внутри приложения. -->
+        <receiver
+            android:name=".update.AppUpdateInstallReceiver"
+            android:exported="false" />
+
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"

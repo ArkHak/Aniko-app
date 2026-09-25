@@ -40,6 +40,9 @@ object AnixTestTags {
     /** Корень [com.aniko.app.feature.settings.SettingsScreen]. */
     const val SETTINGS_SCREEN_ROOT: String = "settings_screen_root"
 
+    /** Диалог обновления приложения (`UpdateDialog`). */
+    const val UPDATE_DIALOG: String = "update_dialog"
+
     /** Корень [com.aniko.app.feature.settings.NotificationSettingsScreen]. */
     const val NOTIFICATION_SETTINGS_SCREEN_ROOT: String = "notification_settings_screen_root"
 
