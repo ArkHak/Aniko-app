@@ -19,6 +19,7 @@ import com.aniko.app.feature.settings.NotificationSettingsViewModel
 import com.aniko.app.feature.settings.SettingsViewModel
 import com.aniko.app.notification.AppNotificationContentFactory
 import com.aniko.data.notification.NotificationContentFactory
+import com.aniko.network.ApiConfig
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
@@ -31,6 +32,10 @@ import org.koin.dsl.module
  */
 val appModule =
     module {
+        // Предрелизный аудит безопасности (#109): HTTP-логи (полные URL и заголовки запросов) только
+        // в debug-сборке. `ApiConfig` поставляет приложение, а не `dataModule`, потому что тип
+        // сборки известен только здесь (`isDebugBuild()` — expect/actual, без проверок платформы).
+        single { ApiConfig(enableLogging = isDebugBuild()) }
         // Найдено вживую на iOS/Desktop (сверка с макетом, 2026-08-23): без этого биндинга
         // приложение падало на КАЖДОМ старте с NoDefinitionFoundException — NotificationPoller
         // (shared/data) требует NotificationContentFactory, а единственная реализация

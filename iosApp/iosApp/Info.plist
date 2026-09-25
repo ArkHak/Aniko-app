@@ -55,9 +55,22 @@
 	<array>
 		<string>com.aniko.app.sync-queue-drain</string>
 	</array>
+	<!-- ATS (issue #109): раньше стояло `NSAllowsArbitraryLoads = true` — cleartext разрешён для
+	     ВСЕГО трафика приложения, включая API с токеном сессии. Нативный сетевой код (Ktor/Darwin:
+	     API `api-s.anixsekai.com`, CDN картинок `s.anixmirai.com`) целиком ходит по https, живые
+	     сэмплы `docs/api/samples/` не содержат ни одного http-хоста, который приложение реально
+	     запрашивает, — поэтому для него ATS снова строгий.
+	     Исключения оставлены только там, где содержимое не наше и его хосты заранее неизвестны:
+	     - `NSAllowsArbitraryLoadsInWebContent` — страницы embed-плееров в `WKWebView` (Kodik, Sibnet,
+	       Libria/Liberty, RuTube, VK Видео) вместе с их рекламными фреймами и подресурсами;
+	     - `NSAllowsArbitraryLoadsForMedia` — медиапотоки (mp4/HLS), которые эти страницы отдают
+	       медиастеку через `<video>`.
+	     Оба ключа действуют только если `NSAllowsArbitraryLoads` отсутствует (иначе игнорируются). -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+		<key>NSAllowsArbitraryLoadsForMedia</key>
 		<true/>
 	</dict>
 	<!-- Deep links (P10.T7): custom scheme `aniko://release/...`, обрабатывается в

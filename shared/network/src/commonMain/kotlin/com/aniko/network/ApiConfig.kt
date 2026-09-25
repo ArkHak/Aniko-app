@@ -19,7 +19,14 @@ data class ApiConfig(
      * шлёт), сервер его не требует. Оставлено `null` осознанно, а не потому что не проверено.
      */
     val apiVersionHeader: String? = null,
-    val enableLogging: Boolean = true,
+    /**
+     * Печатать ли HTTP-запросы/ответы (Ktor `Logging`, уровень `HEADERS`) в stdout/logcat.
+     *
+     * По умолчанию `false` — безопасный дефолт: токен маскируется `token=***`, но полные URL и
+     * заголовки всё равно не должны попадать в логи пользовательских (release) сборок. Включает
+     * флаг только приложение и только для debug-сборки (`isDebugBuild()` в `composeApp`).
+     */
+    val enableLogging: Boolean = false,
     val requestTimeoutMillis: Long = 30_000,
 ) {
     companion object {

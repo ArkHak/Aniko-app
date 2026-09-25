@@ -61,10 +61,16 @@ actual fun EmbedPlayerView(
                 // Без гранта PROTECTED_MEDIA_ID WebView отклоняет запрос EME/Widevine, который
                 // делает html5-плеер при инициализации видео — экран остаётся чёрным без единой
                 // ошибки в логе. Оригинал (`KodikAdActivity$webChromeClient$1`) грантит его же.
+                // Всё остальное (камера, микрофон, MIDI...) отклоняется: раньше выдавалось всё, что
+                // запросит чужая страница (issue #109), см. [isEmbedPermissionGrantable].
                 webChromeClient =
                     object : WebChromeClient() {
                         override fun onPermissionRequest(request: PermissionRequest) {
-                            request.grant(request.resources)
+                            if (isEmbedPermissionGrantable(request.resources)) {
+                                request.grant(request.resources)
+                            } else {
+                                request.deny()
+                            }
                         }
                     }
                 webViewClient =

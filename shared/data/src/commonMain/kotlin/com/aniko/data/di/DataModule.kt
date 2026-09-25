@@ -73,6 +73,10 @@ const val APP_SCOPE: String = "appScope"
  * поэтому его поставляет `composeApp` через свой платформенный модуль. По той же причине снаружи
  * приходят `ConnectivityMonitor` и `BackgroundSyncScheduler` (P10.T1/T2) — здесь собирается только
  * общий [SyncCoordinator] поверх них.
+ *
+ * [ApiConfig] тоже приходит снаружи (его поставляет `appModule` в `composeApp`): флаг
+ * `enableLogging` зависит от типа сборки (debug/release), а тип сборки известен только
+ * приложению — data-слой не должен молча включать логирование HTTP в release.
  */
 val dataModule =
     module {
@@ -85,8 +89,6 @@ val dataModule =
         // одним движением. [SupervisorJob] — чтобы падение одной дочерней корутины не уносило
         // остальные. Отменять его некому и незачем: он живёт ровно столько же, сколько процесс.
         single(named(APP_SCOPE)) { CoroutineScope(SupervisorJob() + get<CoroutineDispatcher>(named("io"))) }
-
-        single { ApiConfig() }
 
         single { SessionStore(settings = get(), secureStorage = get()) }
         single<TokenProvider> { get<SessionStore>() }

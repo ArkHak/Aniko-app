@@ -149,6 +149,13 @@ android {
         versionName = anikoAppVersion
     }
 
+    // `BuildConfig.DEBUG` (по варианту debug/release) читает `isDebugBuild()` в androidMain —
+    // от него зависит выключение HTTP-логов в release (#109). AGP 8 генерирует BuildConfig
+    // только по явному флагу.
+    buildFeatures {
+        buildConfig = true
+    }
+
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
     sourceSets["main"].res.srcDirs("src/androidMain/res")
 
