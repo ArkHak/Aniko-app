@@ -234,6 +234,12 @@ interface Strings {
     val playerLoadError: String
     val playerSourceError: (hostKey: String) -> String
 
+    /** Desktop: нативный плеер не создать — на Mac нет VLC (см. `EmbedVideoState.engineProblem`). */
+    val playerVlcRequired: String
+
+    /** Действие рядом с [playerVlcRequired] — открывает страницу загрузки VLC. */
+    val playerVlcDownload: String
+
     // Оверлей плеера (P8.T3/T4/T5/T8). Кнопка «назад» переиспользует [backContentDescription].
     // Качество по-прежнему CUT (см. KDoc `PlayerBottomPanel` в `PlayerOverlay.kt` и отчёт
     // P13.T9 в `docs/REELWAVE_PLAN.md`): сегмент качества в Kodik embed-URL декоративный на нашей

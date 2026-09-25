@@ -144,6 +144,10 @@ val EnStrings: Strings =
         override val friendRequestVisibilityNobody = "Nobody"
         override val playerLoadError = "Couldn't load video"
         override val playerSourceError: (String) -> String = { hostKey -> "Couldn't get video from source $hostKey" }
+        override val playerVlcRequired =
+            "Playing video on Mac needs VLC. Install it from videolan.org " +
+                "(a build for your processor), then open the episode again."
+        override val playerVlcDownload = "Download VLC"
         override val playerPlay = "Play"
         override val playerPause = "Pause"
         override val playerSeekBackward = "Rewind 10 seconds"

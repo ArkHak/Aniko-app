@@ -35,7 +35,25 @@ data class EmbedVideoState(
     val switchingQualityTo: String? = null,
     /** Desktop: последний сбой смены качества с откатом (см. [QualitySwitchFailure]); иначе `null`. */
     val qualitySwitchFailure: QualitySwitchFailure? = null,
+    /**
+     * Desktop: нативный движок воспроизведения недоступен и видео не начнётся вовсе (см.
+     * [PlaybackEngineProblem]); `null` — движок в порядке. На Android/iOS всегда `null`: там видео
+     * играет системный WebView.
+     */
+    val engineProblem: PlaybackEngineProblem? = null,
 )
+
+/**
+ * Почему нативный движок воспроизведения не удалось создать. Без готового текста — текст выбирает
+ * экран через i18n (ViewModel и плеер про `Strings` не знают).
+ */
+enum class PlaybackEngineProblem {
+    /**
+     * Desktop: не удалось загрузить libVLC — VLC не установлен, повреждён либо его архитектура не
+     * совпадает с архитектурой приложения (libVLC в `.dmg` не входит, vlcj ищет системный VLC).
+     */
+    VlcUnavailable,
+}
 
 /**
  * Управление `<video>` внутри embed-страницы через JS-мост.

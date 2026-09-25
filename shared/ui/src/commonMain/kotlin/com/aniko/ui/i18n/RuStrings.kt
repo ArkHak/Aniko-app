@@ -145,6 +145,10 @@ val RuStrings: Strings =
         override val playerLoadError = "Не удалось загрузить видео"
         override val playerSourceError: (String) -> String =
             { hostKey -> "Не удалось получить видео с источника $hostKey" }
+        override val playerVlcRequired =
+            "Для воспроизведения на Mac нужен VLC. Установите его с videolan.org " +
+                "(версию под ваш процессор) и откройте серию заново."
+        override val playerVlcDownload = "Скачать VLC"
         override val playerPlay = "Играть"
         override val playerPause = "Пауза"
         override val playerSeekBackward = "Назад на 10 секунд"

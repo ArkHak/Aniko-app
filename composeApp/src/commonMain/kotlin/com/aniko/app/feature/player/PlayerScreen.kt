@@ -2,12 +2,14 @@ package com.aniko.app.feature.player
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -21,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -31,8 +34,10 @@ import com.aniko.model.VideoHost
 import com.aniko.player.EmbedPlayerView
 import com.aniko.player.HideSystemBarsEffect
 import com.aniko.player.LockLandscapeOrientationEffect
+import com.aniko.player.PlaybackEngineProblem
 import com.aniko.player.PlaybackSource
 import com.aniko.player.rememberEmbedVideoController
+import com.aniko.ui.component.AnixEmptyState
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixLoadingState
 import com.aniko.ui.i18n.LocalStrings
@@ -428,6 +433,19 @@ fun PlayerScreen(
                             // `alwaysOnTop`-окон конкурировали бы друг с другом за то, какое
                             // из них реально самое верхнее.
                             PlayerOverlayHost(modifier = Modifier.fillMaxSize()) {
+                                // Desktop без VLC: видео-окна нет, вместо чёрного прямоугольника — объяснение и
+                                // «Скачать VLC». Внутри хоста (а не под ним): прозрачное окно оверлея на Desktop
+                                // перехватывало бы клики по кнопке, лежащей в главном окне.
+                                if (videoState.engineProblem == PlaybackEngineProblem.VlcUnavailable) {
+                                    VlcRequiredState(
+                                        modifier =
+                                            if (isFullscreen) {
+                                                Modifier.fillMaxSize()
+                                            } else {
+                                                Modifier.fillMaxWidth().height(videoHeight).offset(y = topOffset)
+                                            },
+                                    )
+                                }
                                 if (isFullscreen && !pipActive) {
                                     PlayerOverlay(
                                         state = videoState,
@@ -566,6 +584,27 @@ fun PlayerScreen(
             }
         }
     }
+}
+
+/** Страница загрузки VLC — единственное действие при [PlaybackEngineProblem.VlcUnavailable]. */
+private const val VLC_DOWNLOAD_URL = "https://www.videolan.org/vlc/"
+
+/**
+ * Desktop: объяснение, почему видео не начнётся (нет VLC), и действие «Скачать VLC». Рисуется на
+ * непрозрачном фоне темы поверх чёрного плеера внутри оверлея ([PlayerOverlayHost]); кнопка «назад»
+ * компактного/полноэкранного оверлея остаётся поверх и доступна. Текст выбирает экран через i18n
+ * ([PlaybackEngineProblem] его не несёт).
+ */
+@Composable
+private fun VlcRequiredState(modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
+    val uriHandler = LocalUriHandler.current
+    AnixEmptyState(
+        message = strings.playerVlcRequired,
+        actionLabel = strings.playerVlcDownload,
+        onAction = { uriHandler.openUri(VLC_DOWNLOAD_URL) },
+        modifier = modifier.background(MaterialTheme.colorScheme.background),
+    )
 }
 
 /** 16:9 — инженерно разумный эквивалент фиксированных 226px видео-области мокапа

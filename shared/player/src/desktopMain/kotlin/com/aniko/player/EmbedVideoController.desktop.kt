@@ -196,6 +196,15 @@ actual class EmbedVideoController actual constructor() {
         }
     }
 
+    /**
+     * Сообщает экрану, что нативный движок создать не удалось: [EmbedVideoState.engineProblem]
+     * становится непустым, и плеер показывает понятное объяснение вместо пустого экрана. Вызывается
+     * `EmbedPlayerView` (desktop), когда создание `CallbackMediaPlayerComponent` бросило исключение.
+     */
+    fun reportEngineProblem(problem: PlaybackEngineProblem) {
+        stateFlow.update { it.copy(engineProblem = problem) }
+    }
+
     /** Вызывается `EmbedPlayerView` (desktop) один раз при создании VLCJ video-окна — до первого
      *  `media().play(...)`, чтобы ни одно событие не потерялось. */
     internal fun attach(player: MediaPlayer) {

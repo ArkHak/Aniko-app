@@ -74,6 +74,10 @@ actual fun EmbedPlayerView(
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
         if (!isPlayerTestMode()) {
             DesktopVlcjPlayer(url = url, referer = referer, controller = controller, modifier = Modifier.fillMaxSize())
+        } else if (isPlayerTestVlcUnavailable()) {
+            // Тестовая имитация «VLC не установлен»: в тестовом режиме настоящий плеер не создаётся
+            // вовсе, поэтому ветку ошибки экрана иначе проверить нечем.
+            LaunchedEffect(controller) { controller?.reportEngineProblem(PlaybackEngineProblem.VlcUnavailable) }
         }
     }
 }
@@ -84,6 +88,28 @@ actual fun EmbedPlayerView(
  * чтение на месте не зависит от порядка загрузки классов и не требует remember.
  */
 private fun isPlayerTestMode(): Boolean = System.getProperty("aniko.playerTestMode") == "true"
+
+/**
+ * `true` под системным свойством `aniko.playerTestVlcUnavailable=true` (только вместе с
+ * [isPlayerTestMode]) — тест имитирует отсутствие VLC, см. [EmbedVideoState.engineProblem].
+ */
+private fun isPlayerTestVlcUnavailable(): Boolean = System.getProperty("aniko.playerTestVlcUnavailable") == "true"
+
+/**
+ * Создаёт VLCJ-компонент, превращая сбой загрузки libVLC в [Result.failure].
+ *
+ * libVLC в `.dmg` НЕ входит: vlcj ищет системный VLC (`/Applications/VLC.app`), и без него
+ * конструктор бросает `UnsatisfiedLinkError`/`NoClassDefFoundError` (повторные попытки после первой
+ * неудачи — это `LinkageError`) либо `RuntimeException` самого vlcj. Все они означают одно и то же —
+ * плеер создать нельзя, — поэтому превращаются в результат, а не роняют экран. Остальные ошибки
+ * (например `OutOfMemoryError`) сюда не относятся и пробрасываются дальше.
+ */
+internal fun createMediaPlayerComponent(
+    factory: () -> CallbackMediaPlayerComponent = { CallbackMediaPlayerComponent() },
+): Result<CallbackMediaPlayerComponent> =
+    runCatching(factory).onFailure { error ->
+        if (error !is LinkageError && error !is RuntimeException) throw error
+    }
 
 /**
  * Фоновый teardown libVLC: `stop()` по сетевому потоку и `release()` компонента могут блокироваться
@@ -99,6 +125,24 @@ private fun CallbackMediaPlayerComponent.releaseInBackground() {
         isDaemon = true
         name = "vlc-player-release"
         start()
+    }
+}
+
+/**
+ * Играет [resolved] напрямую, без контроллера. `:http-referrer=` — media-опция libVLC (модуль
+ * access/http) для ФИНАЛЬНОГО запроса потока самим libVLC. Берётся `resolved.referer`, а НЕ внешний
+ * `referer` [DesktopVlcjPlayer] — они могут не совпадать (Kodik: партнёрский Referer нужен только
+ * чтобы получить страницу, а CDN-хост потока ждёт свой собственный, см. KDoc
+ * [DesktopStreamResolver.Resolved.referer] за разбором). Явное ветвление вместо vararg-спреда из
+ * пустого/одноэлементного массива — так проще читается (и не ловит detekt `SpreadOperator`).
+ */
+private fun CallbackMediaPlayerComponent.playResolved(resolved: DesktopStreamResolver.Resolved) {
+    val media = mediaPlayer().media()
+    val streamReferer = resolved.referer
+    if (streamReferer != null) {
+        media.play(resolved.streamUrl, ":http-referrer=$streamReferer")
+    } else {
+        media.play(resolved.streamUrl)
     }
 }
 
@@ -121,7 +165,14 @@ private fun DesktopVlcjPlayer(
     var bounds by remember { mutableStateOf<Rect?>(null) }
     Box(modifier = modifier.trackScreenBounds { bounds = it })
 
-    val mediaPlayerComponent = remember { CallbackMediaPlayerComponent() }
+    val creation = remember { createMediaPlayerComponent() }
+    val mediaPlayerComponent = creation.getOrNull()
+    if (mediaPlayerComponent == null) {
+        // VLC недоступен — экран плеера получит [EmbedVideoState.engineProblem] и покажет объяснение
+        // с действием «Скачать VLC» (см. `PlayerScreen`); ни видео-окна, ни резолва потока не нужно.
+        LaunchedEffect(creation) { controller?.reportEngineProblem(PlaybackEngineProblem.VlcUnavailable) }
+        return
+    }
     DisposableEffect(mediaPlayerComponent) {
         controller?.attach(mediaPlayerComponent.mediaPlayer())
         onDispose {
@@ -148,20 +199,7 @@ private fun DesktopVlcjPlayer(
                 controller.startResolvedStream(resolved)
             } else {
                 // Без контроллера (превью/тесты) — играем умолчание резолвера как есть.
-                // `:http-referrer=` — media-опция libVLC (модуль access/http) для ФИНАЛЬНОГО запроса
-                // потока самим libVLC. `resolved.referer`, а НЕ внешний параметр `referer` этой
-                // функции — они могут не совпадать (Kodik: партнёрский Referer нужен только чтобы
-                // получить страницу, а CDN-хост потока ждёт свой собственный, см. KDoc
-                // [DesktopStreamResolver.Resolved.referer] за разбором). Явное ветвление вместо
-                // vararg-спреда из пустого/одноэлементного массива — так проще читается, чем собирать
-                // массив ради одного опционального аргумента (заодно не ловит detekt `SpreadOperator`).
-                val media = mediaPlayerComponent.mediaPlayer().media()
-                val streamReferer = resolved.referer
-                if (streamReferer != null) {
-                    media.play(resolved.streamUrl, ":http-referrer=$streamReferer")
-                } else {
-                    media.play(resolved.streamUrl)
-                }
+                mediaPlayerComponent.playResolved(resolved)
             }
         }
         // resolved == null — резолв не нашёл поток (мёртвая ссылка/неподдерживаемый хост/таймаут
