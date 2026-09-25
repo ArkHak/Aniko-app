@@ -29,9 +29,6 @@
 - Kotlin Multiplatform + Compose Multiplatform: Android / iOS / Desktop.
 - Модули: `shared:model|network|data|player|ui|database`, `composeApp` (точки входа и
   экраны), `iosApp` (Xcode-обёртка), `detekt-rules` (кастомные правила).
-- Трекер разработки: **`docs/REELWAVE_PLAN.md`** — статусы фаз, чекбоксы, журнал изменений.
-  Работа над функциональностью привязана к фазам/пунктам плана: читать статус перед
-  стартом, обновлять чекбоксы/журнал после (через `kmp-dev-doc-writer`).
 - API Anixart (реверс-инжиниринг): `docs/api/ANIXART_API.md` + живые сэмплы
   `docs/api/samples/` (используются контрактными тестами).
 

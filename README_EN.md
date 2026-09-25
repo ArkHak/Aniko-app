@@ -14,10 +14,11 @@ for iPhone, Android and Mac — one Kotlin Multiplatform codebase
 [![Platforms](https://img.shields.io/badge/iOS%20·%20Android%20·%20macOS-0A0C12?style=for-the-badge)](#-download)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![CI](https://img.shields.io/github/actions/workflow/status/ArkHak/Aniko-app/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/ArkHak/Aniko-app/actions/workflows/ci.yml)
+[![Telegram](https://img.shields.io/badge/Telegram-aniko__portal-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/aniko_portal)
 
 [🇷🇺 Русский](README.md) · **🇬🇧 English**
 
-[**Download**](#-download) · [Features](#-features) · [Install](#-installation) · [FAQ](#-faq) · [Build](#-build-from-source)
+[**Download**](#-download) · [Features](#-features) · [Install](#-installation) · [FAQ](#-faq) · [Support](#-support)
 
 </div>
 
@@ -32,7 +33,7 @@ for iPhone, Android and Mac — one Kotlin Multiplatform codebase
 > and they are full clients, not stubs.
 
 > [!NOTE]
-> **Status: early public release (v0.1.0).** It is usable day to day, but the project is under active
+> **Status: early public release (v0.1.0).** It is usable right now, but the project is under active
 > development: bugs are possible, some Anixart features are not implemented yet, and the local data
 > format may change between versions.
 
@@ -106,7 +107,7 @@ Ready-made builds are on the [**Releases**](https://github.com/ArkHak/Aniko-app/
 ### 🎨 Interface
 - iOS HIG-inspired design with a Liquid Glass material
 - Adaptive layouts: phone · tablet · desktop
-- Light, dark and AMOLED themes, RU / EN
+- Light and dark themes, RU / EN
 - `aniko://release/…` links to open a title or an episode
 
 </td>
@@ -126,8 +127,11 @@ third-party embedded player page (Android and iOS).
 ### 🤖 Android
 
 1. Download `aniko-v0.1.0-android.apk` from [Releases](https://github.com/ArkHak/Aniko-app/releases).
-2. Allow installing from unknown sources for the app you open the file with (browser or file
-   manager): *Settings → Apps → Special access → Install unknown apps*.
+2. Allow installing from unknown sources. Android usually offers this itself: when you first open the APK,
+   tap "Settings" and turn on "Allow from this source". If no dialog appears, turn it on manually:
+   *Settings → Apps → Special app access → Install unknown apps* → pick the browser or file manager you
+   open the file with. On Samsung, Xiaomi and other skins the items may be named differently — search the
+   settings for "unknown apps".
 3. Open the APK and confirm the installation. If Google Play Protect warns about an unknown
    developer, choose "Install anyway": the build is signed with the project's own key, not a Google
    Play key.
@@ -214,11 +218,10 @@ re-signed (your data is kept). Pick one of the methods:
      xattr -dr com.apple.quarantine /Applications/Aniko.app
      ```
 
-Don't trust the prebuilt binary? Build it yourself — [it is straightforward](#-build-from-source), and
+Don't trust the prebuilt binary? Build it yourself — [it is straightforward](docs/DEVELOPMENT_EN.md#build-from-source), and
 a locally built app is not quarantined.
 
-**Windows and Linux** have no prebuilt binaries. You can run the Desktop version from source
-(`./gradlew :composeApp:run`), but those platforms are untested.
+**Windows and Linux.** There are no prebuilt binaries. If you need them, write in Telegram: [t.me/aniko_portal](https://t.me/aniko_portal).
 
 ### 🚀 First launch
 
@@ -270,129 +273,13 @@ Check your internet connection and whether the Anixart service is reachable from
 contains no VPN, proxy or other circumvention tools (see [Legal](#-legal)).
 </details>
 
-## 🔧 Build from source
+## 💬 Support
 
-Requirements: **JDK 17+**, Android SDK (for Android), **Xcode** (for iOS, macOS only).
-Gradle is fetched automatically (`./gradlew`).
+The official place for Aniko support is Telegram: **[t.me/aniko_portal](https://t.me/aniko_portal)**. Ask a question, report a problem, suggest an idea or request a build for another platform there.
 
-```bash
-# Android — debug APK
-./gradlew :composeApp:assembleDebug
-#   → composeApp/build/outputs/apk/debug/composeApp-debug.apk
+## 📚 For developers
 
-# Desktop — run and build a DMG (macOS)
-./gradlew :composeApp:run
-./gradlew :composeApp:packageDmg
-#   → composeApp/build/compose/binaries/main/dmg/
-
-# iOS — open the project in Xcode (Gradle builds the framework automatically)
-open iosApp/iosApp.xcodeproj
-```
-
-<details>
-<summary><b>Android release signing</b> (<code>assembleRelease</code>)</summary>
-
-<br/>
-
-The repository contains no keys (see `.gitignore`: `*.jks`, `keystore.properties`). Create your own:
-
-```bash
-cp keystore.properties.example keystore.properties
-keytool -genkeypair -v -keystore composeApp/release/aniko-release.jks \
-  -alias aniko-release -keyalg RSA -keysize 2048 -validity 10000
-# fill in storePassword / keyPassword in keystore.properties
-# (they must match for PKCS12)
-
-./gradlew :composeApp:assembleRelease
-#   → composeApp/build/outputs/apk/release/composeApp-release.apk
-```
-
-In CI you can pass the key through the environment variables `ANIKO_KEYSTORE_PATH`,
-`ANIKO_KEYSTORE_PASSWORD`, `ANIKO_KEY_ALIAS`, `ANIKO_KEY_PASSWORD`. Without a key the release build
-fails at the signing step — on purpose, rather than shipping an unsigned build.
-
-</details>
-
-<details>
-<summary><b>Unsigned .ipa for AltStore / SideStore</b></summary>
-
-<br/>
-
-```bash
-xcodebuild archive -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Release \
-  -archivePath build/Aniko.xcarchive -destination 'generic/platform=iOS' \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=""
-mkdir -p Payload && cp -R build/Aniko.xcarchive/Products/Applications/Aniko.app Payload/
-zip -qr Aniko-unsigned.ipa Payload
-```
-
-</details>
-
-## 🏗 Architecture
-
-```mermaid
-graph LR
-    subgraph Platforms
-        A[composeApp<br/>Android · iOS · Desktop]
-        X[iosApp<br/>Xcode wrapper]
-    end
-    A --> D[shared:data]
-    A --> UI[shared:ui]
-    A --> P[shared:player]
-    A --> DB[shared:database]
-    A --> N[shared:network]
-    D --> N
-    D --> DB
-    D --> P
-    D --> M[shared:model]
-    P --> M
-    UI --> M
-    DB --> M
-    X -.->|Kotlin framework| A
-```
-
-| Layer | What's inside |
-|---|---|
-| `shared:model` | Domain models |
-| `shared:network` | HTTP client, API configuration, typed errors |
-| `shared:data` | Repositories, DTOs, API interfaces, offline queue and sync |
-| `shared:database` | SQLDelight: TTL cache, list membership, episode progress |
-| `shared:player` | Player: WebView bridge (Android/iOS) and VLC rendering (Desktop) |
-| `shared:ui` | Design system, components, themes, RU/EN i18n |
-| `composeApp` | Screens, navigation, MVI view models, platform entry points |
-| `detekt-rules` | Custom linter rules (e.g. no Cyrillic literals outside the i18n layer) |
-
-**Stack:** Kotlin 2.4 · Compose Multiplatform 1.11 · Ktor 3.5 · Koin 4.2 · SQLDelight 2.3 · Coil 3.5 ·
-vlcj 4.11 (Desktop). Screen architecture is MVI (`BaseViewModel<State, Intent, Effect>`).
-
-The full description of the Anixart API in use (endpoints, models, authentication) is in
-[`docs/api/ANIXART_API.md`](docs/api/ANIXART_API.md) (in Russian).
-
-## ✅ Tests & quality
-
-```bash
-./gradlew ktlintCheck detektMetadataCommonMain detektDesktopMain   # linters
-./gradlew :composeApp:desktopTest :shared:data:desktopTest         # tests
-```
-
-The repository has contract tests against real API response samples, Desktop UI smoke tests,
-accessibility audits (WCAG AA contrast, `contentDescription`, 200% font scale) and a TalkBack pass.
-A VoiceOver (iOS) pass is not finished yet — see the roadmap.
-
-## 🗺 Roadmap
-
-- [ ] VoiceOver pass on iOS (the last item of the accessibility audit)
-- [ ] "Stale data" indicator when working from the offline cache
-- [ ] Full Xcode iOS build in CI
-- [ ] A more convenient way to deliver iOS builds (currently side-loading only)
-
-Detailed tracker: [`docs/REELWAVE_PLAN.md`](docs/REELWAVE_PLAN.md) (in Russian).
-
-## 🤝 Contributing
-
-Issues and pull requests are welcome. Branching, commit and validation rules are in
-[`CONTRIBUTING.md`](CONTRIBUTING.md) and [`AGENTS.md`](AGENTS.md). If you plan a large feature, please
-open an issue first to discuss the approach.
+The source code is open. Building from source, architecture and tests are described in [`docs/DEVELOPMENT_EN.md`](docs/DEVELOPMENT_EN.md); the Anixart API description is in [`docs/api/ANIXART_API.md`](docs/api/ANIXART_API.md) (in Russian).
 
 ## 📜 Legal
 

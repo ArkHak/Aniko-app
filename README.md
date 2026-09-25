@@ -14,10 +14,11 @@
 [![Платформы](https://img.shields.io/badge/iOS%20·%20Android%20·%20macOS-0A0C12?style=for-the-badge)](#-скачать)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![CI](https://img.shields.io/github/actions/workflow/status/ArkHak/Aniko-app/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/ArkHak/Aniko-app/actions/workflows/ci.yml)
+[![Telegram](https://img.shields.io/badge/Telegram-aniko__portal-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/aniko_portal)
 
 **🇷🇺 Русский** · [🇬🇧 English](README_EN.md)
 
-[**Скачать**](#-скачать) · [Возможности](#-возможности) · [Установка](#-установка) · [Частые вопросы](#-частые-вопросы) · [Сборка](#-сборка-из-исходников)
+[**Скачать**](#-скачать) · [Возможности](#-возможности) · [Установка](#-установка) · [Частые вопросы](#-частые-вопросы) · [Поддержка](#-поддержка)
 
 </div>
 
@@ -32,7 +33,7 @@
 > кодовой базе, и это полноценные клиенты, а не заглушки.
 
 > [!NOTE]
-> **Статус: ранний публичный релиз (v0.1.0).** Приложением можно пользоваться каждый день, но проект
+> **Статус: ранний публичный релиз (v0.1.0).** Приложением можно пользоваться уже сейчас, но проект
 > активно развивается: возможны баги, часть функций Anixart ещё не реализована, а формат локальных
 > данных между версиями может меняться.
 
@@ -106,7 +107,7 @@
 ### 🎨 Интерфейс
 - Дизайн в духе iOS HIG с материалом Liquid Glass
 - Адаптивные раскладки: телефон · планшет · desktop
-- Светлая, тёмная и AMOLED-темы, RU / EN
+- Светлая и тёмная темы, RU / EN
 - Ссылки `aniko://release/…` для открытия релиза и серии
 
 </td>
@@ -126,8 +127,11 @@
 ### 🤖 Android
 
 1. Скачайте `aniko-v0.1.0-android.apk` со страницы [Releases](https://github.com/ArkHak/Aniko-app/releases).
-2. Разрешите установку из неизвестных источников для приложения, которым открываете файл (браузер
-   или менеджер файлов): *Настройки → Приложения → Особый доступ → Установка неизвестных приложений*.
+2. Разрешите установку из неизвестных источников. Обычно Android предложит это сам: при первом открытии APK
+   нажмите «Настройки» и включите «Разрешить установку из этого источника». Если окна нет, включите вручную:
+   *Настройки → Приложения → Специальный доступ → Установка неизвестных приложений* → выберите браузер или
+   менеджер файлов, которым открываете файл. На Samsung, Xiaomi и других оболочках пункты могут называться
+   иначе — найдите «неизвестных приложений» через поиск по настройкам.
 3. Откройте APK и подтвердите установку. Если Google Play Protect предупредит о неизвестном
    разработчике — выберите «Всё равно установить»: сборка подписана собственным ключом проекта, а не
    ключом Google Play.
@@ -213,11 +217,10 @@ Apple требует подпись для *любого* приложения �
      xattr -dr com.apple.quarantine /Applications/Aniko.app
      ```
 
-Не доверяете готовой сборке? Соберите приложение сами — [это несложно](#-сборка-из-исходников), а
+Не доверяете готовой сборке? Соберите приложение сами — [это несложно](docs/DEVELOPMENT.md#сборка-из-исходников), а
 локально собранное приложение карантин не получает.
 
-**Windows и Linux** готовых сборок не имеют. Desktop-версию можно запустить из исходников
-(`./gradlew :composeApp:run`), но платформа не тестировалась.
+**Windows и Linux.** Готовых сборок нет. Если они вам нужны — напишите в Telegram: [t.me/aniko_portal](https://t.me/aniko_portal).
 
 ### 🚀 Первый запуск
 
@@ -269,129 +272,13 @@ Aniko уже стоит и подписана другим ключом — сн
 средств обхода блокировок (см. [правовую информацию](#-правовая-информация)).
 </details>
 
-## 🔧 Сборка из исходников
+## 💬 Поддержка
 
-Требования: **JDK 17+**, Android SDK (для Android), **Xcode** (для iOS, только на macOS).
-Gradle подтягивается автоматически (`./gradlew`).
+Официальное место поддержки Aniko — Telegram: **[t.me/aniko_portal](https://t.me/aniko_portal)**. Там можно задать вопрос, сообщить о проблеме, предложить идею или попросить сборку для другой платформы.
 
-```bash
-# Android — debug APK
-./gradlew :composeApp:assembleDebug
-#   → composeApp/build/outputs/apk/debug/composeApp-debug.apk
+## 📚 Для разработчиков
 
-# Desktop — запуск и DMG (macOS)
-./gradlew :composeApp:run
-./gradlew :composeApp:packageDmg
-#   → composeApp/build/compose/binaries/main/dmg/
-
-# iOS — открыть проект в Xcode (Gradle соберёт фреймворк автоматически)
-open iosApp/iosApp.xcodeproj
-```
-
-<details>
-<summary><b>Релизная подпись Android</b> (<code>assembleRelease</code>)</summary>
-
-<br/>
-
-Репозиторий не содержит ключей (см. `.gitignore`: `*.jks`, `keystore.properties`). Создайте свой:
-
-```bash
-cp keystore.properties.example keystore.properties
-keytool -genkeypair -v -keystore composeApp/release/aniko-release.jks \
-  -alias aniko-release -keyalg RSA -keysize 2048 -validity 10000
-# заполните storePassword / keyPassword в keystore.properties
-# (для PKCS12 они должны совпадать)
-
-./gradlew :composeApp:assembleRelease
-#   → composeApp/build/outputs/apk/release/composeApp-release.apk
-```
-
-В CI можно передать ключ переменными окружения `ANIKO_KEYSTORE_PATH`, `ANIKO_KEYSTORE_PASSWORD`,
-`ANIKO_KEY_ALIAS`, `ANIKO_KEY_PASSWORD`. Без ключа релизная сборка падает на подписи — намеренно, а не
-выпускается неподписанной.
-
-</details>
-
-<details>
-<summary><b>Неподписанный .ipa для AltStore / SideStore</b></summary>
-
-<br/>
-
-```bash
-xcodebuild archive -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Release \
-  -archivePath build/Aniko.xcarchive -destination 'generic/platform=iOS' \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=""
-mkdir -p Payload && cp -R build/Aniko.xcarchive/Products/Applications/Aniko.app Payload/
-zip -qr Aniko-unsigned.ipa Payload
-```
-
-</details>
-
-## 🏗 Архитектура
-
-```mermaid
-graph LR
-    subgraph Платформы
-        A[composeApp<br/>Android · iOS · Desktop]
-        X[iosApp<br/>Xcode-обёртка]
-    end
-    A --> D[shared:data]
-    A --> UI[shared:ui]
-    A --> P[shared:player]
-    A --> DB[shared:database]
-    A --> N[shared:network]
-    D --> N
-    D --> DB
-    D --> P
-    D --> M[shared:model]
-    P --> M
-    UI --> M
-    DB --> M
-    X -.->|Kotlin-фреймворк| A
-```
-
-| Слой | Что внутри |
-|---|---|
-| `shared:model` | Доменные модели |
-| `shared:network` | HTTP-клиент, конфигурация API, типизированные ошибки |
-| `shared:data` | Репозитории, DTO, API-интерфейсы, офлайн-очередь и синхронизация |
-| `shared:database` | SQLDelight: TTL-кэш, членство в списках, прогресс серий |
-| `shared:player` | Плеер: WebView-мост (Android/iOS) и VLC-рендер (Desktop) |
-| `shared:ui` | Дизайн-система, компоненты, темы, RU/EN i18n |
-| `composeApp` | Экраны, навигация, MVI-ViewModel, точки входа платформ |
-| `detekt-rules` | Кастомные правила линтера (например, запрет кириллицы вне i18n) |
-
-**Стек:** Kotlin 2.4 · Compose Multiplatform 1.11 · Ktor 3.5 · Koin 4.2 · SQLDelight 2.3 · Coil 3.5 ·
-vlcj 4.11 (Desktop). Архитектура экранов — MVI (`BaseViewModel<State, Intent, Effect>`).
-
-Полное описание используемого API Anixart (эндпоинты, модели, авторизация) —
-[`docs/api/ANIXART_API.md`](docs/api/ANIXART_API.md).
-
-## ✅ Тесты и качество
-
-```bash
-./gradlew ktlintCheck detektMetadataCommonMain detektDesktopMain   # линтеры
-./gradlew :composeApp:desktopTest :shared:data:desktopTest         # тесты
-```
-
-В репозитории есть контрактные тесты на сэмплах ответов API, UI smoke-тесты на Desktop, аудиты
-доступности (контраст WCAG AA, `contentDescription`, масштаб шрифта 200%) и проверка на TalkBack.
-Проверка на VoiceOver (iOS) пока не завершена — см. Roadmap.
-
-## 🗺 Roadmap
-
-- [ ] Проход VoiceOver на iOS (последний пункт аудита доступности)
-- [ ] Пометка «устаревшие данные» при работе из офлайн-кэша
-- [ ] Полная Xcode-сборка iOS в CI
-- [ ] Более удобная доставка iOS-сборки (сейчас — только side-load)
-
-Подробный трекер — [`docs/REELWAVE_PLAN.md`](docs/REELWAVE_PLAN.md).
-
-## 🤝 Участие в разработке
-
-Issues и Pull Request'ы приветствуются. Правила ветвления, коммитов и проверок —
-в [`CONTRIBUTING.md`](CONTRIBUTING.md) и [`AGENTS.md`](AGENTS.md). Если собираетесь делать крупную
-фичу — сначала откройте issue, чтобы обсудить подход.
+Исходный код открыт. Сборка из исходников, архитектура и тесты описаны в [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md), описание API Anixart — в [`docs/api/ANIXART_API.md`](docs/api/ANIXART_API.md).
 
 ## 📜 Правовая информация
 
