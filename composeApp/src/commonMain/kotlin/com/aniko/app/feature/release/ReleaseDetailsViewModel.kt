@@ -2,6 +2,7 @@ package com.aniko.app.feature.release
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aniko.data.geo.GeoRegionStore
 import com.aniko.data.repository.CommentRepository
 import com.aniko.data.repository.EpisodeRepository
 import com.aniko.data.repository.LibraryRepository
@@ -38,6 +39,10 @@ import kotlinx.coroutines.launch
  *    [ReleaseDetailsUiState] и [com.aniko.model.ReleaseDetails]).
  * 3. [loadStreamingPlatforms] — легальные стриминг-площадки, тот же принцип "падает молча", что
  *    и у [loadCommentsPreview] (сверено вживую 2026-09-23, см. KDoc [ReleaseDetailsUiState]).
+ * 4. Подписка на регион ([observeUserRegion]) + [GeoRegionStore.refreshIfStale] — geo-IP гейтинг
+ *    лицензионной блокировки (см. KDoc `ReleaseDetailsUiState.isLicensedPlaybackBlocked`): старт
+ *    из персиста сразу, сеть — только если кэш протух (TTL 24 ч), при сбое регион остаётся
+ *    последним известным/UNKNOWN и доступ открыт (fail-open).
  *
  * Флоу выбора серии (типы → источники → серии) — простой линейный стейт-машина без пагинации:
  * выбор типа сбрасывает источники и серии, выбор источника сбрасывает серии и переподписывается
@@ -51,7 +56,13 @@ import kotlinx.coroutines.launch
  * мигрировать на MVI-контракт (вне объёма трека C), либо резать по произвольной границе ради
  * самого счётчика.
  */
-@Suppress("TooManyFunctions")
+@Suppress( // DI-конструктор: 7 сторов/репозиториев + geoRegionStore (гео-гейтинг лицензионной
+    // блокировки, см. KDoc класса) — группировка в конфиг-класс добавила бы косвенность ради
+    // обхода линта: Koin-определение (`viewModelOf`) резолвит конструктор напрямую.
+    "LongParameterList",
+    // Один экран — один ViewModel, см. обоснование в KDoc класса (было до добавления региона).
+    "TooManyFunctions",
+)
 class ReleaseDetailsViewModel(
     private val releaseRepository: ReleaseRepository,
     private val episodeRepository: EpisodeRepository,
@@ -59,12 +70,14 @@ class ReleaseDetailsViewModel(
     private val commentRepository: CommentRepository,
     private val titleVoicePreferenceStore: TitleVoicePreferenceStore,
     private val localVoicePinStore: LocalVoicePinStore,
+    private val geoRegionStore: GeoRegionStore,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ReleaseDetailsUiState())
     val uiState: StateFlow<ReleaseDetailsUiState> = _uiState.asStateFlow()
 
     private var loadedReleaseId: Int? = null
     private var watchedJob: Job? = null
+    private var regionJob: Job? = null
 
     /**
      * Реактивная загрузка через `ReleaseRepository.observeRelease` (P4.T7, S3) — БД остаётся SSOT,
@@ -86,8 +99,14 @@ class ReleaseDetailsViewModel(
         if (loadedReleaseId == releaseId && state.release != null && state.errorMessage == null) return
         loadedReleaseId = releaseId
         watchedJob?.cancel()
+        regionJob?.cancel()
 
-        _uiState.value = ReleaseDetailsUiState(isLoading = true)
+        // userRegion сохраняем из стора при ресете: `region` — горячий StateFlow, повторная
+        // подписка (ниже) НЕ переэмитит текущее значение — без этой строки после retry() регион
+        // «зависал» в UNKNOWN до следующего реального изменения региона.
+        _uiState.value = ReleaseDetailsUiState(isLoading = true, userRegion = geoRegionStore.region.value)
+        observeUserRegion()
+        viewModelScope.launch { geoRegionStore.refreshIfStale() }
         viewModelScope.launch {
             try {
                 releaseRepository.observeRelease(releaseId).collect { cached ->
@@ -290,6 +309,21 @@ class ReleaseDetailsViewModel(
             viewModelScope.launch {
                 episodeRepository.observeWatchedPositions(releaseId, sourceId).collect { positions ->
                     _uiState.update { it.copy(watchedOverrides = positions) }
+                }
+            }
+    }
+
+    /**
+     * Подписка на сетевой регион пользователя ([GeoRegionStore.region]) — гейтинг лицензионной
+     * блокировки (см. KDoc предиката `ReleaseDetailsUiState.isLicensedPlaybackBlocked`). Стартует
+     * из персиста сразу (значение уже в стейте ещё до первого collect — см. KDoc [load]), потом
+     * применяются результаты фонового `refreshIfStale`. Отменяется при повторном [load].
+     */
+    private fun observeUserRegion() {
+        regionJob =
+            viewModelScope.launch {
+                geoRegionStore.region.collect { region ->
+                    _uiState.update { it.copy(userRegion = region) }
                 }
             }
     }

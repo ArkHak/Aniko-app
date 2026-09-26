@@ -6,6 +6,7 @@ import com.aniko.model.Release
 import com.aniko.model.ReleaseComment
 import com.aniko.model.ReleaseDetails
 import com.aniko.model.ReleaseStreamingPlatform
+import com.aniko.model.UserRegion
 import com.aniko.model.VideoHost
 import com.aniko.model.VoiceType
 
@@ -48,6 +49,13 @@ data class ReleaseDetailsUiState(
     val detailsError: LoadError? = null,
     val commentsPreview: List<ReleaseComment> = emptyList(),
     val streamingPlatforms: List<ReleaseStreamingPlatform> = emptyList(),
+    // Сетевой регион пользователя (geo-IP по egress-IP — VPN меняет результат естественно), см.
+    // KDoc `UserRegion` в shared/model. Гейтинг лицензионной блокировки: блок применяется
+    // ТОЛЬКО при RUSSIA; UNKNOWN (ещё не проверяли/сбой) — доступ открыт (fail-open, решение
+    // пользователя 2026-09-26). Источник — `GeoRegionStore.region` (персист + TTL 24 ч,
+    // обновляется `ReleaseDetailsViewModel`), поэтому при сбое geo-запросов UI продолжает
+    // работать по последнему известному значению, а не дергает сеть на каждую рекомпозицию.
+    val userRegion: UserRegion = UserRegion.UNKNOWN,
     // Флоу выбора серии: типы озвучки → источники → серии (см. `docs/api/ENDPOINTS.md`).
     val voiceTypes: List<VoiceType> = emptyList(),
     val selectedTypeId: Int? = null,
@@ -157,13 +165,24 @@ internal fun topFavoriteVoiceType(
  *    страны.» приходит именно у легализованных релизов (сверено вживую 2026-09-23).
  * 3. непустой [streamingPlatforms] — сервер отдал легальные площадки для этого релиза.
  *
- * Оба запроса (`releaseDetails`/`streamingPlatforms`) падают молча и независимо (см. KDoc полей
- * выше) — предикат намеренно fail-open: пока ни один сигнал не подтверждён, обычный флоу выбора
- * источника продолжает работать (fail-closed прятал бы кнопку «Смотреть» у всех релизов при
- * простом сбое сети).
+ * Все три сигнала гейтятся регионом: блокировка применяется ТОЛЬКО при
+ * [ReleaseDetailsUiState.userRegion] == [UserRegion.RUSSIA] — регион определяется по СЕТИ
+ * (geo-IP по egress-IP, VPN меняет результат естественно, см. KDoc `UserRegion`). Сервер шлёт
+ * `note`/площадки по своему решению и не знает реальный регион клиента, а требование
+ * правообладателя действует только на территории РФ — пользователь за VPN вне РФ должен смотреть
+ * обычный флоу (решение пользователя 2026-09-26).
+ *
+ * Предикат намеренно fail-open в обе стороны неизвестности (решение пользователя 2026-09-26):
+ * - ни один серверный сигнал не подтверждён — обычный флоу выбора источника продолжает работать
+ *   (fail-closed прятал бы кнопку «Смотреть» у всех релизов при простом сбое сети);
+ * - регион [UserRegion.UNKNOWN] (geo-запросы ещё идут или упали) — доступ ОТКРЫТ: закрывать его
+ *   «на всякий случай» нельзя, т.к. это наказало бы пользователя за сбой сети/сервиса.
  */
 val ReleaseDetailsUiState.isLicensedPlaybackBlocked: Boolean
     get() =
-        details?.isThirdPartyPlatformsDisabled == true ||
-            !details?.note.isNullOrBlank() ||
-            streamingPlatforms.isNotEmpty()
+        (
+            details?.isThirdPartyPlatformsDisabled == true ||
+                !details?.note.isNullOrBlank() ||
+                streamingPlatforms.isNotEmpty()
+        ) &&
+            userRegion == UserRegion.RUSSIA

@@ -87,9 +87,12 @@ import com.aniko.ui.theme.AnixThemeTokens
  * скриншоты), в этом случае просто не рисуются, а не блокируют всю шапку.
  *
  * Легальные стриминг-площадки (сверено вживую 2026-09-23, см. KDoc `ReleaseDto`/`ReleaseDetails`):
- * [details]`.note`, если не пусто, рисуется как короткий информационный баннер ([ReleaseNoteBanner])
- * во всех трёх раскладках; при [playbackBlocked] без `note` баннер показывает фолбэк-текст
- * (`Strings.releaseLicensedNoteFallback`), чтобы у легализованного тайтла всегда было объяснение.
+ * информационный баннер [ReleaseNoteBanner] рисуется ТОЛЬКО при [playbackBlocked] (регион
+ * подтверждён как РФ — блокировка лицензированных тайтлов гейтится geo-IP, см. KDoc
+ * `ReleaseDetailsUiState.isLicensedPlaybackBlocked`): текст — [details].note, если не пусто, иначе
+ * фолбэк-текст (`Strings.releaseLicensedNoteFallback`), чтобы у легализованного тайтла всегда
+ * было объяснение. У пользователя вне РФ (или при сбое определения региона) воспроизведение
+ * открыто и предупреждение не рисуется, хотя `note` с сервера приходит тем же.
  * Кнопка "Смотреть" ([HeroPlayButton]) скрывается при
  * [playbackBlocked] == true — легализованный тайтл не воспроизводится из приложения (как в
  * официальном Anixart), вместо флоу выбора источника пользователь видит баннер и список легальных
@@ -417,12 +420,17 @@ private fun MetadataSection(details: ReleaseDetails?) {
  * Тысячелетняя кровавая война — Бедствие»; в первом живом сэмпле — одно предложение «Данный
  * материал лицензирован на территории вашей страны.»).
  *
- * Если `note` пуст, но воспроизведение заблокировано ([playbackBlocked] —
- * `ReleaseDetailsUiState.isLicensedPlaybackBlocked`), рисуется та же плашка с фолбэк-текстом
- * `Strings.releaseLicensedNoteFallback`: часть легализованных релизов приходит без `note`
- * (живьём 2026-09-24, «Магическая битва» id=16648: `note=null`, но список легальных площадок
- * непуст — без фолбэка у заблокированного тайтла не было никакого объяснения в шапке).
- * Ничего не рисует, если текста нет и блокировки нет.
+ * Рисуется ТОЛЬКО при [playbackBlocked] (`ReleaseDetailsUiState.isLicensedPlaybackBlocked`) —
+ * с 2026-09-26 блокировка лицензированных тайтлов гейтится сетевым регионом (geo-IP по
+ * egress-IP, см. KDoc `UserRegion`): у пользователя вне РФ, а также при невозможности определить
+ * регион (UNKNOWN, fail-open), воспроизведение открыто, и предупреждение было бы бессмысленным —
+ * `note` от сервера приходит тем же независимо от реального региона клиента.
+ *
+ * Текст плашки — `note`, если он не пуст, иначе фолбэк `Strings.releaseLicensedNoteFallback`:
+ * часть легализованных релизов приходит без `note` (живьём 2026-09-24, «Магическая битва»
+ * id=16648: `note=null`, но список легальных площадок непуст — без фолбэка у заблокированного
+ * тайтла не было никакого объяснения в шапке). Пустая строка `note` тоже заменяется фолбэком
+ * (для RU-региона блокировка подтверждается тогда другими сигналами предиката).
  *
  * Цвета баннера — опциональные hex-строки с сервера ([ReleaseDetails.noteBackgroundColorLight]/
  * `*Dark`, [ReleaseDetails.noteTextColorLight]/`*Dark`); во всех живых сэмплах из нашего региона
@@ -442,8 +450,10 @@ private fun ReleaseNoteBanner(
     details: ReleaseDetails?,
     playbackBlocked: Boolean,
 ) {
-    val note = details?.note
-    if (note.isNullOrBlank() && !playbackBlocked) return
+    val note = details?.note?.takeIf { it.isNotBlank() }
+    // Только при подтверждённой блокировке (RU-регион): вне РФ/при сбое гео-определения баннер
+    // не рисуем, хотя `note` с сервера приходит тем же (см. KDoc).
+    if (!playbackBlocked) return
     val text = note ?: LocalStrings.current.releaseLicensedNoteFallback
     val dimens = AnixThemeTokens.dimens
     val isDark = MaterialTheme.colorScheme.surface.luminance() < NOTE_BANNER_DARK_LUMINANCE_THRESHOLD

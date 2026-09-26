@@ -17,6 +17,9 @@ import com.aniko.data.api.ReleaseCommentApi
 import com.aniko.data.api.ReleaseStreamingPlatformApi
 import com.aniko.data.api.ScheduleApi
 import com.aniko.data.api.SearchApi
+import com.aniko.data.geo.GeoRegionApi
+import com.aniko.data.geo.GeoRegionStore
+import com.aniko.data.geo.PublicGeoRegionApi
 import com.aniko.data.librarypreferences.LibraryPreferencesStore
 import com.aniko.data.locale.LocaleStore
 import com.aniko.data.notification.NotificationPoller
@@ -44,11 +47,13 @@ import com.aniko.data.theme.ThemeStore
 import com.aniko.data.voicepin.LocalVoicePinStore
 import com.aniko.data.voicepreference.TitleVoicePreferenceStore
 import com.aniko.network.ApiConfig
+import com.aniko.network.GEO_HTTP_CLIENT_QUALIFIER
 import com.aniko.network.IMAGE_HTTP_CLIENT_QUALIFIER
 import com.aniko.network.SessionInvalidator
 import com.aniko.network.TokenProvider
 import com.aniko.network.createAnixHttpClient
 import com.aniko.network.createAnixImageHttpClient
+import com.aniko.network.createGeoHttpClient
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -102,6 +107,13 @@ val dataModule =
         single { LocalVoicePinStore(settings = get()) }
         single { TitleVoicePreferenceStore(settings = get()) }
         single { LocalProfilePinnedSectionStore(settings = get()) }
+
+        // Гео-регион (geo-IP по egress-IP — гейтинг лицензионной блокировки, см. KDoc UserRegion
+        // в shared/model): отдельный «голый» клиент — токен Anixart на сторонние geo-хосты не
+        // уходит; стор кэширует результат в Settings с TTL 24 ч.
+        single<HttpClient>(named(GEO_HTTP_CLIENT_QUALIFIER)) { createGeoHttpClient() }
+        single<GeoRegionApi> { PublicGeoRegionApi(client = get(named(GEO_HTTP_CLIENT_QUALIFIER))) }
+        single { GeoRegionStore(settings = get(), api = get(), clock = get()) }
 
         single<HttpClient> {
             createAnixHttpClient(
