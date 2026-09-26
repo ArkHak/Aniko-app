@@ -11,8 +11,12 @@ import com.aniko.model.CatalogSort
  * `MainActivity.kt`/`iosApp/iosApp/iOSApp.swift`/`Main.kt`).
  *
  * Схема (custom scheme, НЕ `https://` App Links): `aniko://release/{id}` — карточка тайтла;
- * `aniko://catalog?...` — набор фильтров каталога (см. [parseCatalogFilterLink]; UI «Моей
- * вкладки»/шаринга ссылки, P16.T2, убран с экрана каталога 2026-09-11 — сама схема ссылки
+ * `aniko://release/{id}?voice={typeId}` — та же карточка с предвыбранной типом озвучки
+ * ([AnixDestination.ReleaseDetails.pendingVoiceTypeId], шеринг «верхней любимой озвучки»,
+ * см. `topFavoriteVoiceType` в `ReleaseDetailsContract.kt`; экран сам решает, когда данные
+ * загрузились, — автозапуска плеера НЕТ); `aniko://catalog?...` — набор фильтров каталога
+ * (см. [parseCatalogFilterLink]; UI «Моей вкладки»/шаринга ссылки, P16.T2, убран с экрана
+ * каталога 2026-09-11 — сама схема ссылки
  * оставлена: входящие ссылки старого формата продолжают открывать каталог с нужным фильтром);
  * `aniko://release/{id}/episode/{sourceId}/{position}` — карточка тайтла с попыткой сразу открыть
  * конкретную серию (см. KDoc [AnixDestination.ReleaseDetails] — почему это НЕ прямая ссылка на
@@ -34,7 +38,10 @@ import com.aniko.model.CatalogSort
  * "episode"-хвост (нечисловой `sourceId`/`position`, отсутствующий `position`) НЕ проваливает всю
  * ссылку целиком — деградирует до обычной карточки тайтла: сам `releaseId` уже валиден, отбрасывать
  * уже распознанную часть ссылки ради строгости не имеет смысла для UX "поделились ссылкой на
- * серию — у получателя пусть откроется хотя бы карточка тайтла".
+ * серию — у получателя пусть откроется хотя бы карточка тайтла". То же с битым `?voice` —
+ * нечисловой/неположительный `typeId` игнорируется и деградирует до обычной карточки: кривой
+ * query-параметр не отменяет валидный `releaseId`, а невалидный `typeId` экран просто молча
+ * пропустит (guard в `HandlePendingVoiceTypeDeepLink`).
  *
  * Реализация — серия guard clauses по этим границам (`@Suppress("ReturnCount")` ниже) —
  * идиоматичнее вложенных `let`/`when` для линейного разбора, тот же приём, что и в
@@ -53,7 +60,19 @@ fun parseDeepLink(url: String): AnixDestination? {
 
     val releaseId = segments.getOrNull(SEGMENT_INDEX_RELEASE_ID)?.toIntOrNull() ?: return null
     if (releaseId <= 0) return null
-    val releaseOnly = AnixDestination.ReleaseDetails(releaseId)
+    // Query-параметры (после '?', до '#') — ОТДЕЛЬНО от segments: path выше уже вырезан через
+    // `substringBefore('?')`. Только `voice` (см. KDoc файла) — остальные параметры
+    // (utm_source и пр.) намеренно игнорируются, как и раньше.
+    val pendingVoiceTypeId =
+        body
+            .substringAfter('?', missingDelimiterValue = "")
+            .substringBefore('#')
+            .split('&')
+            .firstNotNullOfOrNull { pair ->
+                val key = pair.substringBefore('=', missingDelimiterValue = "").trim().lowercase()
+                if (key != PARAM_VOICE) null else pair.substringAfter('=', missingDelimiterValue = "").toIntOrNull()
+            }?.takeIf { it > 0 }
+    val releaseOnly = AnixDestination.ReleaseDetails(releaseId, pendingVoiceTypeId = pendingVoiceTypeId)
 
     val hasEpisodeTail =
         segments.size >= EPISODE_SEGMENTS_MIN && segments[SEGMENT_INDEX_EPISODE_KEYWORD] == SEGMENT_EPISODE
@@ -67,6 +86,7 @@ fun parseDeepLink(url: String): AnixDestination? {
         releaseId = releaseId,
         pendingEpisodeSourceId = sourceId,
         pendingEpisodePosition = position,
+        pendingVoiceTypeId = pendingVoiceTypeId,
     )
 }
 
@@ -144,6 +164,7 @@ fun parseCatalogFilterLink(url: String): CatalogFilter? {
 }
 
 private const val SEGMENT_CATALOG = "catalog"
+private const val PARAM_VOICE = "voice"
 private const val PARAM_TYPE = "type"
 private const val PARAM_TYPE_DONGHUA = "donghua"
 private const val PARAM_SORT = "sort"

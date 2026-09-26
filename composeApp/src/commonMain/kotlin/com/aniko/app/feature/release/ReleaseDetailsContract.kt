@@ -124,6 +124,27 @@ val ReleaseDetailsUiState.displayEpisodes: List<Episode>
     get() = episodes.mergeWatchedOverrides(watchedOverrides, localToggleOverrides)
 
 /**
+ * «Верхняя любимая озвучка» тайтла — то, что шерится в deep link как `?voice={typeId}`
+ * (предвыбор в карточке у получателя, без автозапуска плеера).
+ *
+ * Порядок выбора совпадает с порядком чипов на экране ([ReleaseEpisodesSection]
+ * `VoiceTypeSelector`): сначала первый локально закреплённый тип ([localPinnedIds],
+ * `LocalVoicePinStore`), затем первый серверный `VoiceType.pinned` — при нескольких кандидатах
+ * в одной группе выигрывает порядок [types] (порядок серверного списка), потому что это именно
+ * «верхняя» по показу озвучка, а не приоритет выбора для кнопки «Смотреть»
+ * (`chooseDefaultVoiceType` в `ReleaseDetailsViewModel` — там серверный pinned выше локального,
+ * решение пользователя 2026-09-24; здесь намеренно другой порядок, привязанный к UI-чипам).
+ *
+ * `null` — любимых нет (пустой список/ни одного пина): шерится обычная ссылка без `?voice`.
+ * Намеренно чистая функция без Compose/сторов: вызывается из шеринг-хендлера, где данные для
+ * лямбды собираются в момент тапа (см. `rememberShareReleaseHandler`).
+ */
+internal fun topFavoriteVoiceType(
+    types: List<VoiceType>,
+    localPinnedIds: Set<Int>,
+): VoiceType? = types.firstOrNull { it.id in localPinnedIds } ?: types.firstOrNull { it.pinned }
+
+/**
  * Тайтл легализован на территории пользователя — воспроизведение неофициальных источников
  * (озвучки/серии через встроенный плеер) блокируется, как в официальном приложении Anixart:
  * вместо флоу выбора источника остаются только баннер [ReleaseDetails.note] и список легальных

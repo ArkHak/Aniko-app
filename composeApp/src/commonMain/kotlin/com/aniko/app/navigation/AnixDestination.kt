@@ -90,6 +90,14 @@ sealed interface AnixDestination {
      * `parseDeepLink`) — обычная навигация из UI (`TitleNavigator.openTitle`) их не передаёт.
      * `null`/`null` по умолчанию, чтобы не задеть все существующие вызовы `ReleaseDetails(id)`.
      *
+     * @param pendingVoiceTypeId — необязательный "предвыбери эту озвучку", заполняется ТОЛЬКО
+     * парсером deep link (`aniko://release/{id}?voice={typeId}`, шеринг «верхней любимой
+     * озвучки», см. `topFavoriteVoiceType` в `ReleaseDetailsContract.kt`). Это НЕ прямой вход в
+     * [Player] и не автозапуск: карточка только выбирает чип озвучки, когда список типов
+     * загрузится (`ReleaseDetailsScreen.HandlePendingVoiceTypeDeepLink`) — источники/серии доигры
+     * подгружаются по обычному флоу выбора пользователем. Битый/отсутствующий в списке `typeId`
+     * молча игнорируется (деградация до обычной карточки, см. KDoc `DeepLink.kt`).
+     *
      * Deep link на эпизод (`aniko://release/{id}/episode/{sourceId}/{position}`) НЕ мапится сразу
      * в [Player]: `hostKey` ([Player.hostKey]) — клиентская классификация видеохоста
      * (`EpisodeSource.host`), которая приходит только вместе со списком источников конкретного
@@ -104,6 +112,7 @@ sealed interface AnixDestination {
         val releaseId: Int,
         val pendingEpisodeSourceId: Int? = null,
         val pendingEpisodePosition: Int? = null,
+        val pendingVoiceTypeId: Int? = null,
     ) : AnixDestination
 
     /**

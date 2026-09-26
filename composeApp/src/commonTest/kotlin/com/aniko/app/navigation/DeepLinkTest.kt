@@ -110,6 +110,61 @@ class DeepLinkTest {
         assertEquals(AnixDestination.ReleaseDetails(releaseId = 42), destination)
     }
 
+    // ---- `?voice={typeId}` — шеринг «верхней любимой озвучки» (см. KDoc `DeepLink.kt` и
+    // `ReleaseDetailsContract.topFavoriteVoiceType`) ---------------------------------------------------
+
+    @Test
+    fun parseDeepLink_voiceLink_returnsReleaseDetailsWithPendingVoiceType() {
+        val destination = parseDeepLink("aniko://release/1?voice=42")
+
+        assertEquals(AnixDestination.ReleaseDetails(releaseId = 1, pendingVoiceTypeId = 42), destination)
+    }
+
+    @Test
+    fun parseDeepLink_voiceLinkWithoutVoice_returnsNullPendingVoiceType() {
+        val destination = parseDeepLink("aniko://release/1")
+
+        assertEquals(AnixDestination.ReleaseDetails(releaseId = 1, pendingVoiceTypeId = null), destination)
+    }
+
+    @Test
+    fun parseDeepLink_voiceLinkNonNumericVoice_degradesToReleaseWithoutVoice() {
+        val destination = parseDeepLink("aniko://release/1?voice=abc")
+
+        assertEquals(AnixDestination.ReleaseDetails(releaseId = 1, pendingVoiceTypeId = null), destination)
+    }
+
+    @Test
+    fun parseDeepLink_voiceLinkNonPositiveVoice_degradesToReleaseWithoutVoice() {
+        val destination = parseDeepLink("aniko://release/1?voice=0")
+        assertEquals(AnixDestination.ReleaseDetails(releaseId = 1, pendingVoiceTypeId = null), destination)
+
+        val negative = parseDeepLink("aniko://release/1?voice=-1")
+        assertEquals(AnixDestination.ReleaseDetails(releaseId = 1, pendingVoiceTypeId = null), negative)
+    }
+
+    @Test
+    fun parseDeepLink_episodeLinkWithVoice_returnsBothPendingFields() {
+        val destination = parseDeepLink("aniko://release/1/episode/3/5?voice=42")
+
+        assertEquals(
+            AnixDestination.ReleaseDetails(
+                releaseId = 1,
+                pendingEpisodeSourceId = 3,
+                pendingEpisodePosition = 5,
+                pendingVoiceTypeId = 42,
+            ),
+            destination,
+        )
+    }
+
+    @Test
+    fun parseDeepLink_voiceWithOtherQueryParams_keepsVoice() {
+        val destination = parseDeepLink("aniko://release/1?utm_source=share&voice=7#top")
+
+        assertEquals(AnixDestination.ReleaseDetails(releaseId = 1, pendingVoiceTypeId = 7), destination)
+    }
+
     // ---- Ссылка на набор фильтров каталога (P16.T2) — только входящий разбор (см. KDoc
     // `DeepLink.kt`: генерация ссылки/шаринг убраны с экрана каталога 2026-09-11, старые
     // ссылки продолжают открывать каталог с нужным фильтром) --------------------------------

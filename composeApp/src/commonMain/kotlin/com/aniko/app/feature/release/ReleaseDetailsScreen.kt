@@ -27,10 +27,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,11 +43,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.feature.comments.CommentMessage
 import com.aniko.app.feature.release.rating.ReleaseRatingSection
 import com.aniko.app.navigation.LocalTitleNavigator
+import com.aniko.data.voicepin.LocalVoicePinStore
 import com.aniko.model.Episode
 import com.aniko.model.ListStatus
 import com.aniko.model.Release
 import com.aniko.model.ReleaseComment
 import com.aniko.model.VideoHost
+import com.aniko.model.VoiceType
 import com.aniko.ui.adaptive.AnixWindowSize
 import com.aniko.ui.adaptive.LocalAnixWindowSize
 import com.aniko.ui.component.AnixAvatar
@@ -62,6 +62,7 @@ import com.aniko.ui.share.rememberShareController
 import com.aniko.ui.testing.AnixTestTags
 import com.aniko.ui.theme.AnixThemeTokens
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -93,9 +94,10 @@ import org.koin.compose.viewmodel.koinViewModel
  * на hero-обложке (`ExpandedDrawerHeader` в `ReleaseHeaderSection.kt`), поэтому `TopAppBar`
  * остаётся только на Medium.
  */
-@Suppress("LongParameterList") // 6 параметров: releaseId/modifier/viewModel — обязательный
-// каркас экрана, pendingEpisode*/onEpisodeClick — deep link (P10.T7, см. их собственный KDoc);
-// группировать deep-link-параметры в конфиг-класс добавило бы косвенность ради одной пары полей.
+@Suppress("LongParameterList") // 7 параметров: releaseId/modifier/viewModel — обязательный
+// каркас экрана, pendingEpisode*/pendingVoiceTypeId/onEpisodeClick — deep link (P10.T7 + шеринг
+// любимой озвучки, см. их собственный KDoc); группировать deep-link-параметры в конфиг-класс
+// добавило бы косвенность ради пары полей.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReleaseDetailsScreen(
@@ -105,6 +107,8 @@ fun ReleaseDetailsScreen(
      * `AnixDestination.ReleaseDetails`. `null`/`null` — обычный вход на карточку тайтла. */
     pendingEpisodeSourceId: Int? = null,
     pendingEpisodePosition: Int? = null,
+    /** ТОЛЬКО deep link `?voice={typeId}` (шеринг любимой озвучки) — см. KDoc `ReleaseDetailsPendingDeepLinks`. */
+    pendingVoiceTypeId: Int? = null,
     onEpisodeClick: (releaseId: Int, sourceId: Int, position: Int, host: VideoHost) -> Unit = { _, _, _, _ -> },
     viewModel: ReleaseDetailsViewModel = koinViewModel(),
 ) {
@@ -114,15 +118,21 @@ fun ReleaseDetailsScreen(
     val titleNavigator = LocalTitleNavigator.current
     val windowSize = LocalAnixWindowSize.current
     val snackbarHostState = remember { SnackbarHostState() }
-    val onShareClick = rememberShareReleaseHandler(snackbarHostState) { state.release }
+    val onShareClick = rememberShareReleaseHandler(snackbarHostState, { state.voiceTypes }) { state.release }
+    // Общий переход в плеер по резолвнутому PlayTarget (кнопка «Смотреть» и deep link на серию).
+    val openTarget = { target: PlayTarget -> onEpisodeClick(releaseId, target.sourceId, target.position, target.host) }
 
-    HandlePendingEpisodeDeepLink(
+    ReleaseDetailsPendingDeepLinks(
         releaseId = releaseId,
         release = state.release,
-        sourceId = pendingEpisodeSourceId,
-        position = pendingEpisodePosition,
-        resolve = viewModel::resolveDeepLinkEpisode,
-        onResolved = { target -> onEpisodeClick(releaseId, target.sourceId, target.position, target.host) },
+        voiceTypes = state.voiceTypes,
+        selectedTypeId = state.selectedTypeId,
+        pendingEpisodeSourceId = pendingEpisodeSourceId,
+        pendingEpisodePosition = pendingEpisodePosition,
+        pendingVoiceTypeId = pendingVoiceTypeId,
+        resolveDeepLinkEpisode = viewModel::resolveDeepLinkEpisode,
+        onDeepLinkEpisodeResolved = openTarget,
+        selectVoiceType = viewModel::selectVoiceType,
     )
 
     // См. KDoc функции про кнопку "назад" (P13 [FIX] + Track A + desktop-проход 2026-09-15:
@@ -145,9 +155,7 @@ fun ReleaseDetailsScreen(
                 state.release != null ->
                     ReleaseDetailsContent(
                         state = state,
-                        onWatchTargetResolved = { target ->
-                            onEpisodeClick(releaseId, target.sourceId, target.position, target.host)
-                        },
+                        onWatchTargetResolved = openTarget,
                         resolvePlayTarget = viewModel::resolvePlayTarget,
                         onSelectVoiceType = viewModel::selectVoiceType,
                         onSelectSource = viewModel::selectSource,
@@ -191,49 +199,26 @@ private fun ReleaseDetailsTopBar(onBack: () -> Unit) {
 }
 
 /**
- * Deep link на серию (P10.T7) — резолвит `hostKey` (`ReleaseDetailsViewModel.
- * resolveDeepLinkEpisode`) и доходит до плеера сам, когда данные загрузятся, см. KDoc
- * `AnixDestination.ReleaseDetails`. Вынесена из [ReleaseDetailsScreen] отдельным composable
- * (detekt `LongMethod`/`ComplexCondition` — три независимых guard clauses читаются линейно,
- * общее `&&`-условие того же смысла detekt по умолчанию считает слишком сложным).
- *
- * Срабатывает максимум один раз на конкретную пару [sourceId]/[position] — без флага-защёлки
- * [consumed] эффект дёргался бы повторно при каждой рекомпозиции [release] (например, после
- * toggleFavorite/changeListStatus).
- */
-@Suppress("LongParameterList", "ReturnCount") // 6 параметров ровно по числу входов (id/релиз/пара
-// deep-link-параметров/резолвер/колбэк), 3 guard clauses читаются линейно — то же обоснование,
-// что у `ReleaseDetailsViewModel.resolveDeepLinkEpisodeChain`.
-@Composable
-private fun HandlePendingEpisodeDeepLink(
-    releaseId: Int,
-    release: Release?,
-    sourceId: Int?,
-    position: Int?,
-    resolve: suspend (sourceId: Int, position: Int) -> PlayTarget?,
-    onResolved: (PlayTarget) -> Unit,
-) {
-    var consumed by remember(releaseId, sourceId, position) { mutableStateOf(false) }
-    if (consumed) return
-    if (sourceId == null || position == null) return
-    if (release == null) return
-
-    LaunchedEffect(releaseId, sourceId, position) {
-        consumed = true
-        val target = resolve(sourceId, position)
-        if (target != null) onResolved(target)
-    }
-}
-
-/**
  * Кнопка "Поделиться" (P10.T9) — `shareController.shareText` + Desktop-фоллбэк-снекбар, вынесена
  * из [ReleaseDetailsScreen] отдельной factory-функцией (detekt `LongMethod`).
+ *
+ * В ссылку зашивается «верхняя любимая озвучка» (`?voice={typeId}`, см. KDoc `releaseDeepLink` и
+ * [topFavoriteVoiceType]). Локальные пины читаются здесь, а не в экране: [voiceTypes] передаётся
+ * лямбдой и значение «верхней любимой» вычисляется ЛЕНИВО, в момент тапа — список типов и пины
+ * доезжают асинхронно, и снапшот на момент первой композиции разошёлся бы с тем, что видит
+ * пользователь в чипах. Пока вычисление даёт `null` (типы ещё не загружены или любимых нет) —
+ * ссылка обычная, без `?voice` (см. KDoc `releaseDeepLink`). Pin-стор — тот же `LocalVoicePinStore`,
+ * что рисует булавки в `ReleaseEpisodesSection.VoiceTypeSelector` (через `koinInject`, тот же
+ * приём).
  */
 @Composable
 private fun rememberShareReleaseHandler(
     snackbarHostState: SnackbarHostState,
+    voiceTypes: () -> List<VoiceType>,
     release: () -> Release?,
 ): () -> Unit {
+    val voicePinStore = koinInject<LocalVoicePinStore>()
+    val localPinnedVoiceIds by voicePinStore.pinnedIds().collectAsStateWithLifecycle(initialValue = emptySet())
     val shareController = rememberShareController()
     val scope = rememberCoroutineScope()
     val shareLinkCopiedMessage = LocalStrings.current.shareLinkCopiedMessage
@@ -242,7 +227,10 @@ private fun rememberShareReleaseHandler(
         if (current != null) {
             val result =
                 shareController.shareText(
-                    text = "${current.title}\n${releaseDeepLink(current.id)}",
+                    text =
+                        "${current.title}\n${
+                            releaseDeepLink(current.id, topFavoriteVoiceType(voiceTypes(), localPinnedVoiceIds)?.id)
+                        }",
                     subject = current.title,
                 )
             // Android/iOS открывают нативный шер-диалог сами — там уже есть системная обратная
@@ -255,8 +243,23 @@ private fun rememberShareReleaseHandler(
     }
 }
 
-/** `aniko://release/{id}` — тот же формат, что разбирает `parseDeepLink` (`DeepLink.kt`, P10.T7). */
-private fun releaseDeepLink(releaseId: Int): String = "aniko://release/$releaseId"
+/**
+ * `aniko://release/{id}` — тот же формат, что разбирает `parseDeepLink` (`DeepLink.kt`, P10.T7).
+ *
+ * [voiceTypeId] — «верхняя любимая озвучка» на момент шеринга: не-null добавляет
+ * `?voice={voiceTypeId}`, получатель предвыбирает этот чип в карточке (без автозапуска плеера,
+ * см. KDoc `HandlePendingVoiceTypeDeepLink`). `null` (типы ещё не загрузились — значение читается
+ * лениво в момент тапа, см. KDoc `rememberShareReleaseHandler` — или любимых нет) — ссылка как
+ * раньше, без query. Деградация безопасна в обе стороны: старый клиент проигнорирует неизвестный
+ * query-параметр, битый `?voice` в новом клиенте игнорируется парсером.
+ */
+private fun releaseDeepLink(
+    releaseId: Int,
+    voiceTypeId: Int? = null,
+): String {
+    val query = voiceTypeId?.let { "?voice=$it" }.orEmpty()
+    return "aniko://release/$releaseId$query"
+}
 
 @Suppress("LongParameterList") // Экран-оркестратор — каждый параметр это отдельный обязательный
 // колбэк одной из независимых секций (шапка/серии/похожее/комментарии), см. KDoc файла.

@@ -191,6 +191,7 @@ private fun NavGraphBuilder.titleDetailRoutes(
             releaseId = route.releaseId,
             pendingEpisodeSourceId = route.pendingEpisodeSourceId,
             pendingEpisodePosition = route.pendingEpisodePosition,
+            pendingVoiceTypeId = route.pendingVoiceTypeId,
             onEpisodeClick = titleNavigator::openPlayer,
         )
     }
