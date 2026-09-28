@@ -19,6 +19,7 @@ import com.russhwolf.settings.MapSettings
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -52,6 +53,7 @@ import kotlin.time.Instant
  * гонку целиком; виртуальное время при этом сохраняется, потому что диспетчер построен на
  * [TestScope.testScheduler] самого теста.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SyncCoordinatorTest {
     private fun syncWorker(queue: SyncQueueStore): SyncQueueWorker {
         val client = HttpClient(MockEngine { request -> error("Unexpected HTTP call: ${request.url}") })
