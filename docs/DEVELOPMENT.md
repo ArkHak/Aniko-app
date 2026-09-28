@@ -46,6 +46,12 @@ keytool -genkeypair -v -keystore composeApp/release/aniko-release.jks \
 `ANIKO_KEY_ALIAS`, `ANIKO_KEY_PASSWORD`. Без ключа релизная сборка падает на подписи — намеренно, а не
 выпускается неподписанной.
 
+Релизный пайплайн (`.github/workflows/release.yml`, триггер — push тега `v*`) собирает подписанный
+APK, macOS DMG и неподписанный iOS IPA и создаёт **черновик** релиза в приватном репозитории с
+заметками из секции версии в `CHANGELOG.md`. Keystore там хранится в GitHub Secrets как
+`ANIKO_KEYSTORE_BASE64` (`base64 -i aniko-release.jks | pbcopy`) + три секрета с паролями/алиасом
+выше. Тег обязан совпадать с `anikoAppVersion`, иначе джоб preflight падает.
+
 </details>
 
 <details>

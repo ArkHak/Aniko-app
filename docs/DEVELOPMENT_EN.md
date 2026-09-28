@@ -46,6 +46,12 @@ In CI you can pass the key through the environment variables `ANIKO_KEYSTORE_PAT
 `ANIKO_KEYSTORE_PASSWORD`, `ANIKO_KEY_ALIAS`, `ANIKO_KEY_PASSWORD`. Without a key the release build
 fails at the signing step — on purpose, rather than shipping an unsigned build.
 
+The release pipeline (`.github/workflows/release.yml`, triggered by pushing a `v*` tag) builds the
+signed APK, the macOS DMG and the unsigned iOS IPA, and creates a **draft** release with notes taken
+from the version's section in `CHANGELOG.md`. The keystore is stored in GitHub Secrets as
+`ANIKO_KEYSTORE_BASE64` (`base64 -i aniko-release.jks | pbcopy`) plus the three password/alias
+secrets above. The tag must match `anikoAppVersion`, otherwise the preflight job fails.
+
 </details>
 
 <details>

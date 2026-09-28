@@ -1,0 +1,201 @@
+name: Release (tag)
+
+# P12.T3 (docs/REELWAVE_PLAN.md, Фаза 12): пайплайн GitHub Releases. Триггер — push тега `v*`
+# (тег ставится на main после мержа релизной ветки, см. tools/public-release/README.md).
+# Собирает все три артефакта (подписанный Android release APK, macOS DMG, неподписанный iOS IPA),
+# считает SHA256SUMS.txt и создаёт ЧЕРНОВИК релиза в ЭТОМ (приватном) репозитории с заметками из
+# CHANGELOG.md. Публикация в публичный ArkHak/Aniko-app намеренно здесь отсутствует — только
+# вручную через tools/public-release/publish.sh после локальной проверки артефактов (жёсткое
+# правило репозитория, см. AGENTS.md).
+#
+# Секреты (Settings → Secrets and variables → Actions), без них джоб android падает на подписи:
+#   ANIKO_KEYSTORE_BASE64   — `base64 -i aniko-release.jks | pbcopy` релизного keystore
+#   ANIKO_KEYSTORE_PASSWORD, ANIKO_KEY_ALIAS, ANIKO_KEY_PASSWORD — как в keystore.properties
+# Имена ANIKO_KEYSTORE_* читает signingConfig в composeApp/build.gradle.kts (P12.T2).
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Минимальные права по умолчанию; contents: write выдаётся только джобу release.
+permissions:
+  contents: read
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.daemon=false
+
+jobs:
+  preflight:
+    name: Verify tag matches app version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Тег обязан совпадать с anikoAppVersion (иначе в диалоге обновления версия не сойдётся
+      # с тегом) и иметь секцию в CHANGELOG.md (из неё собираются заметки релиза ниже).
+      - name: Check anikoAppVersion and CHANGELOG section
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          APP_VERSION=$(sed -n 's/.*anikoAppVersion = "\([^"]*\)".*/\1/p' composeApp/build.gradle.kts)
+          if [ "$APP_VERSION" != "$VERSION" ]; then
+            echo "::error::Тег ${GITHUB_REF_NAME} не совпадает с anikoAppVersion=$APP_VERSION в composeApp/build.gradle.kts"
+            exit 1
+          fi
+          if ! grep -qF "## [$VERSION]" CHANGELOG.md; then
+            echo "::error::В CHANGELOG.md нет секции ## [$VERSION] — заметки релиза собрать не из чего"
+            exit 1
+          fi
+
+  android:
+    name: Android release APK (signed)
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # JDK 17 + 21 — та же пара, что в ci.yml: 17 — jvmTarget проекта и пин detekt,
+      # 21 — запас для JAVA_HOME демона по умолчанию.
+      - name: Set up JDK 17 + 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Keystore в репозитории не хранится (*.jks в .gitignore) — в CI кладём его из секрета
+      # base64 во временный файл раннера; signingConfig читает ANIKO_KEYSTORE_PATH и пароли.
+      - name: Decode release keystore
+        env:
+          ANIKO_KEYSTORE_BASE64: ${{ secrets.ANIKO_KEYSTORE_BASE64 }}
+        run: echo "$ANIKO_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/aniko-release.jks"
+
+      - name: Assemble release APK
+        env:
+          ANIKO_KEYSTORE_PATH: ${{ runner.temp }}/aniko-release.jks
+          ANIKO_KEYSTORE_PASSWORD: ${{ secrets.ANIKO_KEYSTORE_PASSWORD }}
+          ANIKO_KEY_ALIAS: ${{ secrets.ANIKO_KEY_ALIAS }}
+          ANIKO_KEY_PASSWORD: ${{ secrets.ANIKO_KEY_PASSWORD }}
+        run: ./gradlew :composeApp:assembleRelease
+
+      # Точные имена ассетов обязательны: по ним работает автообновление приложения
+      # (docs/DEVELOPMENT.md, «Что должно быть в каждом релизе»).
+      - name: Stage artifact
+        run: |
+          mkdir -p dist
+          cp composeApp/build/outputs/apk/release/composeApp-release.apk \
+            "dist/aniko-${GITHUB_REF_NAME}-android.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: dist/
+          retention-days: 14
+
+  macos:
+    name: macOS DMG + iOS unsigned IPA
+    needs: preflight
+    runs-on: macos-latest
+    # Kotlin/Native-компиляция фреймворка + xcodebuild archive — самый долгий джоб пайплайна.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17 + 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Package macOS DMG
+        run: ./gradlew :composeApp:packageDmg
+
+      # Неподписанный архив для side-load (AltStore/SideStore) — тот же рецепт, что в
+      # tools/public-release/README.md, «Сборка артефактов». Фреймворк собирает build phase
+      # Xcode (embedAndSignAppleFrameworkForXcode), JDK для него поднят выше.
+      - name: Archive unsigned iOS app
+        run: |
+          xcodebuild archive -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Release \
+            -archivePath "$RUNNER_TEMP/Aniko.xcarchive" -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES DEVELOPMENT_TEAM=""
+
+      - name: Stage artifacts
+        run: |
+          mkdir -p dist "$RUNNER_TEMP/Payload"
+          cp -R "$RUNNER_TEMP/Aniko.xcarchive/Products/Applications/Aniko.app" "$RUNNER_TEMP/Payload/"
+          (cd "$RUNNER_TEMP" && zip -qry Aniko.ipa Payload)
+          cp "$RUNNER_TEMP/Aniko.ipa" "dist/aniko-${GITHUB_REF_NAME}-ios-unsigned.ipa"
+          cp composeApp/build/compose/binaries/main/dmg/Aniko-*.dmg \
+            "dist/aniko-${GITHUB_REF_NAME}-macos.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-ios
+          path: dist/
+          retention-days: 14
+
+  release:
+    name: Draft GitHub Release (this repo)
+    needs: [android, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # Формат sha256sum (`<хэш>  <имя>`) — его ожидает UpdateDownloader при проверке ассетов.
+      - name: SHA256SUMS.txt
+        run: |
+          cd dist
+          sha256sum aniko-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      # Заметки релиза собираются из секции версии в CHANGELOG.md. Первая секция второго
+      # уровня обязана быть «## Что нового» — именно её показывает диалог автообновления
+      # (docs/DEVELOPMENT.md), поэтому содержимое секции вкладывается под этот заголовок.
+      - name: Build release notes from CHANGELOG.md
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          {
+            echo "## Что нового"
+            echo
+            awk -v v="$VERSION" '
+              index($0, "## [" v "]") == 1 { found = 1; next }
+              found && /^## / { exit }
+              found { print }
+            ' CHANGELOG.md
+            echo
+            echo "Полный список изменений — в [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)."
+          } > RELEASE_NOTES.md
+
+      # Черновик: артефакты перед выкладкой наружу проверяются локально (живой запуск APK и
+      # .app — правило репозитория), затем релиз пересоздаётся в ArkHak/Aniko-app вручную.
+      # Пока проект в 0.x — релизы помечаются pre-release (см. tools/public-release/README.md).
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PRERELEASE=""
+          case "$GITHUB_REF_NAME" in
+            v0.*) PRERELEASE="--prerelease" ;;
+          esac
+          cd dist
+          gh release create "$GITHUB_REF_NAME" --draft $PRERELEASE \
+            --title "Aniko $GITHUB_REF_NAME" \
+            --notes-file ../RELEASE_NOTES.md \
+            aniko-* SHA256SUMS.txt
