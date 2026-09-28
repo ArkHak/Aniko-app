@@ -43,9 +43,9 @@
 
 | Платформа | Файл | Размер | Требования | Как поставить |
 |---|---|---|---|---|
-| 🤖 **Android** | `aniko-v0.2.0-android.apk` | 4,6 МБ | Android 8.0+ (API 26) | [инструкция](#-android) |
-| 🍎 **iPhone / iPad** | `aniko-v0.2.0-ios-unsigned.ipa` | 16 МБ | iOS 15+ | [инструкция](#-iphone-без-платного-apple-developer) |
-| 💻 **macOS** | `aniko-v0.2.0-macos.dmg` | 172 МБ | Mac на Apple Silicon (M1 и новее) + [VLC](https://www.videolan.org/vlc/) | [инструкция](#-macos) |
+| 🤖 **Android** | `aniko-v0.2.0-android.apk` | 4,9 МБ | Android 8.0+ (API 26) | [инструкция](#-android) |
+| 🍎 **iPhone / iPad** | `aniko-v0.2.0-ios-unsigned.ipa` | 17 МБ | iOS 15+ | [инструкция](#-iphone-без-платного-apple-developer) |
+| 💻 **macOS** | `aniko-v0.2.0-macos.dmg` | 180 МБ | Mac на Apple Silicon (M1 и новее) + [VLC](https://www.videolan.org/vlc/) | [инструкция](#-macos) |
 
 > Приложение бесплатное и без рекламы. Для входа нужен аккаунт Anixart (его можно создать прямо в приложении).
 

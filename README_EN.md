@@ -43,9 +43,9 @@ Ready-made builds are on the [**Releases**](https://github.com/ArkHak/Aniko-app/
 
 | Platform | File | Size | Requirements | How to install |
 |---|---|---|---|---|
-| 🤖 **Android** | `aniko-v0.2.0-android.apk` | 4.6 MB | Android 8.0+ (API 26) | [guide](#-android) |
-| 🍎 **iPhone / iPad** | `aniko-v0.2.0-ios-unsigned.ipa` | 16 MB | iOS 15+ | [guide](#-iphone-without-a-paid-apple-developer-account) |
-| 💻 **macOS** | `aniko-v0.2.0-macos.dmg` | 172 MB | Apple Silicon Mac (M1 or newer) + [VLC](https://www.videolan.org/vlc/) | [guide](#-macos) |
+| 🤖 **Android** | `aniko-v0.2.0-android.apk` | 4.9 MB | Android 8.0+ (API 26) | [guide](#-android) |
+| 🍎 **iPhone / iPad** | `aniko-v0.2.0-ios-unsigned.ipa` | 17 MB | iOS 15+ | [guide](#-iphone-without-a-paid-apple-developer-account) |
+| 💻 **macOS** | `aniko-v0.2.0-macos.dmg` | 180 MB | Apple Silicon Mac (M1 or newer) + [VLC](https://www.videolan.org/vlc/) | [guide](#-macos) |
 
 > The app is free and ad-free. Signing in requires an Anixart account (you can create one inside the app).
 
