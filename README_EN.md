@@ -108,7 +108,9 @@ Ready-made builds are on the [**Releases**](https://github.com/ArkHak/Aniko-app/
 - iOS HIG-inspired design with a Liquid Glass material
 - Adaptive layouts: phone · tablet · desktop
 - Light and dark themes, RU / EN
-- `aniko://release/…` links to open a title or an episode
+- `aniko://release/…` links to open a title or an episode — shared links carry
+  your favorite voice-over
+- In-app update checks (Settings), browser-free installation on Android and macOS
 
 </td>
 </tr>
@@ -229,7 +231,29 @@ Aniko opens a sign-in screen. Enter your Anixart login and password, or tap "Reg
 account creation (with an emailed confirmation code) is built into the app. The app does not work
 without signing in: the catalog and profile are tied to the account.
 
+### 🔄 Updates
+
+Starting with the release after `v0.1.0`, Aniko checks for updates itself and offers them in a
+dialog with the changelog; manually — *Settings → Check for updates*. The downloaded file is
+verified against its SHA-256 checksum before installation.
+
+- **Android** — installs over the current version via the system installer (Android verifies the signature itself).
+- **macOS** — the app replaces itself from a verified DMG and rolls back if the new version fails to start.
+- **iOS** — due to Apple's restrictions, updating opens the release page: the `.ipa` has to be
+  re-signed using any method from the section above (your data is kept).
+
+Upgrading from `v0.1.0` is manual — once: grab the fresh build from the
+[Releases](https://github.com/ArkHak/Aniko-app/releases) page. Further updates arrive in the app.
+
 ## ❓ FAQ
+
+<details>
+<summary><b>How do I update Aniko?</b></summary>
+
+From the release after `v0.1.0` the app offers updates itself (see "[Updates](#-updates)").
+From `v0.1.0` update manually via the [Releases](https://github.com/ArkHak/Aniko-app/releases) page —
+once; after that updates arrive in the app.
+</details>
 
 <details>
 <summary><b>macOS says "Aniko is damaged" and offers to move it to the Bin</b></summary>
