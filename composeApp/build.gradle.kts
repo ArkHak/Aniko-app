@@ -22,7 +22,7 @@ val desktopMainClass = "com.aniko.app.MainKt"
 // кодогенерация `BuildInfo.APP_VERSION` (commonMain, см. GenerateBuildInfoTask) — версия видна
 // в настройках приложения на Android/iOS/Desktop. Desktop `packageVersion` в конце файла —
 // ОТДЕЛЬНАЯ версия macOS-инсталлятора, сюда её не сводить (см. комментарий там).
-val anikoAppVersion = "0.1.0"
+val anikoAppVersion = "0.2.0"
 
 val generateBuildInfo =
     tasks.register<GenerateBuildInfoTask>("generateBuildInfo") {
@@ -145,7 +145,7 @@ android {
 
     defaultConfig {
         applicationId = "com.aniko.app"
-        versionCode = 3
+        versionCode = 4
         versionName = anikoAppVersion
     }
 
@@ -214,8 +214,8 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg)
             packageName = "Aniko"
             // jpackage требует, чтобы первое число версии пакета было >= 1 — это отдельная
-            // версия macOS-инсталлятора, не совпадающая с версией приложения (0.1.0).
-            packageVersion = "1.1.0"
+            // версия macOS-инсталлятора, не совпадающая с версией приложения (0.2.0).
+            packageVersion = "1.2.0"
             // Без этого jpackage/jlink сам определяет нужные JDK-модули по jdeps-анализу
             // байткода — и не видит java.sql: SQLDelight-драйвер (org.xerial:sqlite-jdbc)
             // грузит java.sql.DriverManager через ServiceLoader (META-INF/services), а не
