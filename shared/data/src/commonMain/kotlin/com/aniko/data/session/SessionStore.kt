@@ -93,7 +93,18 @@ class SessionStore(
         profileId: Long,
     ) {
         stateMutex.withLock {
-            secureStorage.set(token)
+            // Тот же класс отказа, что и в readTokenOrNull(): iOS Keychain на девайсе может
+            // отклонить запись (например, errSecMissingEntitlement у переподписанной сборки)
+            // уже ПОСЛЕ успешного auth/signIn. Без деградации пользователь с валидными кредами
+            // получал бы generic-ошибку и не мог войти вовсе. Сессия при этом живёт в памяти
+            // до конца процесса, после перезапуска потребуется повторный вход.
+            try {
+                secureStorage.set(token)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // no-op — неперсистентная сессия лучше, чем отказ во входе
+            }
             settings.putLong(KEY_PROFILE_ID, profileId)
             _sessionState.value = SessionState.Authorized(token)
             bootstrapped = true

@@ -134,6 +134,25 @@ class SessionStoreTest {
         }
 
     @Test
+    fun save_keepsInMemorySession_when_secureStorageWriteFails() =
+        runTest {
+            // Arrange: secure storage, у которого set() падает (отказ iOS Keychain на девайсе,
+            // например errSecMissingEntitlement у переподписанной сборки) — уже ПОСЛЕ успешного
+            // auth/signIn. Пользователь с валидными кредами не должен получать отказ во входе.
+            val secureStorage = ThrowingOnSetSecureTokenStorage()
+            val settings = MapSettings()
+            val sessionStore = SessionStore(settings, secureStorage)
+
+            // Act: save не должен бросить наружу
+            sessionStore.save(token = "new-token", profileId = 999L)
+
+            // Assert: сессия авторизована в памяти, токен доступен TokenProvider'у до конца процесса
+            assertEquals(SessionState.Authorized("new-token"), sessionStore.sessionState.value)
+            assertEquals("new-token", sessionStore.token())
+            assertEquals(999L, sessionStore.profileId())
+        }
+
+    @Test
     fun save_persists_token_and_profileId() =
         runTest {
             // Arrange
@@ -149,4 +168,15 @@ class SessionStoreTest {
             assertEquals(999L, sessionStore.profileId(), "Profile ID должен быть сохранён в settings")
             assertEquals(SessionState.Authorized("new-token"), sessionStore.sessionState.value)
         }
+}
+
+/** Secure storage, чья запись всегда падает — моделирует отказ iOS Keychain на девайсе. */
+private class ThrowingOnSetSecureTokenStorage : SecureTokenStorage {
+    override suspend fun get(): String? = null
+
+    override suspend fun set(token: String) {
+        error("Keychain error, OSStatus=-34018")
+    }
+
+    override suspend fun clear() = Unit
 }

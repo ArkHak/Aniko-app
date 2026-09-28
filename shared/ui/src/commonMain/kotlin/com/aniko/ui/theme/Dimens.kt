@@ -54,8 +54,9 @@ data class AnixDimens(
     val badgeSize: Dp = 20.dp,
     /** Размер иконки внутри [badgeSize]-бейджа. */
     val badgeIconSize: Dp = 12.dp,
-    /** Высота линейного индикатора прогресса просмотра (Фаза 6, P6.T2). */
-    val progressBarHeight: Dp = 4.dp,
+    /** Высота линейного индикатора прогресса просмотра (Фаза 6, P6.T2; 6dp — рестайл
+     *  2026-09-28: кастомный градиентный `WatchProgressBar` вместо тонкого 4dp M3-индикатора). */
+    val progressBarHeight: Dp = 6.dp,
     /** Минимальный размер ячейки в сетке номеров серий (Фаза 6, P6.T4). */
     val episodeCellMinSize: Dp = 56.dp,
     /** Минимальный размер интерактивной области — ориентир доступности (WCAG/Material). */
