@@ -115,12 +115,20 @@ class LibraryAddSmokeTest {
             apiRoutes = libraryRoutes,
             initialToken = "fake-token",
             koinDeclaration = forceEnglishLocale(),
-        ) {
+        ) { pressBack ->
             openRelease186FromHome()
 
             onNodeWithContentDescription("Add to list").performScrollTo().performClick()
             onNode(hasText("Plan to Watch") and hasClickAction()).performClick()
             onNodeWithContentDescription("Plan to Watch").assertIsDisplayed()
+
+            // Нижняя навигация видна только на корневых вкладках (см.
+            // `AdaptiveScaffold.showNavigationChrome`): на деталях релиза её нет, поэтому
+            // сначала возвращаемся на Home.
+            onNodeWithTag(AnixTestTags.BOTTOM_NAV_BAR).assertDoesNotExist()
+            pressBack()
+            onNodeWithTag(AnixTestTags.HOME_SCREEN_ROOT).assertIsDisplayed()
+            onNodeWithTag(AnixTestTags.BOTTOM_NAV_BAR).assertIsDisplayed()
 
             openLibrary()
 
@@ -181,7 +189,7 @@ private fun SkikoComposeUiTest.openRelease186FromHome() {
     onNodeWithTag(AnixTestTags.RELEASE_DETAILS_SCREEN_ROOT).assertIsDisplayed()
 }
 
-/** Нижняя навигация видна на всех маршрутах, кроме плеера (см. `AdaptiveScaffold.showNavigationChrome`). */
+/** Нижняя навигация видна только на корневых вкладках секций (см. `AdaptiveScaffold.showNavigationChrome`). */
 @OptIn(ExperimentalTestApi::class)
 private fun SkikoComposeUiTest.openLibrary() {
     onNodeWithTag(AnixTestTags.bottomNavItem("Library")).performClick()

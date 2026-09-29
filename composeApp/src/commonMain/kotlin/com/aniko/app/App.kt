@@ -307,8 +307,11 @@ private fun AnixAppScaffold(
         AdaptiveScaffold(
             items = navItems,
             selectedItemId = selectedSection?.name,
-            // Плеер — "поверх" каркаса, см. KDoc `AdaptiveScaffold.showNavigationChrome`.
-            showNavigationChrome = backStackEntry?.destination?.hasRoute(AnixDestination.Player::class) != true,
+            // Навигационный хром (bottom bar / rail / sidebar) — только на корневых вкладках
+            // секций. Второстепенные маршруты (настройки, уведомления, детали тайтла, плеер и
+            // т.п.) рисуются "поверх" каркаса без хрома, см. KDoc
+            // `AdaptiveScaffold.showNavigationChrome`.
+            showNavigationChrome = selectedSection != null,
             onItemClick = { item ->
                 navController.navigateToTabRoot(AnixSection.valueOf(item.id).destination)
             },
