@@ -286,7 +286,10 @@ private fun NavGraphBuilder.chromeRoutes(
             },
             // Track A (точное соответствие макету): ссылка "My Lists →" в шапке профиля ведёт на
             // тот же маршрут, что и вкладка таб-бара `Library` (см. KDoc `ProfileScreen.onOpenLists`).
-            onOpenLists = { navController.navigate(AnixDestination.Library) },
+            // Переход обязан идти через `navigateToTabRoot`, а не голым `navigate()` — иначе в стеке
+            // появляется второй экземпляр Library и ломается учёт saveState/restoreState вкладок
+            // (см. KDoc `navigateToTabRoot`).
+            onOpenLists = { navController.navigateToTabRoot(AnixDestination.Library) },
         )
     }
     composable<AnixDestination.Notifications> {

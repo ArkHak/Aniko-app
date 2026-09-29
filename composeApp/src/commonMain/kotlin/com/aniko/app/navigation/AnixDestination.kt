@@ -165,8 +165,21 @@ sealed interface AnixDestination {
  * его внутренний учёт `saveState`/`restoreState`. Фикс — маршрутизировать ЛЮБОЙ переход на
  * корневую секцию через одну и ту же функцию с одним и тем же рецептом, независимо от того, кто
  * его инициирует — таб-бар или быстрая ссылка с экрана.
+ *
+ * Хром-экраны [AnixDestination.Settings]/[AnixDestination.NotificationSettings]/
+ * [AnixDestination.Notifications] открываются поверх вкладок голым `navigate()` (шестерёнка и
+ * колокольчик в сайдбаре на Expanded, топбар профиля на Compact/Medium) и к конкретной вкладке не
+ * привязаны. Тап по любой вкладке должен их закрывать: если не снять их ДО рецепта ниже,
+ * `popUpTo(start) { saveState = true }` сохранит их в состояние вкладки, а `restoreState`
+ * воскресит поверх её корня при возврате — настройки "висели" над вкладкой, пока их не закроют
+ * кнопкой "назад" (баг 2026-09-29). `popBackStack(..., inclusive = true)` без `saveState` снимает
+ * сам хром-экран и всё, что открыто поверх него (NotificationSettings поверх Settings), не
+ * загрязняя сохранённое состояние вкладок. Контентный drill-down (ReleaseDetails и т.п.) не
+ * трогаем — его сохранение между вкладками и есть смысл рецепта.
  */
 fun NavHostController.navigateToTabRoot(destination: AnixDestination) {
+    popBackStack(AnixDestination.Settings::class, inclusive = true)
+    popBackStack(AnixDestination.Notifications::class, inclusive = true)
     navigate(destination) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
