@@ -1,6 +1,7 @@
 package com.aniko.data.repository
 
 import com.aniko.data.api.AuthApi
+import com.aniko.data.dto.SignUpResponseDto
 import com.aniko.data.mapper.toDomain
 import com.aniko.data.session.SessionState
 import com.aniko.data.session.SessionStore
@@ -41,6 +42,9 @@ class AuthRepository(
      * `auth/signUp` — создаёт неподтверждённую регистрацию и инициирует отправку кода на email.
      * Возвращает [PendingRegistration] с `hash`, который затем уходит в [verifyEmail]/
      * [resendCode].
+     *
+     * Ответ `CODE_ALREADY_SEND` (регистрация уже существует, код ушёл раньше) — не ошибка:
+     * `hash` валиден, флаг [PendingRegistration.codeAlreadySent] просит UI пояснить ситуацию.
      */
     suspend fun signUp(
         login: String,
@@ -52,6 +56,7 @@ class AuthRepository(
             hash = response.hash,
             codeTimestampExpires = response.codeTimestampExpires,
             suggestedLogins = response.suggestedLogins,
+            codeAlreadySent = response.code == SignUpResponseDto.CODE_ALREADY_SEND,
         )
     }
 
@@ -100,4 +105,6 @@ data class PendingRegistration(
     val hash: String,
     val codeTimestampExpires: Long,
     val suggestedLogins: List<String>,
+    /** true, если `auth/signUp` вернул `CODE_ALREADY_SEND` — код был отправлен раньше. */
+    val codeAlreadySent: Boolean = false,
 )

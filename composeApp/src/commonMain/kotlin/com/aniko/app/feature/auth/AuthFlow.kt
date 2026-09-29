@@ -19,6 +19,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -79,10 +81,15 @@ fun AuthFlow(modifier: Modifier = Modifier) {
  * можно доскроллить. На Desktop оба модификатора — no-op.
  *
  * testTag корня (см. `AnixTestTags`) передаётся вызывающим экраном через [modifier].
+ *
+ * Снекбары флоу (например, подсказка про «Спам» после отправки кода регистрации) рисуются
+ * поверх формы в [SnackbarHost] над нижней сноской; хост-состояние приходит с экрана,
+ * чтобы именно экран решал, когда и что показывать.
  */
 @Composable
 internal fun AuthScaffold(
     modifier: Modifier = Modifier,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
@@ -111,6 +118,11 @@ internal fun AuthScaffold(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.align(Alignment.BottomCenter),
+            )
+
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = dimens.spaceXl),
             )
         }
     }

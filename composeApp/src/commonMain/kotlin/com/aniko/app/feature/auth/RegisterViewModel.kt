@@ -30,7 +30,22 @@ data class RegisterUiState(
     val verifyError: VerifyError? = null,
     /** «Код отправлен повторно» — одноразовый флаг подтверждения `auth/resend`. */
     val codeResent: Boolean = false,
+    /**
+     * Одноразовое уведомление для снекбара (см. [RegisterNotice]). Экран показывает его и
+     * сбрасывает через [RegisterViewModel.consumeNotice].
+     */
+    val notice: RegisterNotice? = null,
 )
+
+/**
+ * Одноразовые уведомления регистрационного флоу (показываются снекбаром):
+ * [CODE_SENT] — код ушёл на email (signUp/resend), напомнить про «Спам»;
+ * [CODE_ALREADY_SENT] — `auth/signUp` вернул `CODE_ALREADY_SEND`, код ушёл раньше.
+ */
+enum class RegisterNotice {
+    CODE_SENT,
+    CODE_ALREADY_SENT,
+}
 
 /**
  * Причина ошибки `auth/signUp`, без готового текста — текст живёт в `Strings` (та же конвенция,
@@ -39,7 +54,8 @@ data class RegisterUiState(
  * Коды `auth/signUp` (см. `docs/api/jadx-out-21/.../network/response/auth/SignUpResponse.java`):
  * SUCCESSFUL=0, INVALID_LOGIN=2, INVALID_EMAIL=3, INVALID_PASSWORD=4, LOGIN_ALREADY_TAKEN=5,
  * EMAIL_ALREADY_TAKEN=6, CODE_ALREADY_SEND=7, CODE_CANNOT_SEND=8, EMAIL_SERVICE_DISALLOWED=9,
- * TOO_MANY_REGISTRATIONS=10.
+ * TOO_MANY_REGISTRATIONS=10. Код 7 сюда не попадает — `AuthApi.signUp` считает его успехом
+ * (см. [com.aniko.data.dto.SignUpResponseDto.CODE_ALREADY_SEND]).
  */
 enum class RegisterError {
     GENERIC,
@@ -48,7 +64,6 @@ enum class RegisterError {
     INVALID_PASSWORD,
     LOGIN_TAKEN,
     EMAIL_TAKEN,
-    CODE_ALREADY_SENT,
     CODE_CANNOT_SEND,
     EMAIL_DISALLOWED,
     TOO_MANY,
@@ -120,6 +135,14 @@ class RegisterViewModel(
                     _uiState.value.copy(
                         isLoading = false,
                         stage = RegisterStage.CODE,
+                        // CODE_ALREADY_SEND — не ошибка: регистрация уже существует, код ушёл
+                        // раньше; ведём на ввод кода и поясняем ситуацию снекбаром.
+                        notice =
+                            if (registration.codeAlreadySent) {
+                                RegisterNotice.CODE_ALREADY_SENT
+                            } else {
+                                RegisterNotice.CODE_SENT
+                            },
                         // Пароль на этапе кода больше не показываем, но для verify/resend он
                         // нужен — оставляем в памяти VM до конца флоу (как и логин/email).
                     )
@@ -156,7 +179,12 @@ class RegisterViewModel(
         viewModelScope.launch {
             try {
                 authRepository.resendCode(state.login, state.email, state.password, hash)
-                _uiState.value = _uiState.value.copy(resendLoading = false, codeResent = true)
+                _uiState.value =
+                    _uiState.value.copy(
+                        resendLoading = false,
+                        codeResent = true,
+                        notice = RegisterNotice.CODE_SENT,
+                    )
             } catch (e: AnixError) {
                 // Ошибки resend (2..6 INVALID_*/CODE_CANNOT_SEND) по смыслу близки к проблемам
                 // отправки кода — показываем их на этапе кода, не возвращая пользователя на форму.
@@ -166,17 +194,22 @@ class RegisterViewModel(
         }
     }
 
+    /** Экран показал [RegisterUiState.notice] снекбаром — сбрасываем одноразовый флаг. */
+    fun consumeNotice() {
+        _uiState.value = _uiState.value.copy(notice = null)
+    }
+
     private val RegisterUiState.isFormValid: Boolean
         get() = login.isNotBlank() && email.isNotBlank() && password.isNotBlank()
 }
 
-// Коды auth/signUp (jadx SignUpResponse.java).
+// Коды auth/signUp (jadx SignUpResponse.java). CODE_ALREADY_SEND (7) сюда не доходит —
+// AuthApi считает его успехом и возвращает ответ с валидным hash.
 private const val CODE_INVALID_LOGIN = 2
 private const val CODE_INVALID_EMAIL = 3
 private const val CODE_INVALID_PASSWORD = 4
 private const val CODE_LOGIN_TAKEN = 5
 private const val CODE_EMAIL_TAKEN = 6
-private const val CODE_ALREADY_SEND = 7
 private const val CODE_CANNOT_SEND = 8
 private const val CODE_EMAIL_DISALLOWED = 9
 private const val CODE_TOO_MANY = 10
@@ -194,7 +227,6 @@ private fun AnixError.toRegisterError(): RegisterError =
                 CODE_INVALID_PASSWORD -> RegisterError.INVALID_PASSWORD
                 CODE_LOGIN_TAKEN -> RegisterError.LOGIN_TAKEN
                 CODE_EMAIL_TAKEN -> RegisterError.EMAIL_TAKEN
-                CODE_ALREADY_SEND -> RegisterError.CODE_ALREADY_SENT
                 CODE_CANNOT_SEND -> RegisterError.CODE_CANNOT_SEND
                 CODE_EMAIL_DISALLOWED -> RegisterError.EMAIL_DISALLOWED
                 CODE_TOO_MANY -> RegisterError.TOO_MANY

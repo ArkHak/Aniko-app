@@ -50,6 +50,7 @@ val RuStrings: Strings =
         override val registerCodeSentFormat: (email: String) -> String =
             { email -> "Код подтверждения отправлен на $email" }
         override val registerCodeResent = "Код отправлен повторно"
+        override val registerCodeSpamHint = "Письмо с кодом может попасть в «Спам» — проверьте эту папку"
         override val registerCodeLabel = "Код подтверждения"
         override val registerVerifySubmit = "Подтвердить"
         override val registerResendCode = "Отправить код повторно"

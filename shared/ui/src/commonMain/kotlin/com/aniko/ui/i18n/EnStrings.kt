@@ -54,6 +54,7 @@ val EnStrings: Strings =
         override val registerCodeSentFormat: (email: String) -> String =
             { email -> "A confirmation code was sent to $email" }
         override val registerCodeResent = "The code was sent again"
+        override val registerCodeSpamHint = "The email with the code may land in Spam — check that folder"
         override val registerCodeLabel = "Confirmation code"
         override val registerVerifySubmit = "Confirm"
         override val registerResendCode = "Resend code"

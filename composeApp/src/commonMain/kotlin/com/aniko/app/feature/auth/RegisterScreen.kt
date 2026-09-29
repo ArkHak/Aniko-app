@@ -8,10 +8,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -40,8 +44,25 @@ fun RegisterScreen(
     viewModel: RegisterViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val strings = LocalStrings.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    AuthScaffold(modifier = modifier.testTag(AnixTestTags.REGISTER_SCREEN_ROOT)) {
+    // Одноразовые уведомления флоу (код отправлен / уже отправлен раньше) — снекбаром,
+    // сброс флага после показа, чтобы не всплывало повторно при перекомпозиции.
+    val notice = state.notice
+    LaunchedEffect(notice) {
+        if (notice == null) return@LaunchedEffect
+        snackbarHostState.showSnackbar(
+            message = notice.toMessage(strings),
+            duration = SnackbarDuration.Long,
+        )
+        viewModel.consumeNotice()
+    }
+
+    AuthScaffold(
+        modifier = modifier.testTag(AnixTestTags.REGISTER_SCREEN_ROOT),
+        snackbarHostState = snackbarHostState,
+    ) {
         Text(
             text = LocalStrings.current.registerTitle,
             style = MaterialTheme.typography.headlineSmall,
@@ -198,11 +219,17 @@ private fun RegisterError.toMessage(strings: Strings): String =
         RegisterError.INVALID_PASSWORD -> strings.registerInvalidPassword
         RegisterError.LOGIN_TAKEN -> strings.registerLoginTaken
         RegisterError.EMAIL_TAKEN -> strings.registerEmailTaken
-        RegisterError.CODE_ALREADY_SENT -> strings.registerCodeAlreadySent
         RegisterError.CODE_CANNOT_SEND -> strings.registerCodeCannotSend
         RegisterError.EMAIL_DISALLOWED -> strings.registerEmailDisallowed
         RegisterError.TOO_MANY -> strings.registerTooManyRegistrations
         RegisterError.NO_CONNECTION -> strings.commonErrorNoConnection
+    }
+
+private fun RegisterNotice.toMessage(strings: Strings): String =
+    when (this) {
+        RegisterNotice.CODE_SENT -> strings.registerCodeSpamHint
+        RegisterNotice.CODE_ALREADY_SENT ->
+            "${strings.registerCodeAlreadySent}. ${strings.registerCodeSpamHint}"
     }
 
 private fun VerifyError.toMessage(strings: Strings): String =

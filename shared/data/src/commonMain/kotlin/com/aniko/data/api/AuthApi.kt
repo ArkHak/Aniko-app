@@ -38,6 +38,9 @@ class AuthApi(
     /**
      * `POST auth/signUp` (form: login, email, password) → `hash` для `auth/verify`/`auth/resend`.
      * На указанный email уходит код подтверждения.
+     *
+     * [SignUpResponseDto.CODE_ALREADY_SEND] ошибкой не считается: код уже ушёл на email раньше,
+     * но `hash` в ответе валиден — вызывающий код ведёт пользователя на ввод кода.
      */
     suspend fun signUp(
         login: String,
@@ -55,7 +58,13 @@ class AuthApi(
                             append("password", password)
                         },
                 ).body<SignUpResponseDto>()
-                .requireOk()
+                .let { response ->
+                    if (response.code == SignUpResponseDto.CODE_ALREADY_SEND) {
+                        response
+                    } else {
+                        response.requireOk()
+                    }
+                }
         }
 
     /**

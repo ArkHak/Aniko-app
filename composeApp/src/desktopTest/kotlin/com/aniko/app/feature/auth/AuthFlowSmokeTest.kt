@@ -23,6 +23,14 @@ import kotlin.test.Test
 private const val SIGN_UP_RESPONSE =
     """{"code":0,"hash":"fake-signup-hash","codeTimestampExpires":0,"suggested_logins":[]}"""
 
+/**
+ * `auth/signUp` с `CODE_ALREADY_SEND = 7` (см. `SignUpResponse` в jadx): регистрация уже
+ * существует и код ушёл раньше, но `hash` в ответе валиден — это не ошибка, а переход на
+ * этап ввода кода (регрессия: приложение показывало ошибку и не давало ввести код).
+ */
+private const val SIGN_UP_ALREADY_SENT_RESPONSE =
+    """{"code":7,"hash":"fake-signup-hash","codeTimestampExpires":0,"suggested_logins":[]}"""
+
 /** Успешный `auth/verify` — профиль + токен, то есть verify сам завершает вход. */
 private const val VERIFY_OK_RESPONSE =
     """{"code":0,"profile":{"id":1,"login":"smoketester"},"profileToken":{"id":1,"token":"fake-token-1"}}"""
@@ -98,6 +106,47 @@ class AuthFlowSmokeTest {
     }
 
     /**
+     * Регрессия «код уже выслан»: `auth/signUp` отвечает `{"code":7}` (код был отправлен раньше,
+     * hash валиден) — приложение обязано перейти на этап ввода кода, показать снекбар с
+     * пояснением и дать завершить регистрацию этим кодом, а не оставлять пользователя на форме
+     * с ошибкой.
+     */
+    @Test
+    fun registerCodeAlreadySentLeadsToCodeStage() {
+        val authRoutes: Map<String, () -> String> =
+            mapOf(
+                "auth/signUp" to { SIGN_UP_ALREADY_SENT_RESPONSE },
+                "auth/verify" to { VERIFY_OK_RESPONSE },
+            )
+
+        runAnikoSmokeTest(apiRoutes = authRoutes, koinDeclaration = forceEnglishLocale()) {
+            onNodeWithText("Sign up").performClick()
+            onNodeWithTag(AnixTestTags.REGISTER_SCREEN_ROOT).assertIsDisplayed()
+            onNodeWithText("Username").performTextInput("smoketester")
+            onNodeWithText("Email").performTextInput("smoke@example.com")
+            onNodeWithText("Password").performTextInput("secret-1")
+            onNodeWithText("Confirm password").performTextInput("secret-1")
+
+            // signUp с code=7 → этап ввода кода, а не ошибка формы.
+            onNode(hasText("Sign up") and hasClickAction()).performClick()
+            awaitText("A confirmation code was sent to smoke@example.com")
+            onNodeWithText("A confirmation code was sent to smoke@example.com").assertIsDisplayed()
+            // Снекбар: код уже отправлен раньше + напоминание про «Спам».
+            awaitText("check your inbox", substring = true)
+            onNodeWithText("check your inbox", substring = true).assertIsDisplayed()
+
+            // Код из ранее отправленного письма принимается — verify завершает вход.
+            onNodeWithText("Confirmation code").performTextInput("123456")
+            onNode(hasText("Confirm") and hasClickAction()).performClick()
+
+            waitUntil(timeoutMillis = AUTH_FLOW_TIMEOUT_MS) {
+                onAllNodesWithTag(AnixTestTags.HOME_SCREEN_ROOT).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(AnixTestTags.HOME_SCREEN_ROOT).assertIsDisplayed()
+        }
+    }
+
+    /**
      * Полный флоу регистрации на фейковых маршрутах: форма → `auth/signUp` → этап кода →
      * НЕВЕРНЫЙ код (`{"code":7}` → текст «Invalid code») → `auth/resend` («The code was sent
      * again») → верный код → `auth/verify` вернул профиль+токен → сессия сохранена → приложение
@@ -163,9 +212,10 @@ class AuthFlowSmokeTest {
 @OptIn(ExperimentalTestApi::class)
 private fun SkikoComposeUiTest.awaitText(
     text: String,
+    substring: Boolean = false,
     timeoutMillis: Long = AUTH_FLOW_TIMEOUT_MS,
 ) {
     waitUntil(timeoutMillis = timeoutMillis) {
-        onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty()
     }
 }

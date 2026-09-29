@@ -39,7 +39,16 @@ data class SignUpResponseDto(
     val hash: String = "",
     val codeTimestampExpires: Long = 0,
     @SerialName("suggested_logins") val suggestedLogins: List<String> = emptyList(),
-) : ApiCodeAware
+) : ApiCodeAware {
+    companion object {
+        /**
+         * `CODE_ALREADY_SEND`: регистрация с этими данными уже существует и код был отправлен
+         * ранее — при этом сервер возвращает валидный `hash`, и оригинальный клиент Anixart
+         * (jadx `SignUpPresenter`) ведёт пользователя на ввод кода, а не показывает ошибку.
+         */
+        const val CODE_ALREADY_SEND: Int = 7
+    }
+}
 
 /**
  * `VerifyResponse` — `POST auth/verify` (form: login, email, password, hash, code).

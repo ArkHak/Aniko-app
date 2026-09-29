@@ -102,6 +102,9 @@ interface Strings {
 
     /** Подтверждение успешной повторной отправки кода (auth/resend). */
     val registerCodeResent: String
+
+    /** Снекбар после отправки кода: письмо может попасть в «Спам». */
+    val registerCodeSpamHint: String
     val registerCodeLabel: String
     val registerVerifySubmit: String
     val registerResendCode: String
@@ -112,6 +115,8 @@ interface Strings {
     val registerInvalidPassword: String
     val registerLoginTaken: String
     val registerEmailTaken: String
+
+    /** Снекбар при `CODE_ALREADY_SEND` (код 7 — не ошибка, переход на ввод кода). */
     val registerCodeAlreadySent: String
     val registerCodeCannotSend: String
     val registerEmailDisallowed: String
