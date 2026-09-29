@@ -212,6 +212,36 @@ class UpdateCoordinatorTest {
         }
 
     @Test
+    fun systemInstallFailureIsShownToTheUser() =
+        runTest(UnconfinedTestDispatcher()) {
+            val coordinator = coordinator()
+            coordinator.checkNow()
+            coordinator.startUpdate()
+            coordinator.awaitSettled() // системный установщик показан, диалог закрыт
+            assertFalse(coordinator.promptOpen.value)
+
+            coordinator.onInstallFailed(UpdateError.InstallRejected)
+
+            val failed = assertIs<UpdateState.Failed>(coordinator.state.value)
+            assertEquals(UpdateError.InstallRejected, failed.error)
+            assertEquals("0.2.0", failed.release?.version?.toString())
+            assertTrue(coordinator.promptOpen.value)
+        }
+
+    @Test
+    fun installFailureWithoutAKnownReleaseStaysInTheSettingsRowOnly() =
+        runTest(UnconfinedTestDispatcher()) {
+            val coordinator = coordinator()
+
+            coordinator.onInstallFailed(UpdateError.InsufficientStorage)
+
+            val failed = assertIs<UpdateState.Failed>(coordinator.state.value)
+            assertEquals(UpdateError.InsufficientStorage, failed.error)
+            assertEquals(null, failed.release)
+            assertFalse(coordinator.promptOpen.value)
+        }
+
+    @Test
     fun skipHidesTheVersionFromFutureAutomaticChecks() =
         runTest(UnconfinedTestDispatcher()) {
             val coordinator = coordinator()

@@ -164,6 +164,20 @@ class UpdateCoordinator(
         releaseOf(current)?.let { mutableState.value = UpdateState.Available(it) }
     }
 
+    /**
+     * Android: системная сессия установки завершилась провалом (присылает `AppUpdateInstallReceiver`) —
+     * например, подпись APK не совпала с установленной. Без этого вызова пользователь видел бы просто
+     * молча закрывшийся диалог: [InstallOutcome.SystemInstallerLaunched] приходит сразу после `commit`,
+     * а статус сессии — позже, отдельным бродкастом. Причину показываем в диалоге (когда релиз ещё
+     * известен) и в строке настроек; отмена пользователем сюда не приходит — она не ошибка.
+     */
+    fun onInstallFailed(error: UpdateError) {
+        if (isBusy) return
+        val release = releaseOf(mutableState.value)
+        mutableState.value = UpdateState.Failed(error, release)
+        if (release != null) mutablePromptOpen.value = true
+    }
+
     private suspend fun runUpdate(release: AppRelease) {
         if (installer.capability == UpdateCapability.OpenReleasePage) {
             effectChannel.send(UpdateEffect.OpenUrl(release.pageUrl))
