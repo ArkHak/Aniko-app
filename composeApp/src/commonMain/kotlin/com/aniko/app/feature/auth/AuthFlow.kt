@@ -7,10 +7,13 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
@@ -67,6 +70,14 @@ fun AuthFlow(modifier: Modifier = Modifier) {
  * форма [widthIn] до [AnixThemeTokens.dimens.authFormMaxWidth] с вордмарком [AuthWordmark],
  * внизу — приглушённая сноска [Strings.loginAnixartCredentialsNote].
  *
+ * Колонка формы — скроллируемая и поднимается над клавиатурой ([imePadding]): приложение
+ * edge-to-edge (`enableEdgeToEdge` на Android, то же поведение insets в CMP на iOS), поэтому
+ * `adjustResize` окно не сжимает, и без ime-отступа софт-клавиатура перекрывала низ формы
+ * регистрации (4 поля + кнопка) — кнопка сабмита была физически недостижима («нельзя
+ * зарегаться»). Порядок модификаторов важен: [imePadding] снаружи [verticalScroll] — тогда
+ * viewport скролла ужимается ровно до верхней кромки клавиатуры, и до любого поля/кнопки
+ * можно доскроллить. На Desktop оба модификатора — no-op.
+ *
  * testTag корня (см. `AnixTestTags`) передаётся вызывающим экраном через [modifier].
  */
 @Composable
@@ -84,7 +95,9 @@ internal fun AuthScaffold(
                     Modifier
                         .align(Alignment.Center)
                         .widthIn(max = dimens.authFormMaxWidth)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .imePadding()
+                        .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(dimens.spaceM),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
