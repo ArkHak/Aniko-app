@@ -296,7 +296,8 @@ class PlayerViewModel(
      * же вызовом [load], без навигации и без `popBackStack`.
      *
      * Источник для новой озвучки выбирается предпочтительно с тем же хостом, что играл сейчас
-     * (тише всего для пользователя — тот же плеер под капотом), иначе первый доступный.
+     * (тише всего для пользователя — тот же плеер под капотом), иначе первый доступный; опустевшие
+     * источники (`episodesCount == 0`) в выбор не попадают, пока есть непустые.
      * Позиция — через `EpisodeRepository.matchPosition` (см. её KDoc про то, почему не сам
      * `position`): по номеру серии, а не по индексу.
      *
@@ -312,7 +313,12 @@ class PlayerViewModel(
         _uiState.update { it.copy(isAudioSwitching = true) }
         viewModelScope.launch {
             val sources = sourcesOf(key.releaseId, typeId)
-            val newSource = sources.firstOrNull { it.host == key.host } ?: sources.firstOrNull()
+            // Опустевшие источники (episodesCount == 0 — у хоста нет серий этого тайтла) не
+            // выбираем, пока есть непустые: иначе переключение озвучки уходило в мёртвый
+            // источник и воспроизведение останавливалось (та же находка, что и в
+            // `ReleaseDetailsViewModel.resolvePlayTargetChain`, 2026-09-28).
+            val pool = sources.filter { it.episodesCount != 0 }.ifEmpty { sources }
+            val newSource = pool.firstOrNull { it.host == key.host } ?: pool.firstOrNull()
             if (newSource == null) {
                 // Нет ни одного источника у выбранной озвучки — переключаться некуда, оставляем
                 // как было и просто снимаем индикатор загрузки пикера.

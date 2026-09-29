@@ -402,6 +402,10 @@ class ReleaseDetailsViewModel(
      * (detekt `ReturnCount`) — сама цепочка остаётся серией guard clauses (идиоматичнее вложенных
      * `let`/`when` для линейного разрешения "лучший доступный на каждом шаге" — приоритеты см.
      * в KDoc [resolvePlayTarget]).
+     *
+     * Источники перебираются до первого с непустым списком серий: опустевшие хосты
+     * (`episodesCount == 0` или фактически пустой ответ `episodes`) пропускаются, иначе мёртвый
+     * первый источник озвучки молча блокировал старт воспроизведения всего тайтла.
      */
     @Suppress("ReturnCount")
     private suspend fun resolvePlayTargetChain(
@@ -424,13 +428,28 @@ class ReleaseDetailsViewModel(
         // Сохранённый sourceId валиден только в паре со своим typeId: id источников не общий
         // пул между типами (см. KDoc [resolveDeepLinkEpisode]).
         val savedSourceId = saved?.takeIf { it.typeId == type.id }?.sourceId
-        val source =
-            sources.firstOrNull { it.id == state.selectedSourceId && state.selectedTypeId == type.id }
-                ?: savedSourceId?.let { id -> sources.firstOrNull { it.id == id } }
-                ?: sources.firstOrNull()
-                ?: return null
-        val episodes = episodeRepository.episodes(releaseId, type.id, source.id)
-        if (episodes.isEmpty()) return null
+        // Опустевшие источники (episodesCount == 0 — у хоста больше нет серий этого тайтла)
+        // идут в конец кандидатов: слепой выбор первого источника давал пустой список серий,
+        // и "Смотреть" молча не запускало плеер (живая находка 2026-09-28: у релиза 74 первым
+        // источником AniDUB стоит Sibnet с episodes_count=0 при живом Kodik следом).
+        // null-счётчик = сервер не сообщил количество, такой источник не штрафуем.
+        val prioritized = sources.sortedBy { if (it.episodesCount == 0) 1 else 0 }
+        val candidates =
+            (
+                listOfNotNull(
+                    prioritized.firstOrNull { it.id == state.selectedSourceId && state.selectedTypeId == type.id },
+                    savedSourceId?.let { id -> prioritized.firstOrNull { it.id == id } },
+                ) + prioritized
+            ).distinctBy { it.id }
+        // Счётчик эпизодов — только подсказка: даже у источника с episodesCount > 0 список
+        // серий может прийти пустым, поэтому перебираем кандидатов до первого непустого.
+        val (source, episodes) =
+            candidates.firstNotNullOfOrNull { candidate ->
+                episodeRepository
+                    .episodes(releaseId, type.id, candidate.id)
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { candidate to it }
+            } ?: return null
         val resumePosition = release.lastViewEpisode?.let { last -> episodes.firstOrNull { it.position == last } }
         val position = (resumePosition ?: episodes.first()).position
 

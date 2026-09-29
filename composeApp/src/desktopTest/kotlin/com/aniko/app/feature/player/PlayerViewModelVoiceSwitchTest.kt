@@ -43,6 +43,10 @@ class PlayerViewModelVoiceSwitchTest {
          *  и не показал бы регрессию, где `host` для «Следующей серии» берётся из параметра
          *  маршрута, а не из реально загруженного источника. */
         private val voiceBUrl: String = URL_B,
+        /** Ответ `episode/1/24` (источники озвучки Б) — параметризован ради
+         *  [voiceSwitchSkipsEmptySources]: подменяет список на вариант с опустевшим первым
+         *  источником. */
+        private val voiceBSources: String = ApiFixtures.p131SourcesType24Subs,
     ) {
         val hitsVoiceA = AtomicInteger()
         val hitsVoiceB = AtomicInteger()
@@ -55,7 +59,7 @@ class PlayerViewModelVoiceSwitchTest {
             mapOf(
                 "episode/1" to { ApiFixtures.p131Types },
                 "episode/1/1" to { ApiFixtures.p131SourcesType1Anidub },
-                "episode/1/24" to { ApiFixtures.p131SourcesType24Subs },
+                "episode/1/24" to { voiceBSources },
                 "episode/1/1/8" to { ApiFixtures.p131EpisodesType1Source8 },
                 "episode/1/24/24" to { ApiFixtures.p131EpisodesType24Source24 },
                 "episode/target/1/8/1" to { target(hitsVoiceA, 1, URL_A, voiceAFails) },
@@ -209,6 +213,25 @@ class PlayerViewModelVoiceSwitchTest {
             assertEquals(voiceAHits, fixture.hitsVoiceA.get())
         }
 
+    /**
+     * Регрессия (живая находка 2026-09-28): у озвучки Б первым в списке стоит опустевший источник
+     * (`episodes_count: 0`) на ТОМ ЖЕ хосте, что играет сейчас — старый выбор
+     * `firstOrNull { it.host == key.host }` хватал именно его, и переключение озвучки уходило в
+     * мёртвый источник (экран ошибки вместо видео). Опустевшие источники не должны попадать в
+     * выбор, пока есть непустые.
+     */
+    @Test
+    fun voiceSwitchSkipsEmptySources() =
+        withPlayerViewModel(Fixture(voiceBSources = VOICE_B_SOURCES_EMPTY_FIRST)) { vm, _ ->
+            vm.load(RELEASE, ROUTE_SOURCE, ROUTE_POSITION, VideoHost.KODIK)
+            vm.awaitLoaded()
+
+            vm.selectVoiceType(VOICE_B_TYPE)
+
+            vm.awaitState { !it.isLoading && (it.source as? PlaybackSource.Embed)?.url == URL_B }
+            assertEquals(PositionKey(RELEASE, VOICE_B_SOURCE, ROUTE_POSITION), vm.uiState.value.positionKey)
+        }
+
     private companion object {
         const val RELEASE = 1
         const val ROUTE_SOURCE = 8
@@ -223,5 +246,12 @@ class PlayerViewModelVoiceSwitchTest {
         /** Домен sibnet.ru — резолвится в другой [VideoHost], см. KDoc
          *  [nextEpisodeHostFollowsLoadedVoiceNotRoute]. */
         const val URL_B_SIBNET = "https://video.sibnet.ru/shell.php?videoid=4242424"
+
+        /** Источники озвучки Б для [voiceSwitchSkipsEmptySources]: первый — опустевший Kodik
+         *  (`id=99`, 0 серий), второй — рабочий источник 24 из стандартной фикстуры. */
+        const val VOICE_B_SOURCES_EMPTY_FIRST =
+            """{"code":0,"sources":[""" +
+                """{"id":99,"name":"Kodik","episodes_count":0},""" +
+                """{"id":24,"name":"Kodik","episodes_count":104}]}"""
     }
 }
