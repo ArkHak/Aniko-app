@@ -9,7 +9,7 @@ for iPhone, Android and Mac — one Kotlin Multiplatform codebase
 
 <br/>
 
-[![Release](https://img.shields.io/badge/release-v0.2.0-8B6FF0?style=for-the-badge)](https://github.com/ArkHak/Aniko-app/releases/tag/v0.2.0)
+[![Release](https://img.shields.io/badge/release-v0.2.1-8B6FF0?style=for-the-badge)](https://github.com/ArkHak/Aniko-app/releases/tag/v0.2.1)
 [![License](https://img.shields.io/badge/license-GPL--3.0-0A0C12?style=for-the-badge)](LICENSE)
 [![Platforms](https://img.shields.io/badge/iOS%20·%20Android%20·%20macOS-0A0C12?style=for-the-badge)](#-download)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
@@ -33,7 +33,7 @@ for iPhone, Android and Mac — one Kotlin Multiplatform codebase
 > and they are full clients, not stubs.
 
 > [!NOTE]
-> **Status: early public release (v0.2.0).** It is usable right now, but the project is under active
+> **Status: early public release (v0.2.1).** It is usable right now, but the project is under active
 > development: bugs are possible, some Anixart features are not implemented yet, and the local data
 > format may change between versions.
 
@@ -43,9 +43,9 @@ Ready-made builds are on the [**Releases**](https://github.com/ArkHak/Aniko-app/
 
 | Platform | File | Size | Requirements | How to install |
 |---|---|---|---|---|
-| 🤖 **Android** | `aniko-v0.2.0-android.apk` | 4.9 MB | Android 8.0+ (API 26) | [guide](#-android) |
-| 🍎 **iPhone / iPad** | `aniko-v0.2.0-ios-unsigned.ipa` | 17 MB | iOS 15+ | [guide](#-iphone-without-a-paid-apple-developer-account) |
-| 💻 **macOS** | `aniko-v0.2.0-macos.dmg` | 180 MB | Apple Silicon Mac (M1 or newer) + [VLC](https://www.videolan.org/vlc/) | [guide](#-macos) |
+| 🤖 **Android** | `aniko-v0.2.1-android.apk` | 4.9 MB | Android 8.0+ (API 26) | [guide](#-android) |
+| 🍎 **iPhone / iPad** | `aniko-v0.2.1-ios-unsigned.ipa` | 17 MB | iOS 15+ | [guide](#-iphone-without-a-paid-apple-developer-account) |
+| 💻 **macOS** | `aniko-v0.2.1-macos.dmg` | 180 MB | Apple Silicon Mac (M1 or newer) + [VLC](https://www.videolan.org/vlc/) | [guide](#-macos) |
 
 > The app is free and ad-free. Signing in requires an Anixart account (you can create one inside the app).
 
@@ -128,7 +128,7 @@ third-party embedded player page (Android and iOS).
 
 ### 🤖 Android
 
-1. Download `aniko-v0.2.0-android.apk` from [Releases](https://github.com/ArkHak/Aniko-app/releases).
+1. Download `aniko-v0.2.1-android.apk` from [Releases](https://github.com/ArkHak/Aniko-app/releases).
 2. Allow installing from unknown sources. Android usually offers this itself: when you first open the APK,
    tap "Settings" and turn on "Allow from this source". If no dialog appears, turn it on manually:
    *Settings → Apps → Special app access → Install unknown apps* → pick the browser or file manager you
@@ -178,7 +178,7 @@ re-signed (your data is kept). Pick one of the methods:
 
 <br/>
 
-1. Download `aniko-v0.2.0-ios-unsigned.ipa` from [Releases](https://github.com/ArkHak/Aniko-app/releases)
+1. Download `aniko-v0.2.1-ios-unsigned.ipa` from [Releases](https://github.com/ArkHak/Aniko-app/releases)
    on the iPhone (or transfer the file to it).
 2. Install [AltServer](https://altstore.io/) (Mac/Windows) or [SideStore](https://sidestore.io/) and
    sign in with your free Apple ID.
@@ -196,7 +196,7 @@ re-signed (your data is kept). Pick one of the methods:
 <br/>
 
 1. Download [Sideloadly](https://sideloadly.io/) and connect the iPhone with a cable.
-2. Drag `aniko-v0.2.0-ios-unsigned.ipa` into the window, enter your free Apple ID and press **Start**.
+2. Drag `aniko-v0.2.1-ios-unsigned.ipa` into the window, enter your free Apple ID and press **Start**.
 3. Trust the developer: *Settings → General → VPN & Device Management*.
 4. Repeat the installation every 7 days to renew the signature.
 
@@ -207,7 +207,7 @@ re-signed (your data is kept). Pick one of the methods:
 
 ### 💻 macOS
 
-1. Download `aniko-v0.2.0-macos.dmg`, open it and drag **Aniko** to *Applications*.
+1. Download `aniko-v0.2.1-macos.dmg`, open it and drag **Aniko** to *Applications*.
 2. Install [VLC](https://www.videolan.org/vlc/) into `/Applications` — Aniko uses its libraries to
    play video. The VLC build must match your Mac's architecture (Apple Silicon).
 3. Launch Aniko. The build is ad-hoc signed and not notarized by Apple, so on first launch Gatekeeper
