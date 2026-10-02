@@ -9,7 +9,7 @@
 
 <br/>
 
-[![Релиз](https://img.shields.io/badge/релиз-v0.2.1-8B6FF0?style=for-the-badge)](https://github.com/ArkHak/Aniko-app/releases/tag/v0.2.1)
+[![Релиз](https://img.shields.io/badge/релиз-v0.3.0-8B6FF0?style=for-the-badge)](https://github.com/ArkHak/Aniko-app/releases/tag/v0.3.0)
 [![Лицензия](https://img.shields.io/badge/лицензия-GPL--3.0-0A0C12?style=for-the-badge)](LICENSE)
 [![Платформы](https://img.shields.io/badge/iOS%20·%20Android%20·%20macOS-0A0C12?style=for-the-badge)](#-скачать)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
@@ -33,7 +33,7 @@
 > кодовой базе, и это полноценные клиенты, а не заглушки.
 
 > [!NOTE]
-> **Статус: ранний публичный релиз (v0.2.1).** Приложением можно пользоваться уже сейчас, но проект
+> **Статус: ранний публичный релиз (v0.3.0).** Приложением можно пользоваться уже сейчас, но проект
 > активно развивается: возможны баги, часть функций Anixart ещё не реализована, а формат локальных
 > данных между версиями может меняться.
 
@@ -43,9 +43,9 @@
 
 | Платформа | Файл | Размер | Требования | Как поставить |
 |---|---|---|---|---|
-| 🤖 **Android** | `aniko-v0.2.1-android.apk` | 4,9 МБ | Android 8.0+ (API 26) | [инструкция](#-android) |
-| 🍎 **iPhone / iPad** | `aniko-v0.2.1-ios-unsigned.ipa` | 17 МБ | iOS 15+ | [инструкция](#-iphone-без-платного-apple-developer) |
-| 💻 **macOS** | `aniko-v0.2.1-macos.dmg` | 180 МБ | Mac на Apple Silicon (M1 и новее) + [VLC](https://www.videolan.org/vlc/) | [инструкция](#-macos) |
+| 🤖 **Android** | `aniko-v0.3.0-android.apk` | 4,9 МБ | Android 8.0+ (API 26) | [инструкция](#-android) |
+| 🍎 **iPhone / iPad** | `aniko-v0.3.0-ios-unsigned.ipa` | 17 МБ | iOS 15+ | [инструкция](#-iphone-без-платного-apple-developer) |
+| 💻 **macOS** | `aniko-v0.3.0-macos.dmg` | 180 МБ | Mac на Apple Silicon (M1 и новее) + [VLC](https://www.videolan.org/vlc/) | [инструкция](#-macos) |
 
 > Приложение бесплатное и без рекламы. Для входа нужен аккаунт Anixart (его можно создать прямо в приложении).
 
@@ -86,7 +86,10 @@
 ### 🎬 Просмотр
 - Выбор озвучки и источника, закреплённые («любимые») озвучки
 - Память озвучки для каждого тайтла
-- Диалог «продолжить с места», перемотка ±10 / −30 сек, жесты
+- Управление сериями в духе стриминговых сервисов: ⏮ / ⏭, шторка серий,
+  карточка «Следующая серия» с автопереходом
+- Авто-продолжение с места (с кнопкой «С начала»), перемотка ±10 / −30 сек, жесты
+- Если источник не загрузился — «Другой источник» / «Повторить» / «Сменить озвучку»
 - Качество по умолчанию и плавное переключение (Desktop)
 - Picture-in-Picture (Android)
 - Для лицензированных в вашей стране тайтлов — ссылки на легальные платформы
@@ -128,7 +131,7 @@
 
 ### 🤖 Android
 
-1. Скачайте `aniko-v0.2.1-android.apk` со страницы [Releases](https://github.com/ArkHak/Aniko-app/releases).
+1. Скачайте `aniko-v0.3.0-android.apk` со страницы [Releases](https://github.com/ArkHak/Aniko-app/releases).
 2. Разрешите установку из неизвестных источников. Обычно Android предложит это сам: при первом открытии APK
    нажмите «Настройки» и включите «Разрешить установку из этого источника». Если окна нет, включите вручную:
    *Настройки → Приложения → Специальный доступ → Установка неизвестных приложений* → выберите браузер или
@@ -178,7 +181,7 @@ Apple требует подпись для *любого* приложения �
 
 <br/>
 
-1. Скачайте `aniko-v0.2.1-ios-unsigned.ipa` со страницы [Releases](https://github.com/ArkHak/Aniko-app/releases)
+1. Скачайте `aniko-v0.3.0-ios-unsigned.ipa` со страницы [Releases](https://github.com/ArkHak/Aniko-app/releases)
    на iPhone (или перенесите файл на него).
 2. Установите [AltServer](https://altstore.io/) (Mac/Windows) или [SideStore](https://sidestore.io/) и
    войдите своим бесплатным Apple ID.
@@ -195,7 +198,7 @@ Apple требует подпись для *любого* приложения �
 <br/>
 
 1. Скачайте [Sideloadly](https://sideloadly.io/) и подключите iPhone кабелем.
-2. Перетащите `aniko-v0.2.1-ios-unsigned.ipa` в окно, укажите бесплатный Apple ID и нажмите **Start**.
+2. Перетащите `aniko-v0.3.0-ios-unsigned.ipa` в окно, укажите бесплатный Apple ID и нажмите **Start**.
 3. Доверьте разработчику: *Настройки → Основные → VPN и управление устройством*.
 4. Раз в 7 дней повторяйте установку, чтобы продлить подпись.
 
@@ -206,7 +209,7 @@ Apple требует подпись для *любого* приложения �
 
 ### 💻 macOS
 
-1. Скачайте `aniko-v0.2.1-macos.dmg`, откройте его и перетащите **Aniko** в папку *Программы*.
+1. Скачайте `aniko-v0.3.0-macos.dmg`, откройте его и перетащите **Aniko** в папку *Программы*.
 2. Установите [VLC](https://www.videolan.org/vlc/) в `/Applications` — Aniko использует его библиотеки
    для воспроизведения видео. Версия VLC должна соответствовать архитектуре Mac (Apple Silicon).
 3. Запустите Aniko. Сборка подписана ad-hoc и не нотаризована Apple, поэтому Gatekeeper при первом
