@@ -91,3 +91,18 @@ fun anixColorScheme(darkTheme: Boolean): ColorScheme = if (darkTheme) AnixDarkCo
 
 /** Токен-аналог [anixColorScheme] для [AnixColors] (см. её KDoc про назначение полей). */
 fun anixExtraColors(darkTheme: Boolean): AnixColors = if (darkTheme) AnixDarkExtraColors else AnixLightExtraColors
+
+/**
+ * Принудительно тёмная тема для поддерева поверх видео (плеер): шторки серий/озвучки/качества и
+ * resume-диалог рисуются поверх тёмного кадра, и светлая панель на нём выглядит чужеродно — у
+ * медиаприложений (Netflix/YouTube/Crunchyroll) такие панели всегда тёмные, независимо от темы
+ * приложения. Без фонового `Box` и `SystemBarStyleEffect` [AppTheme] — только цвета и токены.
+ */
+@Composable
+fun ForcedDarkTheme(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalAnixColors provides AnixDarkExtraColors) {
+        MaterialTheme(colorScheme = AnixDarkColors, typography = MaterialTheme.typography) {
+            CompositionLocalProvider(LocalContentColor provides AnixDarkColors.onSurface, content = content)
+        }
+    }
+}

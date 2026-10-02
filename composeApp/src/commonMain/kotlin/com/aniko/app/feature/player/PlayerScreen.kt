@@ -1,14 +1,17 @@
 package com.aniko.app.feature.player
 
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -26,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.app.navigation.LocalTitleNavigator
@@ -36,13 +40,18 @@ import com.aniko.player.HideSystemBarsEffect
 import com.aniko.player.LockLandscapeOrientationEffect
 import com.aniko.player.PlaybackEngineProblem
 import com.aniko.player.PlaybackSource
+import com.aniko.player.isEpisodeFinished
+import com.aniko.player.isNearEnd
 import com.aniko.player.rememberEmbedVideoController
+import com.aniko.player.secondsToEpisodeEnd
 import com.aniko.ui.component.AnixEmptyState
 import com.aniko.ui.component.AnixErrorState
 import com.aniko.ui.component.AnixLoadingState
+import com.aniko.ui.component.displayNumber
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.i18n.Strings
 import com.aniko.ui.testing.AnixTestTags
+import com.aniko.ui.theme.ForcedDarkTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import org.koin.compose.koinInject
@@ -72,9 +81,9 @@ import org.koin.compose.viewmodel.koinViewModel
  * `isFullscreen == true` (см. комментарий у вызова ниже) — принудительно поворачивает устройство
  * в альбомную ориентацию на Android, на iOS остаётся честным CUT (см. KDoc самой функции).
  *
- * **Двухшаговый системный back (player-triple-design, §2.2).** При открытом пикере озвучки
- * back закрывает пикер; при `isFullscreen && videoState.isVideoFound` — сворачивает плеер
- * в компактный режим. Гейт `isVideoFound` обязателен: без моста compact-режим запирает
+ * **Многошаговый системный back (player-triple-design, §2.2).** При открытом пикере (озвучки
+ * или шторки серий) back закрывает его; при `isFullscreen && videoState.isVideoFound` — сворачивает
+ * плеер в компактный режим. Гейт `isVideoFound` обязателен: без моста compact-режим запирает
  * embed-страницу за жестовым слоем `CompactVideoGestureLayer`, поэтому back в no-bridge
  * fullscreen должен оставаться выходом из экрана, а не collapse.
  *
@@ -149,6 +158,9 @@ fun PlayerScreen(
     // Общий на compact/fullscreen пикер озвучки (P13) — см. KDoc [AudioPickerOverlay] про то,
     // почему состояние здесь, а не внутри [PlayerOverlay].
     var showAudioPicker by remember { mutableStateOf(false) }
+    // Общая на compact/fullscreen шторка серий — по тому же аргументу, что showAudioPicker
+    // (одна копия на оба режима вместо двух независимых, см. KDoc [EpisodesSheetOverlay]).
+    var showEpisodesPicker by remember { mutableStateOf(false) }
 
     // P16.T8 — PiP. Флаг поднят сюда, а не живёт в ветке embed-источника, потому что от него
     // зависит и поворот экрана, и обе раскладки; сам контроллер PiP создаётся ниже, где уже есть
@@ -249,15 +261,22 @@ fun PlayerScreen(
 
                     // Back в fullscreen работает в два шага: сначала закрыть пикер озвучки,
                     // потом — свернуть в compact. Пикер добавлен позже в композиции, поэтому
-                    // его BackHandler побеждает при `showAudioPicker == true`.
-                    BackHandler(enabled = !showAudioPicker && isFullscreen && videoState.isVideoFound) {
+                    // его BackHandler побеждает при `showAudioPicker == true`. Шторка серий —
+                    // по тому же приоритету: последняя в композиции побеждает.
+                    BackHandler(
+                        enabled = !showAudioPicker && !showEpisodesPicker && isFullscreen && videoState.isVideoFound,
+                    ) {
                         viewModel.setFullscreen(false)
                     }
                     BackHandler(enabled = showAudioPicker) {
                         showAudioPicker = false
                     }
+                    BackHandler(enabled = showEpisodesPicker) {
+                        showEpisodesPicker = false
+                    }
 
-                    // Переход на следующую серию — навигация на тот же маршрут с `position + 1`.
+                    // Переход на другую серию — навигация на тот же маршрут с другой позицией
+                    // (`+1` следующая, `-1` предыдущая, любая — выбор из шторки серий).
                     // `TitleNavigator.openPlayer` теперь ЗАМЕНЯЕТ текущий Player-маршрут
                     // (`popUpTo<Player> { inclusive = true }`, фикс 2026-09-08 «два плеера
                     // дублируются»): экран пересоздастся, `PlayerViewModel.load` увидит новый
@@ -276,19 +295,80 @@ fun PlayerScreen(
                     // `source.host` — его хост (`PlaybackSource.host`, выставляется
                     // `EpisodeRepository.resolveEpisodeTarget` при каждой (пере)загрузке, домен URL
                     // приоритетнее переданного). Фолбэк на параметры маршрута недостижим на практике:
-                    // кнопка «Следующая серия» видна только внутри уже загруженного `Embed`-источника,
+                    // кнопки серий видны только внутри уже загруженного `Embed`-источника,
                     // когда `positionKey` уже выставлен вместе с ним (см. `PlayerViewModel.startLoad`).
-                    val nextEpisodeSourceKey = state.positionKey
-                    val openNextEpisode = {
+                    val loadedSourceKey = state.positionKey
+                    val openEpisodeAt: (Int) -> Unit = { episodeOrdinal ->
+                        // Режим (fullscreen/compact) переживает смену серии — см. PlayerFullscreenCarry.
+                        PlayerFullscreenCarry.put(isFullscreen)
                         navigator.openPlayer(
-                            nextEpisodeSourceKey?.releaseId ?: releaseId,
-                            nextEpisodeSourceKey?.sourceId ?: sourceId,
-                            (nextEpisodeSourceKey?.episodeOrdinal ?: position) + 1,
+                            loadedSourceKey?.releaseId ?: releaseId,
+                            loadedSourceKey?.sourceId ?: sourceId,
+                            episodeOrdinal,
                             source.host,
                         )
                     }
+                    // Соседи — позиции СОСЕДНИХ элементов списка серий (`PlayerViewModel.neighbourPositions`),
+                    // а не `position ± 1`: нумерация источников бывает с дырками. Кнопки гейтятся
+                    // `hasNext/hasPrevEpisode`, так что `null` здесь недостижим — просто no-op.
+                    val openNextEpisode = { state.nextEpisodePosition?.let(openEpisodeAt) ?: Unit }
+                    val openPrevEpisode = { state.prevEpisodePosition?.let(openEpisodeAt) ?: Unit }
+                    // Серии для шторки: API-снепшот (`state.episodes`) смержен с живой локальной
+                    // картой отметок (`state.watchedPositions`) — ячейки сетки показывают актуальный
+                    // просмотр сразу после оптимистичной записи, не дожидаясь перезагрузки списка.
+                    val playerEpisodes =
+                        state.episodes.map { episode ->
+                            episode.copy(isWatched = state.watchedPositions[episode.position] ?: episode.isWatched)
+                        }
+                    val currentEpisodePosition = loadedSourceKey?.episodeOrdinal ?: position
+                    // Отображаемый номер серии — из `Episode.displayNumber()` (у Sibnet
+                    // API-position с 0, человеческий номер в `name`); фолбэк — сырой position,
+                    // пока список серий ещё не загрузился.
+                    val currentEpisodeLabel =
+                        playerEpisodes.firstOrNull { it.position == currentEpisodePosition }?.displayNumber()
+                            ?: currentEpisodePosition.toString()
+                    val nextEpisodeLabel =
+                        state.nextEpisodePosition?.let { next ->
+                            playerEpisodes.firstOrNull { it.position == next }?.displayNumber() ?: next.toString()
+                        }
 
                     if (controller.isSupported) {
+                        // Конец серии — ОДНО место на оба режима (compact/fullscreen): авто-отметка
+                        // «просмотрено» (P8.T8) и карточка «Следующая серия» с автопереходом. Раньше
+                        // это жило внутри fullscreen-оверлея, и в компактном режиме серия не
+                        // отмечалась, а следующая не включалась. Флаги — `remember(source.url)`:
+                        // переключение режима не воскрешает отменённую карточку и не даёт двум
+                        // режимам навигировать параллельно; новая серия — новый URL — сброс.
+                        val nearEnd = videoState.isNearEnd()
+                        LaunchedEffect(nearEnd) {
+                            if (nearEnd) viewModel.markWatchedIfNeeded()
+                        }
+                        var upNextCancelled by remember(source.url) { mutableStateOf(false) }
+                        var upNextNavigated by remember(source.url) { mutableStateOf(false) }
+                        val upNextActive = state.hasNextEpisode && nearEnd && !upNextCancelled && !upNextNavigated
+                        val episodeFinished = videoState.isEpisodeFinished()
+                        LaunchedEffect(upNextActive, episodeFinished) {
+                            if (upNextActive && episodeFinished) {
+                                upNextNavigated = true
+                                openNextEpisode()
+                            }
+                        }
+                        val upNextSeconds = videoState.secondsToEpisodeEnd()
+                        val upNext =
+                            if (upNextActive && upNextSeconds != null && nextEpisodeLabel != null) {
+                                UpNextCardState(
+                                    episodeLabel = nextEpisodeLabel,
+                                    secondsLeft = upNextSeconds,
+                                    onPlayNow = {
+                                        upNextNavigated = true
+                                        openNextEpisode()
+                                    },
+                                    onCancel = { upNextCancelled = true },
+                                )
+                            } else {
+                                null
+                            }
+
                         // P16.T7 — сохранение позиции воспроизведения в `LocalPlayerPositionStore`
                         // (через `PlayerViewModel`, который знает ключ текущей серии). Троттлинг
                         // ~2с реализован ручным циклом delay(), а не `Flow.sample` — тот же приём,
@@ -308,7 +388,9 @@ fun PlayerScreen(
                         LaunchedEffect(releaseId, sourceId, position, controller) {
                             var wasPlaying = controller.state.value.isPlaying
                             controller.state.collect { snapshot ->
-                                if (wasPlaying && !snapshot.isPlaying) {
+                                // `isVideoFound` — сброс состояния при отцеплении моста (уход с экрана) тоже
+                                // выглядит как «играло → пауза», но с нулевой позицией: его не сохраняем.
+                                if (wasPlaying && !snapshot.isPlaying && snapshot.isVideoFound) {
                                     viewModel.onPlaybackPositionChanged(snapshot.currentTimeMs, snapshot.durationMs)
                                 }
                                 wasPlaying = snapshot.isPlaying
@@ -320,10 +402,25 @@ fun PlayerScreen(
                         // маршрута: после смены озвучки (`selectVoiceType`) маршрут остаётся прежним, и
                         // запись под ним положила бы позицию новой озвучки в ключ исходной. `positionKey`
                         // выставляется вместе с `source`, так что внутри этой ветки он не `null`.
+                        //
+                        // Позиция — ПОСЛЕДНЯЯ увиденная с найденным видео, а не `controller.state` в
+                        // момент dispose: WebView к этому моменту уже отцепил мост и обнулил состояние
+                        // (`detach()`), и выход из плеера записывал 0 поверх настоящей позиции (живая
+                        // проверка 2026-10-01: в сторе `…=0` у всех недосмотренных серий).
                         val loadedPositionKey = state.positionKey
+                        val lastSeenPlayback = remember(loadedPositionKey, controller) { LastSeenPlayback() }
+                        LaunchedEffect(lastSeenPlayback) {
+                            controller.state.collect { snapshot ->
+                                if (snapshot.isVideoFound && snapshot.durationMs != null) {
+                                    lastSeenPlayback.currentMs = snapshot.currentTimeMs
+                                    lastSeenPlayback.durationMs = snapshot.durationMs
+                                }
+                            }
+                        }
                         DisposableEffect(loadedPositionKey, controller) {
                             onDispose {
-                                val snapshot = controller.state.value
+                                // Видео так и не появилось — сохранять нечего (и затирать прежнюю точку тоже).
+                                val seenMs = lastSeenPlayback.currentMs ?: return@onDispose
                                 // Явный ключ: к моменту dispose (смена серии/озвучки) loadedKey в VM
                                 // может указывать уже на новую серию (ревью Волны 3, P3).
                                 loadedPositionKey?.let { loaded ->
@@ -331,19 +428,54 @@ fun PlayerScreen(
                                         releaseId = loaded.releaseId,
                                         sourceId = loaded.sourceId,
                                         position = loaded.episodeOrdinal,
-                                        currentMs = snapshot.currentTimeMs,
-                                        durationMs = snapshot.durationMs,
+                                        currentMs = seenMs,
+                                        durationMs = lastSeenPlayback.durationMs,
                                     )
                                 }
                             }
                         }
-                        // P16.T7 — «Продолжить» из resume-диалога: перемотка откладывается до
-                        // момента, когда мост реально найдёт `<video>` (иначе `seekTo` уйдёт в
-                        // никуда — команда не подтверждается, см. KDoc [EmbedVideoController]).
-                        LaunchedEffect(state.pendingSeekToMs, videoState.isVideoFound) {
+                        // Автозапуск серии, как у взрослых плееров: открыл серию (или сработал
+                        // автопереход) — она играет, без второго тапа по кнопке хоста. Команда
+                        // повторяется, пока мост не увидит воспроизведение: страница хоста
+                        // грузится несколько секунд, а до готовности фрейма `play` уходит в никуда.
+                        // Только до ПЕРВОГО старта — дальше пауза пользователя не перебивается.
+                        // Автозапуск сдался, а видео так и нет — экран покажет «источник недоступен».
+                        var autostartGaveUp by remember(source.url) { mutableStateOf(false) }
+                        LaunchedEffect(source.url, controller) {
+                            val deadline = AUTOSTART_TIMEOUT_MS / AUTOSTART_RETRY_MS
+                            var attempt = 0
+                            while (isActive && attempt < deadline && !controller.state.value.isPlaying) {
+                                // Реклама хоста: не трогаем плеер и не считаем её время в таймаут
+                                // (длинная реклама иначе выглядела бы как «источник недоступен»).
+                                if (!controller.state.value.isAdPlaying) {
+                                    controller.play()
+                                    attempt++
+                                }
+                                delay(AUTOSTART_RETRY_MS)
+                            }
+                            autostartGaveUp = !controller.state.value.isVideoFound
+                        }
+                        // P16.T7 — авто-продолжение: перемотка на сохранённую позицию. Ждём не только
+                        // `<video>`, но и метаданных (`durationMs`): до `loadedmetadata` браузер молча
+                        // игнорирует `currentTime = …` (живая проверка 2026-10-01: продолжение то
+                        // срабатывало, то нет). Команда без подтверждения, поэтому проверяем, что позиция
+                        // реально встала, и повторяем; только потом снимаем pending (до этого
+                        // автосохранение заблокировано и не затрёт точку продолжения нулём).
+                        // …и не во время рекламы хоста: после неё Kodik пересобирает источник и откатывает позицию.
+                        val metadataReady =
+                            videoState.isVideoFound && videoState.durationMs != null && !videoState.isAdPlaying
+                        LaunchedEffect(state.pendingSeekToMs, metadataReady) {
                             val pendingSeekMs = state.pendingSeekToMs
-                            if (pendingSeekMs != null && videoState.isVideoFound) {
-                                controller.seekTo(pendingSeekMs)
+                            if (pendingSeekMs != null && metadataReady) {
+                                repeat(RESUME_SEEK_ATTEMPTS) {
+                                    controller.seekTo(pendingSeekMs)
+                                    delay(RESUME_SEEK_CHECK_MS)
+                                    val landedMs = controller.state.value.currentTimeMs
+                                    if (landedMs >= pendingSeekMs - RESUME_SEEK_TOLERANCE_MS) {
+                                        viewModel.onResumeSeekConsumed()
+                                        return@LaunchedEffect
+                                    }
+                                }
                                 viewModel.onResumeSeekConsumed()
                             }
                         }
@@ -387,12 +519,22 @@ fun PlayerScreen(
                             // системный `libmonochrome_64.so` нативным SIGSEGV на живой проверке
                             // (эмулятор Pixel_6_Pro_API_33/Android 13) — плавная анимация даёт
                             // рендереру кадры на промежуточных размерах вместо одного скачка.
-                            val videoHeight by
-                                animateDpAsState(
-                                    targetValue = targetVideoHeight,
-                                    animationSpec = tween(VIDEO_RESIZE_ANIMATION_MS),
-                                    label = "playerVideoHeight",
-                                )
+                            // Анимируется ТОЛЬКО переключение режима пользователем (2026-10-01):
+                            // `animateDpAsState` анимировал любое изменение цели — и первый кадр
+                            // экрана (окно ещё 0dp → «видео раскрывается» при каждом старте
+                            // серии), и поворот. Вне переключения режима высота ставится сразу.
+                            val videoHeightAnim = remember { Animatable(targetVideoHeight, Dp.VectorConverter) }
+                            var lastFullscreen by remember { mutableStateOf(isFullscreen) }
+                            LaunchedEffect(targetVideoHeight, isFullscreen) {
+                                val modeToggled = lastFullscreen != isFullscreen
+                                lastFullscreen = isFullscreen
+                                if (modeToggled && videoHeightAnim.value > 0.dp) {
+                                    videoHeightAnim.animateTo(targetVideoHeight, tween(VIDEO_RESIZE_ANIMATION_MS))
+                                } else {
+                                    videoHeightAnim.snapTo(targetVideoHeight)
+                                }
+                            }
+                            val videoHeight = videoHeightAnim.value
                             // Вертикальное центрирование компактного блока (видео + название/
                             // прогресс/чипы под ним) в портретном режиме (2026-09-11, живой
                             // баг-репорт: «видео должно быть посередине» — раньше блок был прижат
@@ -432,129 +574,226 @@ fun PlayerScreen(
                             // вызовом хоста, а не отдельным на каждый: несколько независимых
                             // `alwaysOnTop`-окон конкурировали бы друг с другом за то, какое
                             // из них реально самое верхнее.
-                            PlayerOverlayHost(modifier = Modifier.fillMaxSize()) {
-                                // Desktop без VLC: видео-окна нет, вместо чёрного прямоугольника — объяснение и
-                                // «Скачать VLC». Внутри хоста (а не под ним): прозрачное окно оверлея на Desktop
-                                // перехватывало бы клики по кнопке, лежащей в главном окне.
-                                if (videoState.engineProblem == PlaybackEngineProblem.VlcUnavailable) {
-                                    VlcRequiredState(
-                                        modifier =
-                                            if (isFullscreen) {
-                                                Modifier.fillMaxSize()
-                                            } else {
-                                                Modifier.fillMaxWidth().height(videoHeight).offset(y = topOffset)
+                            PlayerOverlayHost(
+                                modifier = Modifier.fillMaxSize(),
+                                onKeyEvent = { event ->
+                                    handlePlayerKeyEvent(event, controller, videoState.playbackRate)
+                                },
+                            ) {
+                                // Слой поверх видео всегда тёмный (шторки/диалоги), как у медиаприложений.
+                                ForcedDarkTheme {
+                                    // Desktop без VLC: видео-окна нет, вместо чёрного прямоугольника — объяснение и
+                                    // «Скачать VLC». Внутри хоста (а не под ним): прозрачное окно оверлея на Desktop
+                                    // перехватывало бы клики по кнопке, лежащей в главном окне.
+                                    if (videoState.engineProblem == PlaybackEngineProblem.VlcUnavailable) {
+                                        VlcRequiredState(
+                                            modifier =
+                                                if (isFullscreen) {
+                                                    Modifier.fillMaxSize()
+                                                } else {
+                                                    Modifier.fillMaxWidth().height(videoHeight).offset(y = topOffset)
+                                                },
+                                        )
+                                    }
+                                    // Ниже хрома (оверлей/compact рисуются после) — «назад» остаётся доступен.
+                                    val onAlternativeSource: (() -> Unit)? =
+                                        viewModel::switchToAlternativeSource.takeIf { state.alternativeSource != null }
+                                    val sourceFailed =
+                                        videoState.engineProblem == PlaybackEngineProblem.SourceUnavailable ||
+                                            (autostartGaveUp && !videoState.isVideoFound)
+                                    val videoAreaModifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(videoHeight)
+                                            .offset(y = topOffset)
+                                    if (sourceFailed && !pipActive) {
+                                        PlayerSourceFailedState(
+                                            // Повтор — пересоздание экрана той же серии: новая страница
+                                            // хоста и новая цепочка автозапуска с нуля.
+                                            onRetry = { openEpisodeAt(currentEpisodePosition) },
+                                            onAlternativeSource = onAlternativeSource,
+                                            onChangeVoice =
+                                                { showAudioPicker = true }.takeIf { state.voiceTypes.size > 1 },
+                                            modifier = videoAreaModifier,
+                                        )
+                                    }
+
+                                    if (isFullscreen && !pipActive) {
+                                        PlayerOverlay(
+                                            state = videoState,
+                                            controller = controller,
+                                            hasPrevEpisode = state.hasPrevEpisode,
+                                            hasNextEpisode = state.hasNextEpisode,
+                                            onBack = onBack,
+                                            onCollapseFullscreen = { viewModel.setFullscreen(false) },
+                                            onPrevEpisode = openPrevEpisode,
+                                            onNextEpisode = openNextEpisode,
+                                            episodeTitle = strings.playerEpisodeChip(currentEpisodeLabel),
+                                            upNext = upNext,
+                                            voiceTypes = state.voiceTypes,
+                                            currentVoiceType = state.currentVoiceType,
+                                            onOpenAudioPicker = { showAudioPicker = true },
+                                            qualityLabel = currentQuality.takeIf { qualityOptions.isNotEmpty() },
+                                            onOpenQualityPicker = {
+                                                if (qualityOptions.isNotEmpty()) showQualityPicker = true
                                             },
-                                    )
-                                }
-                                if (isFullscreen && !pipActive) {
-                                    PlayerOverlay(
+                                            speedLabel = strings.playerSpeedValue(speedRate.formatRate()),
+                                            onOpenSpeedPicker = { showSpeedPicker = true },
+                                            onOpenEpisodesPicker = {
+                                                if (playerEpisodes.isNotEmpty()) showEpisodesPicker = true
+                                            },
+                                            // Кнопка PiP — только когда есть чем управлять: без найденного
+                                            // `<video>` окно «картинка в картинке» показывало бы пустую
+                                            // страницу, поэтому в no-bridge fullscreen её нет вовсе.
+                                            onEnterPictureInPicture =
+                                                pictureInPicture
+                                                    .takeIf { it.isSupported && videoState.isVideoFound }
+                                                    ?.let { pip -> { pip.enter() } },
+                                        )
+                                    } else if (!pipActive) {
+                                        CompactPlayerChrome(
+                                            videoHeight = videoHeight,
+                                            topOffset = topOffset,
+                                            onBelowContentHeightMeasured = { belowContentHeight = it },
+                                            state = videoState,
+                                            controller = controller,
+                                            onBack = onBack,
+                                            onEnterFullscreen = { viewModel.setFullscreen(true) },
+                                            hasPrevEpisode = state.hasPrevEpisode,
+                                            onPrevEpisode = openPrevEpisode,
+                                            hasNextEpisode = state.hasNextEpisode,
+                                            onNextEpisode = openNextEpisode,
+                                            currentEpisodeLabel = currentEpisodeLabel,
+                                            episodesAvailable = playerEpisodes.isNotEmpty(),
+                                            upNext = upNext,
+                                            onOpenEpisodesPicker = { showEpisodesPicker = true },
+                                            voiceTypes = state.voiceTypes,
+                                            currentVoiceType = state.currentVoiceType,
+                                            onOpenAudioPicker = { showAudioPicker = true },
+                                            qualityLabel = currentQuality.takeIf { qualityOptions.isNotEmpty() },
+                                            onOpenQualityPicker = {
+                                                if (qualityOptions.isNotEmpty()) showQualityPicker = true
+                                            },
+                                            speedLabel = strings.playerSpeedValue(speedRate.formatRate()),
+                                            onOpenSpeedPicker = { showSpeedPicker = true },
+                                        )
+                                    }
+
+                                    if (showAudioPicker) {
+                                        AudioPickerOverlay(
+                                            voiceTypes = state.voiceTypes,
+                                            currentVoiceType = state.currentVoiceType,
+                                            isSwitching = state.isAudioSwitching,
+                                            onSelect = { typeId ->
+                                                viewModel.selectVoiceType(typeId)
+                                                showAudioPicker = false
+                                            },
+                                            onDismiss = { showAudioPicker = false },
+                                        )
+                                    }
+
+                                    if (showEpisodesPicker) {
+                                        EpisodesSheetOverlay(
+                                            episodes = playerEpisodes,
+                                            currentPosition = currentEpisodePosition,
+                                            onSelect = { episodeOrdinal ->
+                                                showEpisodesPicker = false
+                                                openEpisodeAt(episodeOrdinal)
+                                            },
+                                            onDismiss = { showEpisodesPicker = false },
+                                        )
+                                    }
+
+                                    if (showQualityPicker) {
+                                        OptionSheetOverlay(
+                                            title = strings.playerQualityTitle,
+                                            options = qualityOptions,
+                                            current = currentQuality,
+                                            onSelect = { quality ->
+                                                controller.setQuality(quality)
+                                                if (!qualityDrivenByController) manualQuality = quality
+                                                showQualityPicker = false
+                                            },
+                                            onDismiss = { showQualityPicker = false },
+                                        )
+                                    }
+
+                                    if (showSpeedPicker) {
+                                        val speedLabels =
+                                            PLAYBACK_RATES.map { strings.playerSpeedValue(it.formatRate()) }
+                                        OptionSheetOverlay(
+                                            title = strings.playerSpeedTitle,
+                                            options = speedLabels,
+                                            current = strings.playerSpeedValue(speedRate.formatRate()),
+                                            onSelect = { label ->
+                                                PLAYBACK_RATES
+                                                    .firstOrNull { strings.playerSpeedValue(it.formatRate()) == label }
+                                                    ?.let { controller.setPlaybackRate(it) }
+                                                showSpeedPicker = false
+                                            },
+                                            onDismiss = { showSpeedPicker = false },
+                                        )
+                                    }
+
+                                    // Старт/буферизация — свой спиннер вместо чёрного кадра и спиннера хоста;
+                                    // если автозапуск сдался — наша ▶. Не в PiP и не без VLC (там своё).
+                                    val hostBusy = videoState.engineProblem != null || videoState.isAdPlaying
+                                    if (!sourceFailed && !pipActive && !hostBusy) {
+                                        PlayerStartIndicator(
+                                            isStarting = !videoState.isVideoFound,
+                                            isBuffering = videoState.isBuffering,
+                                            modifier = videoAreaModifier,
+                                        )
+                                    }
+
+                                    // Индикатор «Переключаем качество…» / уведомление об откате (Desktop) —
+                                    // поверх кадра видео, в том же слое, что и пикеры.
+                                    PlayerQualitySwitchStatus(
                                         state = videoState,
-                                        controller = controller,
-                                        hasNextEpisode = state.hasNextEpisode,
-                                        onBack = onBack,
-                                        onCollapseFullscreen = { viewModel.setFullscreen(false) },
-                                        onNextEpisode = openNextEpisode,
-                                        onEpisodeNearEnd = viewModel::markWatchedIfNeeded,
-                                        voiceTypes = state.voiceTypes,
-                                        currentVoiceType = state.currentVoiceType,
-                                        onOpenAudioPicker = { showAudioPicker = true },
-                                        qualityLabel = currentQuality.takeIf { qualityOptions.isNotEmpty() },
-                                        onOpenQualityPicker = {
-                                            if (qualityOptions.isNotEmpty()) showQualityPicker = true
-                                        },
-                                        speedLabel = strings.playerSpeedValue(speedRate.formatRate()),
-                                        onOpenSpeedPicker = { showSpeedPicker = true },
-                                        // Кнопка PiP — только когда есть чем управлять: без найденного
-                                        // `<video>` окно «картинка в картинке» показывало бы пустую
-                                        // страницу, поэтому в no-bridge fullscreen её нет вовсе.
-                                        onEnterPictureInPicture =
-                                            pictureInPicture
-                                                .takeIf { it.isSupported && videoState.isVideoFound }
-                                                ?.let { pip -> { pip.enter() } },
+                                        modifier = Modifier.fillMaxWidth().height(videoHeight).offset(y = topOffset),
                                     )
-                                } else if (!pipActive) {
-                                    CompactPlayerChrome(
-                                        videoHeight = videoHeight,
-                                        topOffset = topOffset,
-                                        onBelowContentHeightMeasured = { belowContentHeight = it },
-                                        state = videoState,
-                                        controller = controller,
-                                        onBack = onBack,
-                                        onEnterFullscreen = { viewModel.setFullscreen(true) },
-                                        voiceTypes = state.voiceTypes,
-                                        currentVoiceType = state.currentVoiceType,
-                                        onOpenAudioPicker = { showAudioPicker = true },
-                                        qualityLabel = currentQuality.takeIf { qualityOptions.isNotEmpty() },
-                                        onOpenQualityPicker = {
-                                            if (qualityOptions.isNotEmpty()) showQualityPicker = true
-                                        },
-                                        speedLabel = strings.playerSpeedValue(speedRate.formatRate()),
-                                        onOpenSpeedPicker = { showSpeedPicker = true },
-                                    )
-                                }
 
-                                if (showAudioPicker) {
-                                    AudioPickerOverlay(
-                                        voiceTypes = state.voiceTypes,
-                                        currentVoiceType = state.currentVoiceType,
-                                        isSwitching = state.isAudioSwitching,
-                                        onSelect = { typeId ->
-                                            viewModel.selectVoiceType(typeId)
-                                            showAudioPicker = false
-                                        },
-                                        onDismiss = { showAudioPicker = false },
-                                    )
-                                }
-
-                                if (showQualityPicker) {
-                                    OptionSheetOverlay(
-                                        title = strings.playerQualityTitle,
-                                        options = qualityOptions,
-                                        current = currentQuality,
-                                        onSelect = { quality ->
-                                            controller.setQuality(quality)
-                                            if (!qualityDrivenByController) manualQuality = quality
-                                            showQualityPicker = false
-                                        },
-                                        onDismiss = { showQualityPicker = false },
-                                    )
-                                }
-
-                                if (showSpeedPicker) {
-                                    val speedLabels = PLAYBACK_RATES.map { strings.playerSpeedValue(it.formatRate()) }
-                                    OptionSheetOverlay(
-                                        title = strings.playerSpeedTitle,
-                                        options = speedLabels,
-                                        current = strings.playerSpeedValue(speedRate.formatRate()),
-                                        onSelect = { label ->
-                                            PLAYBACK_RATES
-                                                .firstOrNull { strings.playerSpeedValue(it.formatRate()) == label }
-                                                ?.let { controller.setPlaybackRate(it) }
-                                            showSpeedPicker = false
-                                        },
-                                        onDismiss = { showSpeedPicker = false },
-                                    )
-                                }
-
-                                // Индикатор «Переключаем качество…» / уведомление об откате (Desktop) —
-                                // поверх кадра видео, в том же слое, что и пикеры.
-                                PlayerQualitySwitchStatus(
-                                    state = videoState,
-                                    modifier = Modifier.fillMaxWidth().height(videoHeight).offset(y = topOffset),
-                                )
-
-                                // P16.T7 — resume-диалог «Продолжить с M:SS / С начала», по одному
-                                // разу на переоткрытие серии ([PlayerUiState.resumePositionMs]
-                                // сбрасывается обоими выборами).
-                                val resumePositionMs = state.resumePositionMs
-                                if (resumePositionMs != null) {
-                                    ResumePlaybackDialog(
-                                        positionMs = resumePositionMs,
-                                        strings = strings,
-                                        onContinue = viewModel::onResumeContinue,
-                                        onStartOver = viewModel::onResumeStartOver,
-                                        onDismiss = viewModel::onResumeDismiss,
-                                    )
+                                    // P16.T7 — плашка авто-продолжения «Продолжено с M:SS · С начала»: внизу
+                                    // кадра, сама исчезает через RESUME_NOTICE_MS. Не отдельное окно
+                                    // (как прежний AlertDialog) — не возвращает системные панели в fullscreen.
+                                    val resumeNoticeMs = state.resumeNoticeMs
+                                    val resumeNoticeInset =
+                                        if (isFullscreen) RESUME_NOTICE_FULL_INSET else RESUME_NOTICE_COMPACT_INSET
+                                    // Показ и таймер — только когда видео реально пошло: иначе плашка
+                                    // успевала истечь, пока страница хоста ещё грузилась.
+                                    // Защёлка: однажды начавшись, плашка держится свои RESUME_NOTICE_MS, даже
+                                    // если `isPlaying` кратко мигнёт на буферизации после перемотки.
+                                    var resumeNoticeStarted by remember(resumeNoticeMs) { mutableStateOf(false) }
+                                    val playbackRunning = videoState.isPlaying && !videoState.isBuffering
+                                    LaunchedEffect(playbackRunning) {
+                                        if (playbackRunning) resumeNoticeStarted = true
+                                    }
+                                    if (resumeNoticeMs != null && !pipActive && resumeNoticeStarted) {
+                                        LaunchedEffect(resumeNoticeMs) {
+                                            delay(RESUME_NOTICE_MS)
+                                            viewModel.onResumeNoticeDismiss()
+                                        }
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .height(videoHeight)
+                                                    .offset(y = topOffset)
+                                                    .padding(
+                                                        bottom = resumeNoticeInset,
+                                                    ),
+                                            contentAlignment = Alignment.BottomCenter,
+                                        ) {
+                                            ResumeNotice(
+                                                positionMs = resumeNoticeMs,
+                                                strings = strings,
+                                                onStartOver = {
+                                                    controller.seekTo(0L)
+                                                    viewModel.onResumeStartOver()
+                                                },
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -568,9 +807,11 @@ fun PlayerScreen(
                             )
                             PlayerDesktopControls(
                                 isWatched = state.isWatched,
+                                hasPrevEpisode = state.hasPrevEpisode,
                                 hasNextEpisode = state.hasNextEpisode,
                                 onBack = onBack,
                                 onToggleWatched = viewModel::toggleWatched,
+                                onPrevEpisode = openPrevEpisode,
                                 onNextEpisode = openNextEpisode,
                                 modifier = Modifier.align(Alignment.BottomCenter),
                             )
@@ -611,7 +852,7 @@ private fun VlcRequiredState(modifier: Modifier = Modifier) {
  *  (`Reelwave Prototype.dc.html`, `showPlayer`), см. KDoc [PlayerScreen]. */
 private const val COMPACT_VIDEO_ASPECT_RATIO = 16f / 9f
 
-/** См. KDoc у `animateDpAsState` в [PlayerScreen] — длительность плавного ресайза видео-области. */
+/** См. комментарий у `videoHeightAnim` в [PlayerScreen] — длительность плавного ресайза видео-области. */
 private const val VIDEO_RESIZE_ANIMATION_MS = 300
 
 private fun PlayerError?.toMessage(strings: Strings): String =
@@ -622,34 +863,67 @@ private fun PlayerError?.toMessage(strings: Strings): String =
         PlayerError.Generic, null -> strings.playerLoadError
     }
 
+/** Автозапуск серии: шаг повтора команды `play` и сколько всего пытаться (страница хоста + реклама). */
+private const val AUTOSTART_RETRY_MS = 1_500L
+private const val AUTOSTART_TIMEOUT_MS = 20_000L
+
 /** P16.T7 — троттлинг периодического сохранения позиции воспроизведения. */
 private const val POSITION_SAVE_THROTTLE_MS = 2_000L
 
 /**
- * P16.T7 — resume-диалог: «Продолжить с M:SS» / «С начала». Показывается один раз на
- * переоткрытие серии (см. KDoc [PlayerUiState.resumePositionMs]) поверх видео, независимо от
- * compact/fullscreen — тот же слой, что и [AudioPickerOverlay].
+ * P16.T7 — плашка авто-продолжения: «Продолжено с M:SS» + действие «С начала». Тёмная пилюля поверх
+ * кадра (как тосты YouTube/Netflix), не диалог: серия уже играет с сохранённого места.
  */
 @Composable
-private fun ResumePlaybackDialog(
+private fun ResumeNotice(
     positionMs: Long,
     strings: Strings,
-    onContinue: () -> Unit,
     onStartOver: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(strings.playerResumeTitle) },
-        text = { Text(strings.playerResumeContinueFrom(formatResumeTime(positionMs))) },
-        confirmButton = {
-            TextButton(onClick = onContinue) { Text(strings.playerResumeContinue) }
-        },
-        dismissButton = {
-            TextButton(onClick = onStartOver) { Text(strings.playerResumeFromStart) }
-        },
-    )
+    Surface(
+        shape = RoundedCornerShape(RESUME_NOTICE_CORNER),
+        color = Color(RESUME_NOTICE_BG).copy(alpha = RESUME_NOTICE_BG_ALPHA),
+        contentColor = Color.White,
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = strings.playerResumedFrom(formatResumeTime(positionMs)),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            TextButton(onClick = onStartOver) {
+                Text(
+                    text = strings.playerResumeFromStart,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+        }
+    }
 }
+
+/** Последняя позиция, увиденная с найденным видео — для финального сохранения при dispose. */
+private class LastSeenPlayback {
+    var currentMs: Long? = null
+    var durationMs: Long? = null
+}
+
+/** Перемотка на точку продолжения: попыток, пауза до проверки, допуск «позиция встала». */
+private const val RESUME_SEEK_ATTEMPTS = 4
+private const val RESUME_SEEK_CHECK_MS = 1_000L
+private const val RESUME_SEEK_TOLERANCE_MS = 3_000L
+
+/** Сколько висит плашка авто-продолжения. */
+private const val RESUME_NOTICE_MS = 6_000L
+
+/** В fullscreen плашка выше нижней панели (прогресс + пилюли), чтобы не перекрывать их. */
+private val RESUME_NOTICE_FULL_INSET = 120.dp
+private val RESUME_NOTICE_COMPACT_INSET = 12.dp
+private val RESUME_NOTICE_CORNER = 20.dp
+private const val RESUME_NOTICE_BG = 0xFF0F1016
+private const val RESUME_NOTICE_BG_ALPHA = 0.92f
 
 /** `125_000L` → `"2:05"` — M:SS без ведущего нуля у минут, секунды дополняются нулём слева. */
 private fun formatResumeTime(positionMs: Long): String {

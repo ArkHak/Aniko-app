@@ -3,6 +3,7 @@ package com.aniko.app.feature.player
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.KeyEvent
 
 /**
  * Хост оверлея плеера ([PlayerOverlay]/[CompactPlayerChrome]) — Step 2/3 пересмотра P8.T1 (см.
@@ -28,9 +29,15 @@ import androidx.compose.ui.Modifier
  * `:shared:player` не подключает эту функцию сам (`PlayerOverlay`/`CompactPlayerChrome` живут в
  * `composeApp`, не в `:shared:player` — граница модулей, см. их собственный KDoc) — `expect/actual`
  * заведён здесь, а не там, именно поэтому.
+ *
+ * @param onKeyEvent клавиши, пришедшие в окно оверлея (только Desktop: там оверлей — отдельное окно и
+ * после первого клика забирает фокус у главного; на Android/iOS параметр игнорируется). Ловится на
+ * уровне окна (`onPreviewKeyEvent`), а не фокуса узла: после открытия/закрытия шторки фокус терялся,
+ * и пробел/стрелки переставали работать (живая проверка 2026-10-02).
  */
 @Composable
 expect fun PlayerOverlayHost(
     modifier: Modifier = Modifier,
+    onKeyEvent: (KeyEvent) -> Boolean = { false },
     content: @Composable BoxScope.() -> Unit,
 )

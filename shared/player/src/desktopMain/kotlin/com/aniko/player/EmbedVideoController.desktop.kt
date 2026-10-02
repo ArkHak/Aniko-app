@@ -100,7 +100,7 @@ actual class EmbedVideoController actual constructor() {
             override fun buffering(
                 mp: MediaPlayer,
                 newCache: Float,
-            ) = stateFlow.update { it.copy(isVideoFound = true) }
+            ) = stateFlow.update { it.copy(isVideoFound = true, isBuffering = newCache < VLC_BUFFER_FULL) }
 
             override fun playing(mp: MediaPlayer) {
                 post(mp) { it.onPlaying() }
@@ -261,13 +261,29 @@ actual class EmbedVideoController actual constructor() {
     }
 
     actual fun seekTo(positionMs: Long) {
-        mediaPlayer?.controls()?.setTime(positionMs.coerceAtLeast(0L))
+        val player = mediaPlayer ?: return
+        val target = positionMs.coerceAtLeast(0L)
+        player.controls().setTime(target)
+        reflectSeek(target)
     }
 
     actual fun seekBy(deltaMs: Long) {
         val player = mediaPlayer ?: return
         val target = (player.status().time() + deltaMs).coerceAtLeast(0L)
         player.controls().setTime(target)
+        reflectSeek(target)
+    }
+
+    /**
+     * libVLC на ПАУЗЕ перематывает кадр, но `timeChanged` не присылает — подпись времени и полоса
+     * оставались на старой позиции (живая проверка 2026-10-02: стрелки на паузе «не работали»).
+     * Позицию отражаем сразу; во время воспроизведения следующий `timeChanged` её уточнит.
+     */
+    private fun reflectSeek(targetMs: Long) {
+        updateUnlessSwitching { state ->
+            val duration = state.durationMs
+            state.copy(currentTimeMs = if (duration != null) targetMs.coerceAtMost(duration) else targetMs)
+        }
     }
 
     actual fun setPlaybackRate(rate: Float) {
@@ -348,3 +364,6 @@ actual class EmbedVideoController actual constructor() {
         stateFlow.update { it.copy(isVideoFound = false, isPlaying = false, switchingQualityTo = null) }
     }
 }
+
+/** libVLC сообщает заполненность кэша в процентах; меньше 100 — поток ещё ждёт данных. */
+private const val VLC_BUFFER_FULL = 100f

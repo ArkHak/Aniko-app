@@ -9,12 +9,20 @@ import androidx.compose.ui.viewinterop.UIKitView
 import kotlinx.cinterop.CValue
 import platform.CoreGraphics.CGRect
 import platform.CoreGraphics.CGRectMake
+import platform.Foundation.NSError
+import platform.Foundation.NSHTTPURLResponse
 import platform.Foundation.NSMutableURLRequest
 import platform.Foundation.NSURL
 import platform.Foundation.NSURLRequest
 import platform.Foundation.setValue
+import platform.UIKit.UIColor
+import platform.WebKit.WKNavigation
+import platform.WebKit.WKNavigationDelegateProtocol
+import platform.WebKit.WKNavigationResponse
+import platform.WebKit.WKNavigationResponsePolicy
 import platform.WebKit.WKWebView
 import platform.WebKit.WKWebViewConfiguration
+import platform.darwin.NSObject
 
 /**
  * iOS: `WKWebView` в `UIKitView` (стиль cinterop — как в `IosKeychainTokenStorage.kt`, но здесь
@@ -59,7 +67,18 @@ actual fun EmbedPlayerView(
                 }
             controller?.install(configuration)
             AnixEmbedWebView(frame = CGRectMake(0.0, 0.0, 0.0, 0.0), configuration = configuration).apply {
+                // Чёрный, а не белый фон до загрузки страницы хоста (белая вспышка на старте серии).
+                setOpaque(false)
+                backgroundColor = UIColor.blackColor
+                scrollView.backgroundColor = UIColor.blackColor
                 controller?.attach(this)
+                // Главный фрейм не загрузился (403 Sibnet вне РФ, 404, сеть) — экран покажет своё
+                // сообщение вместо сырой страницы ошибки. `navigationDelegate` — weak-ссылка,
+                // поэтому делегат держит сам web view.
+                loadFailureDelegate =
+                    EmbedLoadFailureDelegate {
+                        controller?.reportEngineProblem(PlaybackEngineProblem.SourceUnavailable)
+                    }.also { navigationDelegate = it }
                 loadEmbed(url, referer)
             }
         },
@@ -95,7 +114,37 @@ private class AnixEmbedWebView(
     configuration: WKWebViewConfiguration,
 ) : WKWebView(frame, configuration) {
     var loadedEmbedUrl: String? = null
+    var loadFailureDelegate: EmbedLoadFailureDelegate? = null
 }
+
+/** Сообщает о провале загрузки ГЛАВНОГО фрейма embed-страницы (HTTP ≥ 400 или сетевая ошибка). */
+private class EmbedLoadFailureDelegate(
+    private val onFailure: () -> Unit,
+) : NSObject(),
+    WKNavigationDelegateProtocol {
+    override fun webView(
+        webView: WKWebView,
+        decidePolicyForNavigationResponse: WKNavigationResponse,
+        decisionHandler: (WKNavigationResponsePolicy) -> Unit,
+    ) {
+        val status = (decidePolicyForNavigationResponse.response as? NSHTTPURLResponse)?.statusCode ?: 0L
+        if (decidePolicyForNavigationResponse.forMainFrame && status >= HTTP_ERROR_MIN) onFailure()
+        decisionHandler(WKNavigationResponsePolicy.WKNavigationResponsePolicyAllow)
+    }
+
+    override fun webView(
+        webView: WKWebView,
+        didFailProvisionalNavigation: WKNavigation?,
+        withError: NSError,
+    ) {
+        // NSURLErrorCancelled — наша же отмена (смена серии/уход с экрана), не провал источника.
+        if (withError.code != NSURL_ERROR_CANCELLED) onFailure()
+    }
+}
+
+private const val NSURL_ERROR_CANCELLED = -999L
+
+private const val HTTP_ERROR_MIN = 400L
 
 private fun AnixEmbedWebView.loadEmbed(
     url: String,

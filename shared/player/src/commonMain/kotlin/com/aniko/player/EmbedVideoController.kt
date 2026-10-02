@@ -15,6 +15,10 @@ import kotlinx.coroutines.flow.StateFlow
  * команды уходят в никуда, а оверлей плеера показывать нечего.
  * @param durationMs `null`, пока не пришло событие `loadedmetadata`: до него `duration`
  * у элемента равен `NaN` (подтверждено спайком). Прогресс-бар до этого момента включать нельзя.
+ * @param isBuffering видео должно играть, но ждёт данных (`readyState` < HAVE_FUTURE_DATA при
+ * `!paused`) — экран показывает свой индикатор загрузки вместо спиннера хоста (тот скрыт CSS).
+ * @param isAdPlaying хост показывает рекламу (Kodik VAST): экран прячет свои контролы и не перехватывает
+ * касания, чтобы работали кнопки «Пропустить»/«Закрыть» самой рекламы.
  */
 data class EmbedVideoState(
     val isVideoFound: Boolean = false,
@@ -22,6 +26,8 @@ data class EmbedVideoState(
     val currentTimeMs: Long = 0L,
     val durationMs: Long? = null,
     val playbackRate: Float = 1f,
+    val isBuffering: Boolean = false,
+    val isAdPlaying: Boolean = false,
     /** Качества, которые объявляет хост-плеер (порядок хоста), напр. `360p,480p,720p`. */
     val availableQualities: List<String> = emptyList(),
     /** Текущее качество по данным хоста, если он его показывает. */
@@ -53,6 +59,15 @@ enum class PlaybackEngineProblem {
      * совпадает с архитектурой приложения (libVLC в `.dmg` не входит, vlcj ищет системный VLC).
      */
     VlcUnavailable,
+
+    /**
+     * Страница/поток источника не загрузились: HTTP-ошибка или сетевой сбой главного фрейма
+     * embed-страницы (Android/iOS), провал резолва потока (Desktop). Живой случай 2026-10-01:
+     * Sibnet отдаёт `403 Forbidden` не-российским IP (VPN), и вместо плеера была сырая белая
+     * страница «403» с вечным спиннером. Экран показывает своё сообщение с «Повторить» и
+     * «Сменить озвучку».
+     */
+    SourceUnavailable,
 }
 
 /**

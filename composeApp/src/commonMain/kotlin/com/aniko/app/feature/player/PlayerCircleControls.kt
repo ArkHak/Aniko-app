@@ -82,6 +82,9 @@ internal fun PlayerIconCircle(
  * паттерн, что и у остальных M3-кнопок проекта.
  *
  * @param contentDescription озвучка кнопки для скринридера (обязательна: кнопка без подписи).
+ * @param tint цвет иконки — по умолчанию белый оверлея; переопределяется для disabled-состояний
+ * (кнопки prev/next серии компактного режима глушат иконку до M3-альфы 0.38, см.
+ * [CompactEpisodeSkipButton]).
  * @see PlayerIconCircle про остальные параметры и гарантии центровки.
  */
 @Suppress("LongParameterList") // Кнопка = подпись + onClick + та же декомпозиция круга
@@ -95,6 +98,7 @@ internal fun PlayerCircleIconButton(
     iconSize: Dp,
     background: Color,
     filled: Boolean = false,
+    tint: Color = OVERLAY_CONTENT_COLOR,
 ) {
     IconButton(
         onClick = onClick,
@@ -109,6 +113,7 @@ internal fun PlayerCircleIconButton(
             iconSize = iconSize,
             background = background,
             filled = filled,
+            tint = tint,
         )
     }
 }

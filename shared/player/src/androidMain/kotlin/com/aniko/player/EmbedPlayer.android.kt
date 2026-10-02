@@ -55,6 +55,9 @@ actual fun EmbedPlayerView(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
+                // Чёрный, а не белый фон по умолчанию: до загрузки страницы хоста белый прямоугольник
+                // мелькал в чёрном плеере при каждом старте серии.
+                setBackgroundColor(android.graphics.Color.BLACK)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.mediaPlaybackRequiresUserGesture = false
@@ -79,6 +82,30 @@ actual fun EmbedPlayerView(
                             view: WebView,
                             request: android.webkit.WebResourceRequest,
                         ): Boolean = !isSafeEmbedUrl(request.url.toString())
+
+                        // Главный фрейм embed-страницы не загрузился (403 Sibnet вне РФ, 404, 5xx) —
+                        // вместо сырой страницы ошибки хоста экран покажет своё сообщение.
+                        override fun onReceivedHttpError(
+                            view: WebView,
+                            request: android.webkit.WebResourceRequest,
+                            errorResponse: android.webkit.WebResourceResponse,
+                        ) {
+                            if (request.isForMainFrame && errorResponse.statusCode >= HTTP_ERROR_MIN) {
+                                controller?.reportEngineProblem(PlaybackEngineProblem.SourceUnavailable)
+                            }
+                        }
+
+                        override fun onReceivedError(
+                            view: WebView,
+                            request: android.webkit.WebResourceRequest,
+                            error: android.webkit.WebResourceError,
+                        ) {
+                            // ERROR_UNKNOWN — это net::ERR_ABORTED: наша же отмена загрузки (смена
+                            // серии/уход с экрана), не провал источника.
+                            if (request.isForMainFrame && error.errorCode != ERROR_UNKNOWN) {
+                                controller?.reportEngineProblem(PlaybackEngineProblem.SourceUnavailable)
+                            }
+                        }
                     }
                 controller?.attach(this)
                 loadEmbed(url, referer, headers)
@@ -123,6 +150,8 @@ private fun WebView.destroyEmbed() {
 }
 
 private const val BLANK_PAGE_URL = "about:blank"
+
+private const val HTTP_ERROR_MIN = 400
 
 private fun WebView.loadEmbed(
     url: String,

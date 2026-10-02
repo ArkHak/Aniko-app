@@ -185,6 +185,13 @@ class PlayerIconCenteringTest {
                         controller = controller,
                         onBack = {},
                         onEnterFullscreen = {},
+                        hasPrevEpisode = false,
+                        onPrevEpisode = {},
+                        hasNextEpisode = false,
+                        onNextEpisode = {},
+                        currentEpisodeLabel = "1",
+                        episodesAvailable = false,
+                        onOpenEpisodesPicker = {},
                         voiceTypes = emptyList(),
                         currentVoiceType = null,
                         onOpenAudioPicker = {},
@@ -257,11 +264,12 @@ class PlayerIconCenteringTest {
                     PlayerOverlay(
                         state = EmbedVideoState(isVideoFound = true, isPlaying = isPlaying),
                         controller = controller,
+                        hasPrevEpisode = false,
                         hasNextEpisode = false,
                         onBack = {},
                         onCollapseFullscreen = {},
+                        onPrevEpisode = {},
                         onNextEpisode = {},
-                        onEpisodeNearEnd = {},
                         onEnterPictureInPicture = {},
                     )
                 }

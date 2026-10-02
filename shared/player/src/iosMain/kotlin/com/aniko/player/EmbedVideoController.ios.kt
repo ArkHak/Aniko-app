@@ -3,6 +3,7 @@ package com.aniko.player
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import platform.Foundation.NSLog
 import platform.WebKit.WKContentWorld
 import platform.WebKit.WKFrameInfo
 import platform.WebKit.WKScriptMessage
@@ -47,6 +48,13 @@ actual class EmbedVideoController actual constructor() {
     private var userContentController: WKUserContentController? = null
     private var videoFrame: WKFrameInfo? = null
 
+    /**
+     * Фреймы хоста без `<video>` — адресаты команд до первого старта (см. одноимённое поле
+     * Android-контроллера). `WKFrameInfo` приходит новым объектом на каждое сообщение, поэтому
+     * ключ — главный/дочерний фрейм + origin: последний экземпляр на ключ.
+     */
+    private val candidateFrames = LinkedHashMap<String, WKFrameInfo>()
+
     /** Применяет «качество по умолчанию» из настроек к меню хоста — один раз на источник. */
     private val qualityApplier = PreferredQualityApplier()
 
@@ -55,6 +63,7 @@ actual class EmbedVideoController actual constructor() {
     actual fun setExpectedSource(embedUrl: String) {
         originFilter = EmbedOriginFilter(embedUrl)
         videoFrame = null
+        candidateFrames.clear()
         qualityApplier.reset()
         stateFlow.value = EmbedVideoState()
     }
@@ -82,9 +91,15 @@ actual class EmbedVideoController actual constructor() {
         webView = target
     }
 
+    /** Страница источника не загрузилась — см. [PlaybackEngineProblem.SourceUnavailable]. */
+    internal fun reportEngineProblem(problem: PlaybackEngineProblem) {
+        stateFlow.value = stateFlow.value.copy(engineProblem = problem)
+    }
+
     actual fun release() {
         webView = null
         videoFrame = null
+        candidateFrames.clear()
         runCatching { userContentController?.removeScriptMessageHandlerForName(EMBED_BRIDGE_CHANNEL) }
         userContentController = null
         stateFlow.value = EmbedVideoState()
@@ -112,32 +127,58 @@ actual class EmbedVideoController actual constructor() {
         frame: WKFrameInfo,
     ) {
         if (originFilter?.accepts(origin) != true) return
-        val parsed = parseEmbedVideoState(body) ?: return
-        if (parsed.isVideoFound) {
-            videoFrame = frame
-        } else if (videoFrame != null) {
+        // Сообщения, не являющиеся state-апдейтом (отладочный отчёт о видимом chrome — см.
+        // parseEmbedChromeDebug), состояния не меняют, только логируются.
+        // Сообщённая страницей ошибка загрузки (engineProblem) переживает апдейты моста — см. Android.
+        val parsed = parseEmbedVideoState(body)?.copy(engineProblem = stateFlow.value.engineProblem)
+        if (parsed == null) {
+            reportChromeDebug(body)
             return
         }
-        stateFlow.value = parsed
-        // Видео найдено и меню качеств известно — единственный момент, когда клик по пункту меню
-        // хоста имеет смысл; применяется один раз на источник (см. PreferredQualityApplier).
-        if (parsed.isVideoFound) qualityApplier.onState(parsed)?.let(::setQuality)
+        // Второй фрейм того же домена без видео не должен затирать состояние настоящего.
+        val usableFrame = parsed.isVideoFound || videoFrame == null
+        if (parsed.isVideoFound) {
+            videoFrame = frame
+        } else if (videoFrame == null && candidateFrames.size < MAX_CANDIDATE_FRAMES) {
+            candidateFrames["${frame.mainFrame}|$origin"] = frame
+        }
+        if (usableFrame) {
+            stateFlow.value = parsed
+            // Видео найдено и меню качеств известно — единственный момент, когда клик по пункту меню
+            // хоста имеет смысл; применяется один раз на источник (см. PreferredQualityApplier).
+            if (parsed.isVideoFound) qualityApplier.onState(parsed)?.let(::setQuality)
+        }
+    }
+
+    private fun reportChromeDebug(raw: String) {
+        val entries = parseEmbedChromeDebug(raw)
+        // Без аргументов формата: `NSLog("%@", kotlinString)` роняет процесс (EXC_BAD_ACCESS в
+        // CFStringAppendFormat — живой краш 2026-10-02), `%` в тексте экранируем.
+        if (entries.isNotEmpty()) NSLog("embed chrome over video: ${entries.joinToString(" ; ").replace("%", "%%")}")
     }
 
     private fun send(command: String) {
         val target = webView ?: return
-        val frame = videoFrame ?: return
-        val script = "window.$EMBED_BRIDGE_EXEC_FN(${command.asJsStringLiteral()});"
-        runCatching {
-            target.evaluateJavaScript(
-                javaScriptString = script,
-                inFrame = frame,
-                inContentWorld = WKContentWorld.pageWorld,
-                completionHandler = null,
-            )
+        val frames = videoFrame?.let(::listOf) ?: candidateFrames.values.toList()
+        // `typeof` — фрейм мог перезагрузиться и ещё не получить мост; тогда команда — no-op.
+        val script =
+            "if (typeof window.$EMBED_BRIDGE_EXEC_FN === 'function') " +
+                "window.$EMBED_BRIDGE_EXEC_FN(${command.asJsStringLiteral()});"
+        frames.forEach { frame ->
+            runCatching {
+                target.evaluateJavaScript(
+                    javaScriptString = script,
+                    inFrame = frame,
+                    inContentWorld = WKContentWorld.pageWorld,
+                    completionHandler = null,
+                )
+            }
         }
     }
 }
+
+/** Ограничение на случай страницы с десятками фреймов того же домена. */
+private const val MAX_CANDIDATE_FRAMES = 8
 
 /**
  * Команды формируются нами и состоят из `[a-zA-Z0-9:.\-]`, но литерал всё равно экранируем —

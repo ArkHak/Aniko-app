@@ -68,6 +68,16 @@ fun EpisodeGrid(
     }
 }
 
+/**
+ * Номер серии для показа пользователю. [Episode.position] — это ключ API (`episode/target/...`),
+ * а не человеческий номер: хосты несогласованы (у Kodik нумерация с 1, у Sibnet — с 0), зато
+ * человеческий номер приходит в [Episode.name] («1 серия»). Берём первое число из имени; если
+ * его нет (нештатные имена) — сырой [Episode.position] как последний фолбэк.
+ */
+fun Episode.displayNumber(): String = name?.let { EPISODE_NAME_NUMBER_REGEX.find(it)?.value } ?: position.toString()
+
+private val EPISODE_NAME_NUMBER_REGEX = Regex("""\d+""")
+
 // Приватная функция, зеркалит параметры публичного EpisodeGrid (см. @Suppress выше по файлу)
 // плюс onLongClick, добавленный аддитивно в Фазе 7.
 @Suppress("LongParameterList")
@@ -131,7 +141,7 @@ private fun EpisodeCell(
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = episode.position.toString(),
+            text = episode.displayNumber(),
             color = contentColor.copy(alpha = alpha),
             style = MaterialTheme.typography.labelLarge,
         )

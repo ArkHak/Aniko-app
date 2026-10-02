@@ -59,7 +59,7 @@ fun Modifier.playerKeyboardShortcuts(
 }
 
 /** `true` — Compose получила это событие как «клавиша нажата» и обработала его. */
-private fun handlePlayerKeyEvent(
+internal fun handlePlayerKeyEvent(
     event: KeyEvent,
     controller: EmbedVideoController,
     currentRate: Float,

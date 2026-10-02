@@ -201,10 +201,12 @@ private fun DesktopVlcjPlayer(
                 // Без контроллера (превью/тесты) — играем умолчание резолвера как есть.
                 mediaPlayerComponent.playResolved(resolved)
             }
+        } else {
+            // Резолв не нашёл поток (мёртвая ссылка/403 вне РФ/неподдерживаемый хост/таймаут сети):
+            // экран покажет «источник недоступен» с «Повторить»/«Сменить озвучку» вместо вечного
+            // спиннера (раньше — молчаливая деградация до одной кнопки «назад»).
+            controller?.reportEngineProblem(PlaybackEngineProblem.SourceUnavailable)
         }
-        // resolved == null — резолв не нашёл поток (мёртвая ссылка/неподдерживаемый хост/таймаут
-        // сети): остаёмся с isVideoFound=false, PlayerOverlay честно деградирует до одной кнопки
-        // "назад" (см. её KDoc про bridgeActive) вместо притворства, что видео есть.
     }
 
     val currentBounds = bounds

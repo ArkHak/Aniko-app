@@ -30,13 +30,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,26 +46,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aniko.data.voicepin.LocalVoicePinStore
+import com.aniko.model.Episode
 import com.aniko.model.VoiceType
 import com.aniko.player.EmbedVideoController
 import com.aniko.player.EmbedVideoState
-import com.aniko.player.isEpisodeFinished
-import com.aniko.player.isNearEnd
 import com.aniko.player.playerOpensFullscreen
-import com.aniko.player.secondsToEpisodeEnd
 import com.aniko.ui.component.AnixIcon
+import com.aniko.ui.component.EpisodeGrid
 import com.aniko.ui.component.VoiceTypeRow
 import com.aniko.ui.i18n.LocalStrings
 import com.aniko.ui.theme.AnixThemeTokens
@@ -119,11 +120,19 @@ import org.koin.compose.koinInject
  * смена раскладки без навигации. При `bridgeActive` именно это делает стрелка «назад» на
  * платформах, где compact-режим — самостоятельное состояние ([com.aniko.player.playerOpensFullscreen]
  * == false).
- * @param onEpisodeNearEnd вызывается, когда серия подходит к концу — сюда подвешена авто-отметка
- * «просмотрено» (P8.T8). Порог — общий с баннером ([isNearEnd] из `:shared:player`), сознательно
- * один и тот же на обе фичи.
- * @param onNextEpisode переход на следующую серию: и по кнопке «Смотреть сейчас», и по истечении
- * обратного отсчёта. Вызывается не чаще одного раза за жизнь этого экрана.
+ * @param onNextEpisode переход на следующую серию — кнопка «Следующая серия» в нижней панели
+ * (Netflix-раскладка, 2026-10-01). Автопереход в конце серии и авто-отметка «просмотрено» живут в
+ * [PlayerScreen] (общие для compact/fullscreen), сюда приходит только карточка [upNext].
+ * @param onPrevEpisode переход на предыдущую серию — иконка skip_previous рядом с «Следующей
+ * серией» (гейтится [hasPrevEpisode]).
+ * @param episodeTitle заголовок топбара («Серия N»), `null` — не рисуется.
+ * @param upNext карточка «Следующая серия» с обратным отсчётом; `null` — не показывается. Видна
+ * независимо от контролов: титры смотрят без оверлея, и молча перескочить без шанса нажать
+ * «Отмена» было бы хуже всего.
+ * @param onOpenEpisodesPicker тап по кнопке списка серий в [PlayerTopBar] — сама шторка
+ * ([EpisodesSheetOverlay]) рисуется в [PlayerScreen] общей для compact/fullscreen, как
+ * [AudioPickerOverlay] (см. её KDoc): одно состояние видимости на оба режима вместо двух копий.
+ * Кнопка гейтится непустым списком серий на вызывающей стороне: открывать шторку нечего.
  * @param voiceTypes список озвучек релиза для чипа «Audio» (P13.T10, `PlayerUiState.voiceTypes`).
  * Пустой список прячет чип целиком — переключаться некуда, показывать неактивную кнопку незачем
  * (тот же принцип честного UI, что и у PiP-заглушки, только тут решение — не рисовать вовсе).
@@ -133,21 +142,25 @@ import org.koin.compose.koinInject
  * рисуется (см. её KDoc), состояние видимости пикера и выбор строки (`selectVoiceType`) подняты в
  * [PlayerScreen], один пикер общий для compact- и fullscreen-режимов вместо двух независимых копий.
  */
-@Suppress("LongParameterList", "LongMethod") // Состояние + контроллер + флаг наличия следующей
-// серии + 3 колбэка наружу (назад/следующая/конец серии) + аудио-пикер (список + текущая озвучка +
-// флаг загрузки + колбэк выбора, P13.T10) + modifier. Дробить оверлей на части с меньшим числом
-// параметров пришлось бы через общий mutable-объект состояния — это хуже, чем счётчик. Тело функции
-// длиннее лимита ровно из-за этого же перечисления layout-секций (топбар/центр/баннер/панель/пикер)
-// — каждая уже вынесена в свой composable, короче эта функция уже не станет без потери читаемости.
+@Suppress("LongParameterList", "LongMethod") // Состояние + контроллер + флаги наличия соседних
+// серий + колбэки наружу (назад/prev/next/конец серии/шторка серий) + аудио-пикер (список +
+// текущая озвучка + флаг загрузки + колбэк выбора, P13.T10) + modifier. Дробить оверлей на части
+// с меньшим числом параметров пришлось бы через общий mutable-объект состояния — это хуже, чем
+// счётчик. Тело функции длиннее лимита ровно из-за этого же перечисления layout-секций (топбар/
+// центр/баннер/панель/пикер) — каждая уже вынесена в свой composable, короче эта функция уже не
+// станет без потери читаемости.
 @Composable
 fun PlayerOverlay(
     state: EmbedVideoState,
     controller: EmbedVideoController,
+    hasPrevEpisode: Boolean,
     hasNextEpisode: Boolean,
     onBack: () -> Unit,
     onCollapseFullscreen: () -> Unit,
+    onPrevEpisode: () -> Unit,
     onNextEpisode: () -> Unit,
-    onEpisodeNearEnd: () -> Unit,
+    episodeTitle: String? = null,
+    upNext: UpNextCardState? = null,
     voiceTypes: List<VoiceType> = emptyList(),
     currentVoiceType: VoiceType? = null,
     onOpenAudioPicker: () -> Unit = {},
@@ -155,6 +168,7 @@ fun PlayerOverlay(
     onOpenQualityPicker: () -> Unit = {},
     speedLabel: String? = null,
     onOpenSpeedPicker: () -> Unit = {},
+    onOpenEpisodesPicker: () -> Unit = {},
     onEnterPictureInPicture: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -168,7 +182,9 @@ fun PlayerOverlay(
 
     // Мост реально держит видео. Пока нет — управлять нечем, и оверлей обязан деградировать
     // до одной кнопки «назад», не перехватывая касания (см. KDoc, абзац про перехват).
-    val bridgeActive = state.isVideoFound
+    // Реклама хоста (Kodik VAST) — тот же режим, что «видео ещё не найдено»: только «назад» и никакого
+    // перехвата касаний, иначе кнопку «Пропустить» рекламы не нажать.
+    val bridgeActive = state.isVideoFound && !state.isAdPlaying
     // До нахождения <video> оверлей деградирует до «только назад»: старт делает большой play
     // хоста (trust-gesture), после первого старта класс `aniko-video-found` скрывает его и
     // рабочим UI становится наш (см. KDoc `EmbedVideoBridge` CHROME_HIDE_CSS).
@@ -187,11 +203,6 @@ fun PlayerOverlay(
     // параметром: это фича ровно этого (полноэкранного) слоя, компактному режиму она не нужна.
     val systemLevels = rememberPlayerSystemLevels()
     val levelGesture = rememberPlayerLevelGesture(systemLevels)
-
-    val nearEnd = state.isNearEnd()
-    LaunchedEffect(nearEnd) {
-        if (nearEnd) onEpisodeNearEnd()
-    }
 
     // Жест уровней висит на КОРНЕ оверлея, а не на тап-слое: тап-слой — сосед `Column`'а снизу по
     // z-порядку, и до него события не доходят вовсе (живая проверка: свайп уходил прямо в
@@ -259,6 +270,14 @@ fun PlayerOverlay(
             )
         }
 
+        PlayerCenterArea(
+            visible = controlsShown,
+            state = state,
+            controller = controller,
+            onInteraction = { interactionTick++ },
+            modifier = Modifier.fillMaxSize(),
+        )
+
         // Колонка сама по себе не перехватывает касания (у неё нет pointer-модификаторов), поэтому
         // тапы мимо кнопок проваливаются в слой-перехватчик выше и продолжают прятать контролы.
         Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
@@ -266,33 +285,45 @@ fun PlayerOverlay(
             // единственный выход с экрана на iOS.
             AnimatedVisibility(visible = controlsShown || !bridgeActive, enter = fadeIn(), exit = fadeOut()) {
                 PlayerTopBar(
+                    title = episodeTitle,
                     onBack = onBack,
                     onCollapseFullscreen = onCollapseFullscreen,
                     bridgeActive = bridgeActive,
+                    onOpenEpisodesPicker = {
+                        interactionTick++
+                        onOpenEpisodesPicker()
+                    },
                     onEnterPictureInPicture = onEnterPictureInPicture,
                     onInteraction = { interactionTick++ },
                 )
             }
 
-            PlayerCenterArea(
-                visible = controlsShown,
-                state = state,
-                controller = controller,
-                onInteraction = { interactionTick++ },
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
+            // Середина — пустая: центральные кнопки центрируются по КАДРУ (слой ниже), а не по зазору
+            // между топбаром и нижней панелью — иначе они уезжали выше центра видео (живая проверка iOS).
+            Spacer(modifier = Modifier.weight(1f))
 
-            NextEpisodeBanner(
-                state = state,
-                hasNextEpisode = hasNextEpisode,
-                onNextEpisode = onNextEpisode,
-            )
+            if (upNext != null) {
+                UpNextCard(
+                    state = upNext,
+                    modifier =
+                        Modifier
+                            .align(Alignment.End)
+                            .padding(
+                                horizontal = AnixThemeTokens.dimens.spaceM,
+                                vertical = AnixThemeTokens.dimens.spaceS,
+                            ),
+                )
+            }
 
             AnimatedVisibility(visible = controlsShown, enter = fadeIn(), exit = fadeOut()) {
                 PlayerBottomPanel(
                     state = state,
                     controller = controller,
                     onInteraction = { interactionTick++ },
+                    hasPrevEpisode = hasPrevEpisode,
+                    hasNextEpisode = hasNextEpisode,
+                    onPrevEpisode = onPrevEpisode,
+                    onNextEpisode = onNextEpisode,
                     voiceTypes = voiceTypes,
                     currentVoiceType = currentVoiceType,
                     onOpenAudioPicker = {
@@ -316,7 +347,7 @@ fun PlayerOverlay(
 }
 
 /**
- * Стрелка «назад» + PiP-заглушка (P8.T3).
+ * Стрелка «назад» + кнопка списка серий + PiP-заглушка (P8.T3).
  *
  * Семантика стрелки зависит от [bridgeActive] И платформы: при активном мосте она сворачивает
  * fullscreen в compact ([onCollapseFullscreen]) — но только там, где compact-режим реально
@@ -328,11 +359,16 @@ fun PlayerOverlay(
  * экрана ([onBack]). При неактивном мосте — тоже [onBack], чтобы не запереть пользователя в
  * неуправляемом compact-режиме.
  */
+@Suppress("LongParameterList") // Плоский набор колбэков без бизнес-логики: назад/collapse +
+// bridgeActive (семантика стрелки) + открытие шторки серий + PiP + счётчик взаимодействия —
+// тот же случай, что и у OverlayIconButton (см. её KDoc); группировка ради счётчика — косвенность.
 @Composable
 private fun PlayerTopBar(
+    title: String?,
     onBack: () -> Unit,
     onCollapseFullscreen: () -> Unit,
     bridgeActive: Boolean,
+    onOpenEpisodesPicker: () -> Unit,
     onEnterPictureInPicture: (() -> Unit)?,
     onInteraction: () -> Unit,
 ) {
@@ -354,7 +390,24 @@ private fun PlayerTopBar(
                 }
             },
         )
-        Spacer(modifier = Modifier.weight(1f))
+        // Заголовок «Серия N» — как у взрослых плееров: всегда понятно, что сейчас играет.
+        Text(
+            text = title.orEmpty(),
+            color = OVERLAY_CONTENT_COLOR,
+            fontSize = TOP_BAR_TITLE_FONT_SIZE,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(horizontal = dimens.spaceXs),
+        )
+        // Шторка со списком серий — общая с compact-режимом ([EpisodesSheetOverlay] в
+        // [PlayerScreen]); сам оверлей только сообщает о тапе. Порядок кнопок: список серий
+        // ближе к центру, PiP — на самом краю.
+        OverlayIconButton(
+            iconName = "playlist_play",
+            contentDescription = strings.playerSelectEpisode,
+            onClick = onOpenEpisodesPicker,
+        )
         // Кнопка рисуется только там, где PiP реально работает (P16.T8): на iOS оверлей не может
         // ни войти в PiP, ни нарисовать в нём свои кнопки — вместо неработающей кнопки её нет
         // вовсе (тот же принцип честного UI, что у чипа Audio с одной озвучкой).
@@ -391,6 +444,7 @@ private fun PlayerCenterArea(
         AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
             PlayerCenterControls(
                 isPlaying = state.isPlaying,
+                isBuffering = state.isBuffering,
                 controller = controller,
                 onInteraction = onInteraction,
             )
@@ -399,7 +453,8 @@ private fun PlayerCenterArea(
 }
 
 /**
- * Центральная тап-зона: −30 с / −10 с / play-pause / +10 с (P8.T3, P16.T10).
+ * Центральная тап-зона: −10 с / play-pause / +10 с (P8.T3, P16.T10). Переключение серий —
+ * в нижней панели (Netflix-раскладка 2026-10-01), центр отдан только управлению текущим видео.
  *
  * Рисуется только когда мост держит `<video>` (см. `bridgeActive` в [PlayerOverlay]) — поэтому
  * отдельного «неактивного» состояния у кнопок нет: если команду некому исполнить, кнопок просто
@@ -408,13 +463,14 @@ private fun PlayerCenterArea(
 @Composable
 private fun PlayerCenterControls(
     isPlaying: Boolean,
+    isBuffering: Boolean,
     controller: EmbedVideoController,
     onInteraction: () -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
     val strings = LocalStrings.current
     Row(
-        horizontalArrangement = Arrangement.spacedBy(dimens.spaceL),
+        horizontalArrangement = Arrangement.spacedBy(CENTER_CONTROLS_SPACING),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // P16 (2026-09-10): кнопка −30 убрана по решению пользователя — остаётся только ±10.
@@ -427,11 +483,14 @@ private fun PlayerCenterControls(
                 controller.seekBy(-PLAYER_SEEK_STEP_MS)
             },
         )
+        // Во время буферизации на месте ▶/⏸ — спиннер [PlayerStartIndicator] (как у Netflix):
+        // кнопка прозрачна, но держит место, чтобы ряд не схлопывался.
         OverlayIconButton(
             iconName = if (isPlaying) "pause" else "play_arrow",
             filled = true,
             contentDescription = if (isPlaying) strings.playerPause else strings.playerPlay,
             iconSize = PLAY_BUTTON_ICON_SIZE,
+            modifier = Modifier.alpha(if (isBuffering) 0f else 1f),
             onClick = {
                 onInteraction()
                 controller.togglePlayPause()
@@ -453,9 +512,9 @@ private fun PlayerCenterControls(
  * Нижняя панель fullscreen: прогресс-бар с seek (P8.T3) + одна центрированная строка пилюль
  * (P13.T10 / player-triple-design, §3).
  *
- * Раскладка — `Column { PlayerProgressBar; Box(Center) { Row(horizontalScroll) { пилюли } } }`.
- * Порядок пилюль идентичен compact-строке: audio → sub → speeds, чтобы оба режима читались
- * одинаково. Строка центрирована, когда влезает, и скроллируется при переполнении.
+ * Раскладка — `Column { PlayerProgressBar; Row { Row(weight, horizontalScroll) { пилюли }; ⏮; «Следующая ⏭» } }`
+ * (Netflix-раскладка 2026-10-01): пилюли слева (скроллятся при переполнении), навигация по сериям
+ * справа. Порядок пилюль идентичен compact-строке: audio → sub → quality → speed.
  *
  * Прогресс-бар рисуется **только** при `durationMs != null` — до события `loadedmetadata`
  * длительности не существует вообще (`duration = NaN`), и шкала «от нуля до неизвестно чего»
@@ -489,14 +548,18 @@ private fun PlayerQualityChip(
     )
 }
 
-@Suppress("LongParameterList") // Состояние/контроллер + колбэк взаимодействия (P8.T3/T5), набор
-// озвучек + открытие пикера (P13.T10) и пара «качество/открытие пикера качества» (P16-фикс
-// 2026-09-09). Группировать в объект ради счётчика — косвенность без назначения.
+@Suppress("LongParameterList", "LongMethod") // Линейная раскладка панели: прогресс + пилюли
+// (озвучка/качество/скорость) + навигация по сериям, каждая секция уже вынесена; параметры — их
+// состояния и колбэки. Группировать в объект ради счётчика — косвенность без назначения.
 @Composable
 private fun PlayerBottomPanel(
     state: EmbedVideoState,
     controller: EmbedVideoController,
     onInteraction: () -> Unit,
+    hasPrevEpisode: Boolean,
+    hasNextEpisode: Boolean,
+    onPrevEpisode: () -> Unit,
+    onNextEpisode: () -> Unit,
     voiceTypes: List<VoiceType>,
     currentVoiceType: VoiceType?,
     onOpenAudioPicker: () -> Unit,
@@ -511,25 +574,24 @@ private fun PlayerBottomPanel(
         modifier = Modifier.fillMaxWidth().padding(dimens.spaceM),
         verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
     ) {
-        val duration = state.durationMs
-        if (duration != null) {
-            PlayerProgressBar(
-                currentTimeMs = state.currentTimeMs,
-                durationMs = duration,
-                onSeek = { positionMs ->
-                    onInteraction()
-                    controller.seekTo(positionMs)
-                },
-            )
-        }
+        PlayerProgressBar(
+            currentTimeMs = state.currentTimeMs,
+            durationMs = state.durationMs,
+            onSeek = { positionMs ->
+                onInteraction()
+                controller.seekTo(positionMs)
+            },
+        )
 
-        Box(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
         ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
             ) {
                 // Меньше двух озвучек — переключаться некуда, чип не рисуем вовсе (тот же принцип
                 // честного UI, что и у PiP-заглушки/качества выше — см. KDoc [PlayerOverlay]).
@@ -562,7 +624,79 @@ private fun PlayerBottomPanel(
                     )
                 }
             }
+            EpisodeNavButtons(
+                hasPrevEpisode = hasPrevEpisode,
+                hasNextEpisode = hasNextEpisode,
+                onPrevEpisode = {
+                    onInteraction()
+                    onPrevEpisode()
+                },
+                onNextEpisode = {
+                    onInteraction()
+                    onNextEpisode()
+                },
+            )
         }
+    }
+}
+
+/**
+ * Навигация по сериям справа в нижней панели, как у Netflix: «предыдущая» иконкой (нужна реже),
+ * «Следующая серия» — подписанной кнопкой. Крайние серии просто не рисуют кнопку.
+ */
+@Composable
+private fun EpisodeNavButtons(
+    hasPrevEpisode: Boolean,
+    hasNextEpisode: Boolean,
+    onPrevEpisode: () -> Unit,
+    onNextEpisode: () -> Unit,
+) {
+    val strings = LocalStrings.current
+    if (hasPrevEpisode) {
+        OverlayIconButton(
+            iconName = "skip_previous",
+            filled = true,
+            contentDescription = strings.playerPrevEpisode,
+            iconSize = EPISODE_NAV_ICON_SIZE,
+            onClick = onPrevEpisode,
+        )
+    }
+    if (hasNextEpisode) {
+        NextEpisodeButton(onClick = onNextEpisode)
+    }
+}
+
+/** Подписанная кнопка «Следующая серия ⏭» нижней панели fullscreen (Netflix-раскладка). */
+@Composable
+private fun NextEpisodeButton(onClick: () -> Unit) {
+    val dimens = AnixThemeTokens.dimens
+    val strings = LocalStrings.current
+    val shape = RoundedCornerShape(dimens.cornerPill)
+    Row(
+        modifier =
+            Modifier
+                .heightIn(min = dimens.minTouchTarget)
+                .clip(shape)
+                .background(Color.White.copy(alpha = NEXT_EPISODE_BUTTON_ALPHA), shape)
+                .clickable(onClick = onClick)
+                .padding(horizontal = dimens.space12),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spaceXs),
+    ) {
+        Text(
+            text = strings.playerNextEpisode,
+            color = OVERLAY_CONTENT_COLOR,
+            fontSize = NEXT_EPISODE_BUTTON_FONT_SIZE,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+        AnixIcon(
+            name = "skip_next",
+            contentDescription = null,
+            filled = true,
+            tint = OVERLAY_CONTENT_COLOR,
+            modifier = Modifier.size(EPISODE_NAV_ICON_SIZE),
+        )
     }
 }
 
@@ -724,102 +858,96 @@ private val AUDIO_PICKER_GRAB_HANDLE_HEIGHT = 5.dp
 private const val AUDIO_PICKER_GRAB_HANDLE_ALPHA = 0.4f
 
 /**
- * P8.T4 — баннер «следующая серия через Nс» с отменой.
+ * Шторка со списком серий поверх кадра плеера — выбор любой серии без выхода из плеера, по
+ * паттерну [AudioPickerOverlay] (полноэкранный скрим + прижатая снизу панель с grab-handle и
+ * заголовком; тап по скриму закрывает). Список — тот же переиспользуемый [EpisodeGrid], что и на
+ * Title Detail (`ReleaseEpisodesSection.kt`), с подсветкой текущей серии ([currentPosition]) и
+ * watched-отметками: [episodes] приходят уже смерженными с живой картой отметок — мердж делается
+ * на вызывающей стороне ([PlayerScreen]), потому что источник отметок (`watchedPositions`) живёт
+ * в её стейте.
  *
- * Обратный отсчёт берётся из позиции воспроизведения ([secondsToEpisodeEnd]), а не из
- * собственного таймера: иначе он разъедется с видео на первой же паузе, перемотке или смене
- * скорости (требование плана — «триггер брать из `EmbedVideoController.state`»).
+ * `internal`, не `private` — одна шторка общая для compact- и fullscreen-режимов: состояние
+ * видимости поднято в [PlayerScreen] (тот же аргумент, что у [AudioPickerOverlay], см. её KDoc).
  *
- * Показывается независимо от видимости контролов: пользователь мог смотреть титры без оверлея,
- * и молча перескочить на следующую серию без единого шанса нажать «Отмена» было бы хуже всего.
+ * @param episodes серии текущего источника с актуальными `isWatched`; пустой список сюда не
+ * должен попадать — кнопку открытия гейтит непустой список (честный UI, как у чипа Audio).
+ * @param currentPosition `position` реально играющей серии (`PlayerUiState.positionKey`) — рамка
+ * текущей ячейки в сетке.
+ * @param onSelect выбор серии: навигация на тот же маршрут с её `position` (делает [PlayerScreen]),
+ * шторку закрывает вызывающая сторона после колбэка.
  */
 @Composable
-private fun NextEpisodeBanner(
-    state: EmbedVideoState,
-    hasNextEpisode: Boolean,
-    onNextEpisode: () -> Unit,
+internal fun EpisodesSheetOverlay(
+    episodes: List<Episode>,
+    currentPosition: Int?,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit,
 ) {
     val dimens = AnixThemeTokens.dimens
+    val colors = AnixThemeTokens.colors
     val strings = LocalStrings.current
-    // Отмена живёт до конца этого экрана: серия одна, второй раз предлагать то же самое незачем.
-    var cancelled by remember { mutableStateOf(false) }
-    // Переход возможен ровно один раз: после навигации экран остаётся в back stack, и без флага
-    // следующий же тик состояния попытался бы открыть ту же серию повторно.
-    var navigated by remember { mutableStateOf(false) }
+    // Тот же лимит высоты, что у аудио-пикера: панель не выше 60% экрана, содержимое скроллится.
+    val maxSheetHeight = LocalWindowInfo.current.containerDpSize.height * AUDIO_PICKER_MAX_HEIGHT_FRACTION
 
-    val visible = hasNextEpisode && !cancelled && !navigated && state.isNearEnd()
-    val finished = state.isEpisodeFinished()
-
-    LaunchedEffect(visible, finished) {
-        if (visible && finished) {
-            navigated = true
-            onNextEpisode()
-        }
-    }
-
-    if (!visible) return
-    val seconds = state.secondsToEpisodeEnd() ?: return
-    // Точное соответствие макету Claude Design (`showPlayer`): фиксированный тёмный фон
-    // `rgba(15,16,22,0.9)`, а не тема-зависимый `colorScheme.surface` — баннер, как и остальной
-    // оверлей плеера, всегда рисуется поверх тёмного кадра видео независимо от темы приложения
-    // (тот же принцип, что и у [OVERLAY_CONTENT_COLOR]).
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = dimens.spaceM, vertical = dimens.spaceS),
-        shape = RoundedCornerShape(dimens.cornerM),
-        color = NEXT_EPISODE_BANNER_COLOR,
-        contentColor = OVERLAY_CONTENT_COLOR,
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(colors.posterScrim)
+                .clickableNoIndication(onDismiss),
     ) {
-        Row(
+        Surface(
             modifier =
-                Modifier.padding(
-                    horizontal = NEXT_EPISODE_BANNER_PADDING_H,
-                    vertical = NEXT_EPISODE_BANNER_PADDING_V,
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.spaceS),
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .heightIn(max = maxSheetHeight)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    // Проглатывает тап, чтобы панель не закрывалась сквозь саму себя.
+                    .clickableNoIndication {},
+            shape = RoundedCornerShape(topStart = dimens.cornerL, topEnd = dimens.cornerL),
+            color = MaterialTheme.colorScheme.surface,
         ) {
-            Text(
-                text = strings.playerNextEpisodeIn(seconds),
-                fontSize = NEXT_EPISODE_BANNER_FONT_SIZE,
-                textAlign = TextAlign.Start,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = { cancelled = true }) {
-                Text(
-                    text = strings.playerCancel,
-                    fontSize = NEXT_EPISODE_BANNER_FONT_SIZE,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
+            Column(
+                modifier = Modifier.padding(dimens.spaceM).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(dimens.spaceS),
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .size(width = AUDIO_PICKER_GRAB_HANDLE_WIDTH, height = AUDIO_PICKER_GRAB_HANDLE_HEIGHT)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = AUDIO_PICKER_GRAB_HANDLE_ALPHA),
+                                RoundedCornerShape(dimens.cornerPill),
+                            ),
                 )
-            }
-            TextButton(onClick = {
-                navigated = true
-                onNextEpisode()
-            }) {
-                Text(
-                    text = strings.playerNextEpisodeNow,
-                    fontSize = NEXT_EPISODE_BANNER_FONT_SIZE,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
+                AudioPickerHeader(title = strings.playerEpisodesTitle, onDismiss = onDismiss)
+                // EpisodeGrid — не ленивый FlowRow, но одна сетка на реалистичное число серий
+                // (десятки ячеек) меряется мгновенно, а bounded-высота панели + verticalScroll
+                // дают скролл для длинных тайтлов — тот же ограничитель высоты, что в пикере
+                // озвучки, только без LazyColumn.
+                EpisodeGrid(
+                    episodes = episodes,
+                    currentPosition = currentPosition,
+                    onEpisodeClick = { episode -> onSelect(episode.position) },
                 )
             }
         }
     }
 }
 
-/** Фон баннера «следующая серия» — точный hex макета (`rgba(15,16,22,0.9)`), см. комментарий у
- *  места использования. */
-private const val NEXT_EPISODE_BANNER_BG_ALPHA = 0.9f
+private val TOP_BAR_TITLE_FONT_SIZE = 16.sp
+private val CENTER_CONTROLS_SPACING = 40.dp
+private val EPISODE_NAV_ICON_SIZE = 24.dp
+private const val NEXT_EPISODE_BUTTON_ALPHA = 0.16f
+private val NEXT_EPISODE_BUTTON_FONT_SIZE = 13.sp
 
-@Suppress("MagicNumber") // hex-литерал цвета — то же обоснование, что и у `AnixPalette`
-// (shared/ui, Color.kt): сам hex и есть содержательная константа, заводить под него ещё одну
-// именованную числовую метрику было бы шумом.
-private val NEXT_EPISODE_BANNER_COLOR = Color(0xFF0F1016).copy(alpha = NEXT_EPISODE_BANNER_BG_ALPHA)
-private val NEXT_EPISODE_BANNER_PADDING_H = 12.dp
-private val NEXT_EPISODE_BANNER_PADDING_V = 10.dp
-private val NEXT_EPISODE_BANNER_FONT_SIZE = 11.sp
-
-/** Кнопка-иконка оверлея: белая на кадре видео (см. [OVERLAY_CONTENT_COLOR]). */
+/** Кнопка-иконка оверлея: белая на кадре видео (см. [OVERLAY_CONTENT_COLOR]). [enabled] = false
+ *  гасит иконку до M3-альфы disabled (0.38) — кнопка остаётся на месте, но читается неактивной.
+ *  `LongParameterList`: плоский декоративный набор (иконка/подпись/клик/filled/размер/enabled),
+ *  группировать нечего. */
+@Suppress("LongParameterList")
 @Composable
 private fun OverlayIconButton(
     iconName: String,
@@ -827,18 +955,21 @@ private fun OverlayIconButton(
     onClick: () -> Unit,
     filled: Boolean = false,
     iconSize: Dp = DEFAULT_ICON_SIZE,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     val dimens = AnixThemeTokens.dimens
     val buttonDescription = contentDescription
     IconButton(
         onClick = onClick,
+        enabled = enabled,
         // Тач-таргет не меньше рекомендованного минимума даже у мелких иконок — оверлей
         // нажимают вслепую, глядя на видео, а не на кнопку. `clearAndSetSemantics` вместо
         // contentDescription на Icon (Фаза 11, T9, подтверждено на устройстве): IconButton не
         // сливает его в свой кликабельный узел — тот же паттерн, что и остальные M3-компоненты
         // этой фазы (см. AnixNavigationBar.kt/ChipRow.kt/LibraryScreen.kt).
         modifier =
-            Modifier
+            modifier
                 .size(maxOf(dimens.minTouchTarget, iconSize + dimens.spaceM))
                 .clearAndSetSemantics { this.contentDescription = buttonDescription },
     ) {
@@ -846,11 +977,18 @@ private fun OverlayIconButton(
             name = iconName,
             contentDescription = null,
             filled = filled,
-            tint = OVERLAY_CONTENT_COLOR,
+            // Явный tint: у M3 IconButton disabled-альфа идёт через LocalContentColor, а наш
+            // цвет задан жёстко белым (оверлей всегда поверх тёмного кадра) — без ручной альфы
+            // неактивная кнопка визуально не отличалась бы от активной.
+            tint = if (enabled) OVERLAY_CONTENT_COLOR else OVERLAY_CONTENT_COLOR.copy(alpha = OVERLAY_DISABLED_ALPHA),
             modifier = Modifier.size(iconSize),
         )
     }
 }
+
+/** M3-альфа контента в disabled-состоянии ([androidx.compose.material3] применяет ту же константу).
+ *  `internal` — та же альфа нужна компактному ряду prev/next ([CompactEpisodeSkipButton]). */
+internal const val OVERLAY_DISABLED_ALPHA = 0.38f
 
 /** Клик без ripple — на слое поверх видео рябь во весь экран читалась бы как дефект отрисовки. */
 @Composable

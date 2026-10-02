@@ -8,6 +8,8 @@ import com.aniko.data.repository.EpisodeRepository
 import com.aniko.data.repository.LibraryRepository
 import com.aniko.data.voicepreference.TitleVoicePreferenceStore
 import com.aniko.model.AnixError
+import com.aniko.model.Episode
+import com.aniko.model.EpisodeSource
 import com.aniko.model.VideoHost
 import com.aniko.model.VoiceType
 import com.aniko.player.PlaybackSource
@@ -23,9 +25,21 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * @param hasNextEpisode следующая серия (`position + 1`) существует в этом же источнике —
- * условие показа баннера P8.T4 и кнопки «Следующая серия» на Desktop. `false`, пока проверка не
- * завершилась или если её не удалось выполнить (см. `EpisodeRepository.hasEpisode`).
+ * @param nextEpisodePosition `position` следующей серии этого же источника — цель кнопки
+ * «Следующая серия» и карточки автоперехода. После загрузки [episodes] — позиция СОСЕДНЕГО
+ * элемента списка (нумерация источников не обязана быть непрерывной: дырки, старт с 0 или 1);
+ * до загрузки — fallback `position + 1`, если `EpisodeRepository.hasEpisode` его подтвердил.
+ * `null` — следующей серии нет или проверка ещё не завершилась.
+ * @param prevEpisodePosition симметрично [nextEpisodePosition] для «Предыдущей серии».
+ * @param episodes список серий текущего источника (`EpisodeRepository.episodes`, нужен `typeId`,
+ * который подбирается там же, что и для [currentVoiceType], — см. [resolveCurrentVoiceType]).
+ * Догружается отдельной веткой после подбора озвучки и не задерживает показ кадра; пустой, пока
+ * не загрузился или если запрос упал (шторка серий тогда просто не откроется — кнопка её гейтится
+ * непустым списком). Отметки просмотра в нём — серверный слепок на момент запроса; живые локальные
+ * отметки — в [watchedPositions], мерджатся в UI при отрисовке шторки.
+ * @param watchedPositions весь известный локальный статус просмотра источника (позиция →
+ * is_watched), collect из `EpisodeRepository.observeWatchedPositions` — обновляется сразу после
+ * оптимистичной записи (P4.T7), в отличие от снепшота [episodes].
  * @param isWatched текущая серия отмечена просмотренной. Читается из локального стора
  * (`EpisodeProgressStore`), поэтому меняется сразу после оптимистичной записи, не дожидаясь сети.
  * @param episodeName человекочитаемое имя текущей серии (`"1 серия"`) из `episode/target` —
@@ -50,15 +64,17 @@ import kotlinx.coroutines.launch
  * `LockLandscapeOrientationEffect` диспозится без единого вызова колбэка сворачивания). ViewModel
  * же живёт в `ViewModelStore` конкретной `NavBackStackEntry`, которая не зависит от того, через
  * какую ветку `AdaptiveScaffold` сейчас отрисован `NavHost` — переживает эту перестройку.
- * @param resumePositionMs P16.T7 — сохранённая позиция серии (мс), при которой пользователю
- * предлагается resume-диалог «Продолжить с M:SS / С начала». `null` — либо позиция ещё не
- * загружена/отсутствует, либо диалог уже закрыт (см. [PlayerViewModel.onResumeContinue]/
- * [PlayerViewModel.onResumeStartOver] — оба сбрасывают поле, чтобы диалог не показывался повторно
- * до переоткрытия серии).
- * @param pendingSeekToMs P16.T7 — позиция, на которую нужно перемотать видео сразу как только
- * мост найдёт `<video>` (`EmbedVideoState.isVideoFound`); выставляется
- * [PlayerViewModel.onResumeContinue], потребляется и сбрасывается [PlayerScreen] через
- * [PlayerViewModel.onResumeSeekConsumed] после фактического `seekTo`.
+ * @param resumeNoticeMs P16.T7 (переработано 2026-10-01) — серия продолжена с сохранённой позиции
+ * (мс): экран показывает поверх видео плашку «Продолжено с M:SS · С начала». Раньше был блокирующий
+ * диалог «Продолжить / С начала» — отдельное окно, которое в fullscreen возвращало системные панели
+ * и держало серию на паузе до ответа; медиаприложения продолжают молча. `null` — плашки нет (позиции
+ * не было, или плашку уже закрыли — [PlayerViewModel.onResumeNoticeDismiss]/[PlayerViewModel.onResumeStartOver]).
+ * @param pendingSeekToMs позиция, на которую нужно перемотать видео сразу, как только мост найдёт
+ * `<video>` (`EmbedVideoState.isVideoFound`); выставляется вместе с [resumeNoticeMs], потребляется
+ * и сбрасывается [PlayerScreen] через [PlayerViewModel.onResumeSeekConsumed] после фактического `seekTo`.
+ * @param alternativeSource другой источник ТОЙ ЖЕ озвучки (непустой, не текущий) — цель кнопки
+ * «Другой источник» на экране сбоя загрузки: у озвучки нередко два хоста (Sibnet + Kodik), и если один
+ * недоступен (403 вне РФ), второй обычно играет. `null` — альтернативы нет или подбор не завершён.
  * @param positionKey ключ локального хранилища позиции РЕАЛЬНО загруженного источника — он совпадает
  * с ключом маршрута экрана, пока озвучку не переключали, и отличается после [PlayerViewModel.selectVoiceType]
  * (тот перезагружает плеер другим `sourceId`/`position`, а маршрут остаётся прежним). Выставляется
@@ -70,17 +86,27 @@ data class PlayerUiState(
     val isLoading: Boolean = true,
     val source: PlaybackSource? = null,
     val error: PlayerError? = null,
-    val hasNextEpisode: Boolean = false,
+    val nextEpisodePosition: Int? = null,
+    val prevEpisodePosition: Int? = null,
     val isWatched: Boolean = false,
     val episodeName: String? = null,
+    val episodes: List<Episode> = emptyList(),
+    val watchedPositions: Map<Int, Boolean> = emptyMap(),
     val voiceTypes: List<VoiceType> = emptyList(),
     val currentVoiceType: VoiceType? = null,
     val isAudioSwitching: Boolean = false,
     val isFullscreen: Boolean = playerOpensFullscreen(),
-    val resumePositionMs: Long? = null,
+    val resumeNoticeMs: Long? = null,
     val pendingSeekToMs: Long? = null,
     val positionKey: PositionKey? = null,
-)
+    val alternativeSource: EpisodeSource? = null,
+) {
+    /** Следующая серия существует — гейт кнопки «Следующая серия» и карточки автоперехода. */
+    val hasNextEpisode: Boolean get() = nextEpisodePosition != null
+
+    /** Предыдущая серия существует — гейт кнопки «Предыдущая серия». */
+    val hasPrevEpisode: Boolean get() = prevEpisodePosition != null
+}
 
 /**
  * Причина ошибки резолва плеера, без готового текста — текст живёт в `Strings` (Фаза 2 плана,
@@ -121,8 +147,9 @@ sealed interface PlayerError {
  * `releaseId`/`sourceId`/`position` приходят из `AnixDestination.Player` через `toRoute()` в
  * `App.kt`, аналогично `ReleaseDetailsViewModel.load(releaseId)` — не через Koin `parametersOf`.
  *
- * TooManyFunctions подавлен: 13 функций — интенты экрана плеера + resume-поток (P16.T7);
- * объединение смешало бы независимые интенты.
+ * TooManyFunctions подавлен: функций больше дюжины — интенты экрана плеера + resume-поток
+ * (P16.T7) + догрузка списка серий/карты отметок для шторки серий; объединение смешало бы
+ * независимые интенты.
  */
 @Suppress("TooManyFunctions") // См. KDoc класса: рост функций — от независимых интентов плеера.
 class PlayerViewModel(
@@ -131,7 +158,10 @@ class PlayerViewModel(
     private val positionStore: LocalPlayerPositionStore,
     private val titleVoicePreferenceStore: TitleVoicePreferenceStore,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(PlayerUiState())
+    private val _uiState =
+        MutableStateFlow(
+            PlayerUiState(isFullscreen = PlayerFullscreenCarry.consume() ?: playerOpensFullscreen()),
+        )
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
     private data class LoadKey(
@@ -160,6 +190,9 @@ class PlayerViewModel(
 
     /** Подписка на локальную отметку просмотра — своя на каждую серию, старую гасим при смене. */
     private var watchedJob: Job? = null
+
+    /** Подписка на карту отметок просмотра всего источника (для шторки серий) — аналогично [watchedJob]. */
+    private var watchedPositionsJob: Job? = null
 
     /**
      * Точка входа экрана: грузит серию по параметрам МАРШРУТА.
@@ -207,6 +240,7 @@ class PlayerViewModel(
                 isFullscreen = _uiState.value.isFullscreen,
             )
         observeWatched(key)
+        observeWatchedPositions(key)
         viewModelScope.launch {
             try {
                 val resolved =
@@ -237,22 +271,44 @@ class PlayerViewModel(
                 }
             }
         }
-        viewModelScope.launch {
-            // Отдельной корутиной: наличие следующей серии не должно ни задерживать показ кадра,
-            // ни ронять экран — `hasEpisode` сам глотает сетевую ошибку в `false`.
-            val hasNext = episodeRepository.hasEpisode(key.releaseId, key.sourceId, key.position + 1)
-            if (loadedKey == key) _uiState.update { it.copy(hasNextEpisode = hasNext) }
-        }
-        // P16.T7 — resume-диалог: сохранённая позиция читается параллельно с кадром видео и не
-        // задерживает его показ. Диалог показывается только при позиции дальше самого начала
-        // (см. [RESUME_MIN_POSITION_MS]) — иначе он бы всплывал на каждой почти нетронутой серии.
+        checkNeighbourFallback(key)
+        // P16.T7 — авто-продолжение: сохранённая позиция читается параллельно с кадром видео и не
+        // задерживает его показ. Только при позиции дальше самого начала (см. [RESUME_MIN_POSITION_MS])
+        // — иначе плашка всплывала бы на каждой почти нетронутой серии.
         viewModelScope.launch {
             val saved = runCatching { positionStore.load(key.toPositionKey()) }.getOrNull()
             if (loadedKey == key && saved != null && saved >= RESUME_MIN_POSITION_MS) {
-                _uiState.update { it.copy(resumePositionMs = saved) }
+                _uiState.update { it.copy(resumeNoticeMs = saved, pendingSeekToMs = saved) }
             }
         }
         resolveCurrentVoiceType(key)
+    }
+
+    /**
+     * Fallback соседних серий до загрузки списка ([loadEpisodes]): `hasEpisode(position ± 1)`.
+     * Отдельными корутинами — не задерживают кадр и не роняют экран (`hasEpisode` глотает ошибку).
+     */
+    private fun checkNeighbourFallback(key: LoadKey) {
+        viewModelScope.launch {
+            // Отдельной корутиной: наличие следующей серии не должно ни задерживать показ кадра,
+            // ни ронять экран — `hasEpisode` сам глотает сетевую ошибку в `false`. Это fallback до
+            // загрузки [PlayerUiState.episodes]; как только список пришёл, флаги пересчитываются
+            // по индексу текущей позиции в нём (см. [loadEpisodes]) — `position` у источников
+            // нумеруется не обязательно с единицы и не обязательно непрерывно.
+            val hasNext = episodeRepository.hasEpisode(key.releaseId, key.sourceId, key.position + 1)
+            // Список серий мог прийти раньше — тогда его соседи точнее, fallback их не перетирает.
+            if (loadedKey == key && hasNext && _uiState.value.episodes.isEmpty()) {
+                _uiState.update { it.copy(nextEpisodePosition = key.position + 1) }
+            }
+        }
+        viewModelScope.launch {
+            // Симметричный fallback для кнопки «Предыдущая серия» — тот же `hasEpisode`, той же ценой.
+            val hasPrev =
+                key.position > 0 && episodeRepository.hasEpisode(key.releaseId, key.sourceId, key.position - 1)
+            if (loadedKey == key && hasPrev && _uiState.value.episodes.isEmpty()) {
+                _uiState.update { it.copy(prevEpisodePosition = key.position - 1) }
+            }
+        }
     }
 
     /**
@@ -273,14 +329,60 @@ class PlayerViewModel(
             if (loadedKey != key) return@launch
             _uiState.update { it.copy(voiceTypes = types) }
 
-            val matched =
+            val matchedWithSources =
                 coroutineScope {
                     types
                         .map { type -> type to async { sourcesOf(key.releaseId, type.id) } }
                         .firstOrNull { (_, sourcesDeferred) -> sourcesDeferred.await().any { it.id == key.sourceId } }
-                        ?.first
+                        ?.let { (type, sourcesDeferred) -> type to sourcesDeferred.await() }
                 }
-            if (loadedKey == key) _uiState.update { it.copy(currentVoiceType = matched) }
+            val matched = matchedWithSources?.first
+            val alternative =
+                matchedWithSources
+                    ?.second
+                    ?.firstOrNull { it.id != key.sourceId && it.episodesCount != 0 }
+            if (loadedKey == key) {
+                _uiState.update { it.copy(currentVoiceType = matched, alternativeSource = alternative) }
+            }
+            // Список серий нужен `typeId` текущего источника — он известен ровно после этого
+            // подбора, поэтому догрузка идёт здесь же, следующим шагом той же ветки (своя корутина
+            // внутри [loadEpisodes] — показ кадра по-прежнему не ждёт ни подбора, ни списка).
+            loadEpisodes(key, matched?.id)
+        }
+    }
+
+    /**
+     * Догружает [PlayerUiState.episodes] текущего источника для шторки серий плеера. `typeId`
+     * берётся из подбора [resolveCurrentVoiceType] (маршрут плеера его не несёт, см. там) —
+     * поэтому функция вызывается только после завершения подбора и получает его результат.
+     *
+     * По факту загрузки пересчитывает [PlayerUiState.nextEpisodePosition]/
+     * [PlayerUiState.prevEpisodePosition] как позиции СОСЕДНИХ элементов списка (см.
+     * [neighbourPositions]): `position ± 1` — лишь fallback, пока списка нет, и он врёт для
+     * источников с нестандартной нумерацией (дырки в номерах — см. живую проверку в KDoc
+     * `EpisodeRepository.matchPosition`). Если текущей позиции в списке нет (список пуст/упал/
+     * позиция вне списка) — значения не трогаем, остаётся fallback.
+     */
+    private suspend fun loadEpisodes(
+        key: LoadKey,
+        typeId: Int?,
+    ) {
+        if (typeId == null) return
+        val list =
+            runCatching { episodeRepository.episodes(key.releaseId, typeId, key.sourceId) }
+                .getOrDefault(emptyList())
+        if (loadedKey != key) return
+        val neighbours = neighbourPositions(list, key.position)
+        _uiState.update {
+            if (neighbours == null) {
+                it.copy(episodes = list)
+            } else {
+                it.copy(
+                    episodes = list,
+                    prevEpisodePosition = neighbours.first,
+                    nextEpisodePosition = neighbours.second,
+                )
+            }
         }
     }
 
@@ -341,50 +443,52 @@ class PlayerViewModel(
         }
     }
 
+    /**
+     * «Другой источник» на экране сбоя загрузки: та же озвучка, другой хост ([PlayerUiState.alternativeSource]).
+     * Позиция — через `matchPosition` (нумерация у источников разная), как при смене озвучки.
+     */
+    fun switchToAlternativeSource() {
+        val key = loadedKey
+        val target = _uiState.value.alternativeSource
+        val typeId = _uiState.value.currentVoiceType?.id
+        if (key == null || target == null || typeId == null) return
+        val episodeName = _uiState.value.episodeName
+        viewModelScope.launch {
+            val matchedPosition =
+                runCatching {
+                    episodeRepository.matchPosition(key.releaseId, typeId, target.id, episodeName, key.position)
+                }.getOrDefault(key.position)
+            if (loadedKey != key) return@launch
+            titleVoicePreferenceStore.save(key.releaseId, typeId, target.id)
+            reload(LoadKey(key.releaseId, target.id, matchedPosition, target.host))
+        }
+    }
+
     /** P13 — переключатель compact/fullscreen, см. KDoc [PlayerUiState.isFullscreen] про то,
      *  почему это состояние здесь, а не `remember` на [PlayerScreen]. */
     fun setFullscreen(value: Boolean) {
         _uiState.update { it.copy(isFullscreen = value) }
     }
 
-    /**
-     * P16.T7 — пользователь выбрал «Продолжить с M:SS» в resume-диалоге: диалог закрывается, а
-     * позиция перекладывается в [PlayerUiState.pendingSeekToMs] — фактический `seekTo` делает
-     * [PlayerScreen], как только мост найдёт `<video>` (`isVideoFound`), а не эта ViewModel,
-     * которая ничего не знает про [com.aniko.player.EmbedVideoController].
-     */
-    fun onResumeContinue() {
-        val positionMs = _uiState.value.resumePositionMs ?: return
-        val key = loadedKey ?: return
-        _uiState.update { it.copy(resumePositionMs = null, pendingSeekToMs = positionMs) }
-        // Старая точка больше не нужна: «продолжить» перемотает на неё через pendingSeekToMs, а
-        // последующие автосохранения перезапишут ключ свежими позициями. Очистка сразу исключает
-        // гонку, где троттлинг успел бы записать 0-позицию поверх точки resume.
-        viewModelScope.launch { runCatching { positionStore.clear(key.toPositionKey()) } }
+    /** Плашка «Продолжено с M:SS» скрылась сама (таймер) — позиция остаётся как есть. */
+    fun onResumeNoticeDismiss() {
+        _uiState.update { it.copy(resumeNoticeMs = null) }
     }
 
     /**
-     * P16.T7 — resume-диалог закрыт без выбора (тап мимо/back): просто прячем диалог, сохранённая
-     * позиция в сторе ОСТАЁТСЯ — следующее открытие серии снова предложит продолжить (ревью
-     * Волны 3, P3). Отдельный обработчик, не путать с «С начала» ([onResumeStartOver]).
-     */
-    fun onResumeDismiss() {
-        _uiState.update { it.copy(resumePositionMs = null) }
-    }
-
-    /**
-     * P16.T7 — пользователь выбрал «С начала»: диалог закрывается, а сохранённая позиция стирается
-     * из [LocalPlayerPositionStore] — иначе следующее открытие той же серии снова предложило бы
-     * resume с уже отвергнутой позиции.
+     * P16.T7 — «С начала» на плашке авто-продолжения: плашка закрывается, отложенная перемотка
+     * отменяется (если ещё не выполнена), сохранённая позиция стирается — иначе следующее открытие
+     * той же серии снова продолжило бы с отвергнутой позиции. Саму перемотку на 0 делает [PlayerScreen]
+     * (ViewModel не знает про контроллер).
      */
     fun onResumeStartOver() {
         val key = loadedKey ?: return
-        _uiState.update { it.copy(resumePositionMs = null, pendingSeekToMs = null) }
+        _uiState.update { it.copy(resumeNoticeMs = null, pendingSeekToMs = null) }
         viewModelScope.launch { runCatching { positionStore.clear(key.toPositionKey()) } }
     }
 
     /** P16.T7 — [PlayerScreen] вызывает это сразу после того, как реально выполнил `seekTo`
-     *  из [onResumeContinue] — снимает [PlayerUiState.pendingSeekToMs], чтобы повторная
+     *  авто-продолжения — снимает [PlayerUiState.pendingSeekToMs], чтобы повторная
      *  рекомпозиция не перемотала видео второй раз. */
     fun onResumeSeekConsumed() {
         _uiState.update { it.copy(pendingSeekToMs = null) }
@@ -401,11 +505,9 @@ class PlayerViewModel(
         durationMs: Long?,
     ) {
         val key = loadedKey ?: return
-        // Пока открыт resume-диалог (позиция ещё не выбрана), автосохранение запрещено: видео
-        // уже играет с 0, и запись затрёт настоящую точку resume раньше, чем пользователь
-        // выберет (ревью Волны 3, P3). После «Продолжить»/«С начала» диалог закрыт — запись снова
-        // работает, а старая точка уже очищена соответствующим обработчиком.
-        if (_uiState.value.resumePositionMs != null) return
+        // Пока перемотка на точку продолжения не выполнена, автосохранение запрещено: видео уже
+        // играет с 0, и запись затёрла бы настоящую точку resume (ревью Волны 3, P3).
+        if (_uiState.value.pendingSeekToMs != null) return
         persistPosition(key.toPositionKey(), currentMs, durationMs)
     }
 
@@ -413,7 +515,7 @@ class PlayerViewModel(
      * P16.T7 — сохранение позиции при dispose контроллера. Принимает ключ ЯВНО: к моменту
      * dispose (смена серии/озвучки) [loadedKey] может уже указывать на новую серию, и запись под
      * «живым» ключом положила бы позицию старой серии в ключ новой (ревью Волны 3, P3).
-     * Подавление при открытом resume-диалоге — только если диалог относится к ЭТОМУ ключу.
+     * Подавление до перемотки на точку продолжения — только если она относится к ЭТОМУ ключу.
      */
     fun onControllerDisposed(
         releaseId: Int,
@@ -423,12 +525,12 @@ class PlayerViewModel(
         durationMs: Long?,
     ) {
         val positionKey = PositionKey(releaseId = releaseId, sourceId = sourceId, episodeOrdinal = position)
-        val dialogOpenForSameKey =
-            _uiState.value.resumePositionMs != null &&
+        val resumePendingForSameKey =
+            _uiState.value.pendingSeekToMs != null &&
                 loadedKey?.let {
                     it.releaseId == releaseId && it.sourceId == sourceId && it.position == position
                 } == true
-        if (dialogOpenForSameKey) return
+        if (resumePendingForSameKey) return
         persistPosition(positionKey, currentMs, durationMs)
     }
 
@@ -500,6 +602,60 @@ class PlayerViewModel(
                 }
             }
     }
+
+    /**
+     * Карта отметок просмотра ВСЕГО источника (позиция → is_watched) — для watched-отметок ячеек
+     * в шторке серий. Своя подписка на каждую загрузку, как у [observeWatched]: старая гасится,
+     * иначе смена серии оставляла бы collect за прошлым ключом. Живёт в стейте отдельно от
+     * [PlayerUiState.episodes], потому что обновляется сразу после оптимистичной локальной записи
+     * (P4.T7), а не по сети.
+     */
+    private fun observeWatchedPositions(key: LoadKey) {
+        watchedPositionsJob?.cancel()
+        watchedPositionsJob =
+            viewModelScope.launch {
+                episodeRepository.observeWatchedPositions(key.releaseId, key.sourceId).collect { positions ->
+                    if (loadedKey == key) _uiState.update { it.copy(watchedPositions = positions) }
+                }
+            }
+    }
+}
+
+/**
+ * Режим отображения, переносимый на СЛЕДУЮЩИЙ экран плеера при смене серии.
+ *
+ * Смена серии — навигация на новый маршрут (`TitleNavigator.openPlayer` заменяет текущий Player), а
+ * значит новый [PlayerViewModel] со стартовым [PlayerUiState.isFullscreen] по умолчанию: смотрел в
+ * fullscreen, нажал «Следующая серия» — и плеер выпадал в компактный режим (живая проверка
+ * 2026-10-01). [PlayerScreen] кладёт сюда текущий режим прямо перед навигацией, новая ViewModel
+ * забирает его один раз при создании. Обычное открытие плеера (из Detail) значения не находит и
+ * стартует с платформенного дефолта.
+ */
+internal object PlayerFullscreenCarry {
+    private var pending: Boolean? = null
+
+    fun put(isFullscreen: Boolean) {
+        pending = isFullscreen
+    }
+
+    fun consume(): Boolean? = pending.also { pending = null }
+}
+
+/**
+ * Позиции соседних серий `(предыдущая, следующая)` для [currentPosition] в списке [episodes].
+ *
+ * Список сортируется по `position` — API отдаёт его упорядоченным, но кнопки «пред./след.» не должны
+ * зависеть от этого неявного контракта. `null` — текущей позиции в списке нет (тогда у вызывающей
+ * стороны остаётся fallback `position ± 1`); внутри пары `null` — соседа с этой стороны нет.
+ */
+internal fun neighbourPositions(
+    episodes: List<Episode>,
+    currentPosition: Int,
+): Pair<Int?, Int?>? {
+    val sorted = episodes.map(Episode::position).distinct().sorted()
+    val index = sorted.indexOf(currentPosition)
+    if (index < 0) return null
+    return sorted.getOrNull(index - 1) to sorted.getOrNull(index + 1)
 }
 
 /**
@@ -516,6 +672,7 @@ class PlayerViewModel(
  * Чистая функция вынесена из [PlayerViewModel] ради теста таблицей случаев: сам ViewModel завязан
  * на конкретный `EpisodeRepository`. Дженерик по ключу — чтобы не светить приватный `LoadKey`.
  */
+
 internal fun <K> shouldStartLoad(
     acceptedKey: K?,
     requestedKey: K,

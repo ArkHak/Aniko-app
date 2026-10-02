@@ -1,6 +1,7 @@
 package com.aniko.player
 
 import android.net.Uri
+import android.util.Log
 import android.webkit.WebView
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.ScriptHandler
@@ -54,6 +55,14 @@ actual class EmbedVideoController actual constructor() {
      */
     private var videoFrame: JavaScriptReplyProxy? = null
 
+    /**
+     * Фреймы хоста, приславшие сообщение моста, пока `<video>` ещё не найден. Команда `play` до
+     * первого старта обязана дойти хоть куда-то: раньше [send] молча её терял (адресат был только
+     * [videoFrame]), и наша кнопка ▶ не запускала Kodik — работал лишь тап по его собственной
+     * кнопке. Мост в любом из этих фреймов умеет стартовать хост (см. `startHostPlayer`).
+     */
+    private val candidateFrames = LinkedHashSet<JavaScriptReplyProxy>()
+
     /** Применяет «качество по умолчанию» из настроек к меню хоста — один раз на источник. */
     private val qualityApplier = PreferredQualityApplier()
 
@@ -65,6 +74,7 @@ actual class EmbedVideoController actual constructor() {
     actual fun setExpectedSource(embedUrl: String) {
         originFilter = EmbedOriginFilter(embedUrl)
         videoFrame = null
+        candidateFrames.clear()
         qualityApplier.reset()
         stateFlow.value = EmbedVideoState()
     }
@@ -97,6 +107,7 @@ actual class EmbedVideoController actual constructor() {
         val attached = webView ?: return
         webView = null
         videoFrame = null
+        candidateFrames.clear()
         runCatching { scriptHandler?.remove() }
         scriptHandler = null
         runCatching { WebViewCompat.removeWebMessageListener(attached, EMBED_BRIDGE_CHANNEL) }
@@ -104,6 +115,11 @@ actual class EmbedVideoController actual constructor() {
     }
 
     actual fun release() = detach()
+
+    /** Страница источника не загрузилась — см. [PlaybackEngineProblem.SourceUnavailable]. */
+    internal fun reportEngineProblem(problem: PlaybackEngineProblem) {
+        stateFlow.value = stateFlow.value.copy(engineProblem = problem)
+    }
 
     actual fun play() = send(EmbedVideoCommand.PLAY)
 
@@ -134,8 +150,15 @@ actual class EmbedVideoController actual constructor() {
     ) {
         if (originFilter?.accepts(sourceOrigin.toString()) != true) return
         // `WebMessageCompat.getData()` бросает, если сообщение пришло не строкой (ArrayBuffer).
-        val parsed = runCatching { message.data }.getOrNull()?.let(::parseEmbedVideoState) ?: return
-        if (parsed.isVideoFound) {
+        val data = runCatching { message.data }.getOrNull() ?: return
+        // Сообщения, не являющиеся state-апдейтом (отладочный отчёт о видимом chrome — см.
+        // parseEmbedChromeDebug), состояния не меняют, только логируются.
+        // Сообщённая страницей ошибка загрузки (engineProblem) переживает апдейты моста: на странице
+        // ошибки хоста мост тоже работает и шлёт «видео не найдено», затирая бы флаг.
+        val parsed = parseEmbedVideoState(data)?.copy(engineProblem = stateFlow.value.engineProblem)
+        if (parsed == null) {
+            reportChromeDebug(data)
+        } else if (parsed.isVideoFound) {
             videoFrame = replyProxy
             stateFlow.value = parsed
             // Видео найдено и меню качеств известно — единственный момент, когда клик по пункту меню
@@ -143,8 +166,15 @@ actual class EmbedVideoController actual constructor() {
             qualityApplier.onState(parsed)?.let(::setQuality)
         } else if (videoFrame == null) {
             // Второй фрейм того же домена без видео не должен затирать состояние настоящего.
+            if (candidateFrames.size < MAX_CANDIDATE_FRAMES) candidateFrames += replyProxy
             stateFlow.value = parsed
         }
+    }
+
+    /** Логирует отладочный список видимых chrome-элементов хоста (включается `window.__anikoDebugChrome`). */
+    private fun reportChromeDebug(raw: String) {
+        val entries = parseEmbedChromeDebug(raw)
+        if (entries.isNotEmpty()) Log.d(TAG, "chrome over video: ${entries.joinToString(" ; ")}")
     }
 
     /**
@@ -153,16 +183,19 @@ actual class EmbedVideoController actual constructor() {
      * ещё не завершённой навигации.
      */
     private fun send(command: String) {
-        val proxy = videoFrame ?: return
+        val proxies = videoFrame?.let(::listOf) ?: candidateFrames.toList()
+        if (proxies.isEmpty()) return
+        val deliver = { proxies.forEach { proxy -> runCatching { proxy.postMessage(command) } } }
         val target = webView
-        if (target != null) {
-            target.post { runCatching { proxy.postMessage(command) } }
-        } else {
-            runCatching { proxy.postMessage(command) }
-        }
+        if (target != null) target.post { deliver() } else deliver()
     }
 
     private companion object {
         val ALLOWED_ORIGIN_RULES = setOf("*")
+
+        const val TAG = "EmbedVideoController"
+
+        /** Ограничение на случай страницы с десятками фреймов того же домена. */
+        const val MAX_CANDIDATE_FRAMES = 8
     }
 }

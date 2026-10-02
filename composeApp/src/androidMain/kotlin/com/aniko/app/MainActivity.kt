@@ -14,6 +14,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (BuildConfig.DEBUG) {
+            // chrome://inspect к WebView плеера — живой DOM-дамп Kodik для CHROME_HIDE_CSS
+            // (`window.__anikoDebugChrome` в EmbedVideoBridge) возможен только с этим флагом.
+            android.webkit.WebView.setWebContentsDebuggingEnabled(true)
+        }
         dispatchDeepLink(intent)
         setContent {
             App()

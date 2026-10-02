@@ -33,7 +33,7 @@ import com.aniko.ui.theme.AnixThemeTokens
  * кончилась» не существует — значит:
  * - баннер «следующая серия через Nс» (P8.T4) здесь невозможен, отсчитывать нечего. Его заменяет
  *   постоянно видимая кнопка «Следующая серия» — переход по решению пользователя,
- *   а не по таймингу видео;
+ *   а не по таймингу видео; симметрично добавлена «Предыдущая серия» (гейтится [hasPrevEpisode]);
  * - авто-отметка «просмотрено» (P8.T8) здесь тоже невозможна — её заменяет ручной toggle рядом.
  *
  * Кнопка «Назад» (2026-09-10, ревью замечание #5): до этой правки в этой ветке UI не было НИ
@@ -57,9 +57,11 @@ import com.aniko.ui.theme.AnixThemeTokens
 @Suppress("LongParameterList")
 fun PlayerDesktopControls(
     isWatched: Boolean,
+    hasPrevEpisode: Boolean,
     hasNextEpisode: Boolean,
     onBack: () -> Unit,
     onToggleWatched: () -> Unit,
+    onPrevEpisode: () -> Unit,
     onNextEpisode: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -95,6 +97,16 @@ fun PlayerDesktopControls(
                     text = if (isWatched) strings.playerMarkUnwatched else strings.playerMarkWatched,
                     modifier = Modifier.padding(start = dimens.spaceS),
                 )
+            }
+            if (hasPrevEpisode) {
+                OutlinedButton(onClick = onPrevEpisode) {
+                    AnixIcon(
+                        name = "skip_previous",
+                        contentDescription = null,
+                        modifier = Modifier.size(ButtonDefaults.IconSize),
+                    )
+                    Text(text = strings.playerPrevEpisode, modifier = Modifier.padding(start = dimens.spaceS))
+                }
             }
             if (hasNextEpisode) {
                 Button(onClick = onNextEpisode) {

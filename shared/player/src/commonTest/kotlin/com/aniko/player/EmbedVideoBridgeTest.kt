@@ -83,6 +83,46 @@ class EmbedVideoBridgeTest {
     }
 
     @Test
+    fun parseChromeDebug_extractsEntriesAndStaysBelowStateFieldCount() {
+        // Отладочное сообщение НЕ должно парситься как state: у него меньше EMBED_BRIDGE_FIELDS
+        // полей — иначе отчёт затирал бы состояние плеера.
+        val raw = "v1|dbgchrome|div.endscreen@40;div#next-episode.fp-next;span"
+        assertNull(parseEmbedVideoState(raw))
+
+        assertEquals(
+            listOf("div.endscreen@40", "div#next-episode.fp-next", "span"),
+            parseEmbedChromeDebug(raw),
+        )
+    }
+
+    @Test
+    fun parseChromeDebug_ignoresNonDebugMessages() {
+        assertEquals(emptyList(), parseEmbedChromeDebug(""))
+        assertEquals(emptyList(), parseEmbedChromeDebug("v1|1|1|0|-|1"))
+        assertEquals(emptyList(), parseEmbedChromeDebug("v2|dbgchrome|div.x"))
+        // Пустой отчёт (видимых элементов нет) — пустой список, а не список из одной пустой строки.
+        assertEquals(emptyList(), parseEmbedChromeDebug("v1|dbgchrome|"))
+    }
+
+    @Test
+    fun bridgeScript_kodikCssCoversWholeDomainFamily() {
+        val script = embedBridgeScript()
+
+        // Семейство доменов Kodik (KODIK_EMBED_HOSTS) — одна и та же CSS-таблица на все суффиксы.
+        listOf("kodik.cc", "kodik.info", "kodik-hd.com", "kodik.biz", "aniqit.com", "kodikplayer.com", "anixmirai.com")
+            .forEach { host -> assertTrue("'$host'" in script) }
+        // Эндскрин «следующая серия» скрывается wildcard-селекторами (разметка Kodik плавает).
+        assertTrue("'[class*=\"endscreen\"]'" in script)
+        assertTrue("'[class*=\"next-ep\"]'" in script)
+        // Скрытие только через CSS — <video> и его контейнеры в селекторы не попадают.
+        assertTrue("html.aniko-video-found .fp-play" in script)
+        assertFalse("'.fp-engine'" in script)
+        // Debug-хук выключен по умолчанию и включается глобальным флагом страницы.
+        assertTrue("__anikoDebugChrome" in script)
+        assertTrue("'|$EMBED_BRIDGE_DEBUG_MARKER|'" in script)
+    }
+
+    @Test
     fun bridgeScript_snapshotsPlaybackBeforeQualitySwitch_andRestoresItAfterReload() {
         val script = embedBridgeScript()
 

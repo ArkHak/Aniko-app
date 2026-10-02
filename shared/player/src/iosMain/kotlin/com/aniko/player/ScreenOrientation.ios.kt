@@ -1,32 +1,61 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package com.aniko.player
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import platform.Foundation.NSSelectorFromString
+import platform.UIKit.UIApplication
+import platform.UIKit.UIInterfaceOrientationMaskLandscape
+import platform.UIKit.UIInterfaceOrientationMaskPortrait
+import platform.UIKit.UIInterfaceOrientationPortrait
+import platform.UIKit.UIInterfaceOrientationPortraitUpsideDown
+import platform.UIKit.UIWindowScene
+import platform.UIKit.UIWindowSceneGeometryPreferencesIOS
 
 /**
- * **CUT на iOS** — программная блокировка ориентации на landscape не реализована.
+ * iOS: поворот в альбомную ориентацию, пока открыт полноэкранный плеер — официальным
+ * `UIWindowScene.requestGeometryUpdate` (iOS 16+).
  *
- * Общая политика и кросс-ссылка на Android-реализацию — см. KDoc expect-функции
- * [LockLandscapeOrientationEffect] в `ScreenOrientation.kt`. Там же описан детерминированный
- * возврат ориентации на Android (capture-effective → force-match-entry → settle → release).
+ * Раньше здесь был честный CUT: считалось, что нужен доступ к `UIWindowScene` через обёртку
+ * `MainViewController`. Сцена доступна и без неё — через `UIApplication.connectedScenes`; живая
+ * проверка 2026-10-02 показала, что без поворота «полный экран» на iPhone — маленькое видео посреди
+ * портретного экрана, то есть фича не работала вовсе.
  *
- * Единственный работающий без полноценной Swift-интеграции способ — приватный (недокументированный)
- * KVC-приём `UIDevice.currentDevice.setValue(_:forKey:"orientation")`: `NSKeyValueCoding.setValue
- * (forKey:)` не резолвится в доступном на этой машине наборе Kotlin/Native cinterop-биндингов
- * `platform.darwin.NSObject`/`platform.UIKit.UIDevice` (проверено — `platform.darwin.NSObject` уже
- * даёт компилироваться самому типу, но метод `setValue(forKey:)` на нём не находится ни в одной
- * комбинации сигнатур). Официальный современный API (`UIWindowScene.requestGeometryUpdate`,
- * iOS 16+) требует доступа к реальному `UIWindowScene` активного окна — `MainViewController.kt`
- * (`composeApp/iosMain`) отдаёт `ComposeUIViewController` как есть, без обёртки, которая
- * держала бы такую ссылку; протягивать её ради одной кнопки — за пределами этой задачи.
+ * `Info.plist` разрешает landscape на уровне приложения (`UISupportedInterfaceOrientations`), поэтому
+ * запрос `Landscape` система выполняет. При выходе из fullscreen возвращаем ориентацию, в которой
+ * экран был до входа (как Android, см. KDoc expect-функции [LockLandscapeOrientationEffect]): из
+ * портрета — обратно в портрет, из уже альбомной — ничего не трогаем.
  *
- * `Info.plist` уже разрешает landscape на уровне приложения (`UISupportedInterfaceOrientations`),
- * поэтому кнопка "На весь экран" в [com.aniko.app.feature.player.PlayerOverlay] всё равно разворачивает
- * видео на всю ширину экрана в ТЕКУЩЕЙ ориентации — если пользователь физически повернёт телефон,
- * система сама переведёт интерфейс в landscape (то же самое, что уже работало до этой задачи).
- * Отсутствует только программное автоматическое переключение по тапу без физического поворота —
- * честно вырезано, а не подделано молчаливым no-op без объяснения (тот же принцип, что и Quality-
- * CUT в `PlayerBottomPanel`, `docs/REELWAVE_PLAN.md`, отчёт P13.T9).
+ * На iOS 15 (`requestGeometryUpdate` нет — проверка через `respondsToSelector`) эффект — no-op:
+ * пользователь может повернуть телефон сам, интерфейс поддерживает landscape.
  */
 @Composable
 actual fun LockLandscapeOrientationEffect() {
+    DisposableEffect(Unit) {
+        val scene = activeWindowScene()
+        val wasPortrait =
+            scene?.interfaceOrientation.let {
+                it == UIInterfaceOrientationPortrait || it == UIInterfaceOrientationPortraitUpsideDown
+            }
+        scene?.requestOrientation(UIInterfaceOrientationMaskLandscape)
+        onDispose {
+            if (wasPortrait) activeWindowScene()?.requestOrientation(UIInterfaceOrientationMaskPortrait)
+        }
+    }
 }
+
+private fun activeWindowScene(): UIWindowScene? =
+    UIApplication.sharedApplication.connectedScenes
+        .filterIsInstance<UIWindowScene>()
+        .firstOrNull()
+
+private fun UIWindowScene.requestOrientation(mask: ULong) {
+    if (!respondsToSelector(NSSelectorFromString(REQUEST_GEOMETRY_SELECTOR))) return
+    requestGeometryUpdateWithPreferences(
+        UIWindowSceneGeometryPreferencesIOS(interfaceOrientations = mask),
+        errorHandler = null,
+    )
+}
+
+private const val REQUEST_GEOMETRY_SELECTOR = "requestGeometryUpdateWithPreferences:errorHandler:"

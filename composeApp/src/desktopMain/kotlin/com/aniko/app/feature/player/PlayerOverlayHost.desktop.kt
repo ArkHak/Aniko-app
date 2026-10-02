@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.window.Window
@@ -33,6 +34,7 @@ import com.aniko.player.trackScreenBounds
 @Composable
 actual fun PlayerOverlayHost(
     modifier: Modifier,
+    onKeyEvent: (KeyEvent) -> Boolean,
     content: @Composable BoxScope.() -> Unit,
 ) {
     var bounds by remember { mutableStateOf<Rect?>(null) }
@@ -98,6 +100,7 @@ actual fun PlayerOverlayHost(
         // между двумя такими окнами не гарантирован одним этим флагом, поэтому досылаем `toFront()`
         // на каждое изменение границ (видео-окно пересоздаёт/двигает себя в ответ на тот же сигнал).
         alwaysOnTop = true,
+        onPreviewKeyEvent = onKeyEvent,
     ) {
         LaunchedEffect(currentBounds) { window.toFront() }
         Box(modifier = Modifier.fillMaxSize(), content = content)

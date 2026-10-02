@@ -254,6 +254,16 @@ interface Strings {
     // тот же список, что и на Title Detail), просто перенесённый в плеер отдельным чипом.
     val playerPlay: String
     val playerPause: String
+
+    /** contentDescription индикатора старта/буферизации видео в плеере. */
+    val playerLoading: String
+
+    // Источник не загрузился (403/404/сеть) или видео так и не появилось: заголовок, пояснение и
+    // действие «сменить озвучку» (повтор — `commonRetry`).
+    val playerSourceFailedTitle: String
+    val playerSourceFailedHint: String
+    val playerChangeVoice: String
+    val playerOtherSource: String
     val playerSeekBackward: String
     val playerSeekForward: String
     val playerPictureInPicture: String
@@ -261,6 +271,18 @@ interface Strings {
     val playerNextEpisodeIn: (seconds: Int) -> String
     val playerNextEpisodeNow: String
     val playerNextEpisode: String
+
+    // Навигация по сериям внутри плеера (кнопки prev/next + шторка со списком серий):
+    // [playerPrevEpisode] — contentDescription кнопки «предыдущая серия»,
+    // [playerEpisodesTitle] — заголовок шторки (и contentDescription кнопки её открытия),
+    // [playerEpisodeChip] — подпись чипа «Серия N» в компактном режиме (аргумент — уже
+    // отображаемый номер `Episode.displayNumber()`, не сырой API-position: у Sibnet серии
+    // нумеруются с 0, человеческий номер приходит в `Episode.name`),
+    // [playerSelectEpisode] — contentDescription выбора серии в шторке.
+    val playerPrevEpisode: String
+    val playerEpisodesTitle: String
+    val playerEpisodeChip: (episode: String) -> String
+    val playerSelectEpisode: String
     val playerCancel: String
     val playerMarkWatched: String
     val playerMarkUnwatched: String
@@ -293,11 +315,10 @@ interface Strings {
     val playerBrightnessLabel: String
     val playerVolumeLabel: String
 
-    // P16.T7 — resume-диалог: продолжить с сохранённой позиции или начать сначала.
-    val playerResumeTitle: String
-    val playerResumeContinue: String
+    // P16.T7 — авто-продолжение с сохранённой позиции (2026-10-01: вместо блокирующего диалога —
+    // плашка поверх видео «Продолжено с M:SS» с действием «С начала», как у медиаприложений).
     val playerResumeFromStart: String
-    val playerResumeContinueFrom: (time: String) -> String
+    val playerResumedFrom: (time: String) -> String
 
     // --- Настройки ---
     // P13.T2 (сверка с мокапом Claude Design): `settingsTitle` — новый ключ, заголовок `TopAppBar`
